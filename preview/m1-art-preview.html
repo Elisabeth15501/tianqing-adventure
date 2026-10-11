@@ -30,6 +30,11 @@
   /* ---------- S2 瓷器特写 ---------- */
   .vessel-wrap{position:relative;background:radial-gradient(120% 90% at 50% 20%,#2A3E45 0%,#16232A 60%,#0E171C 100%);
     padding:8px 0 0;}
+  .vrow{display:flex;align-items:flex-end;}
+  .vcell{flex:1;padding:30px 8px 14px;text-align:center;min-width:0;}
+  .vcell svg{width:100%;height:auto;display:block;}
+  .vlabel{color:#C9DAD6;font-size:12px;letter-spacing:1px;margin-top:10px;}
+  .vlabel span{display:block;font-size:11px;color:#8FA5A2;margin-top:4px;letter-spacing:0;}
   .glow{position:absolute;left:50%;top:58%;width:560px;height:560px;transform:translate(-50%,-50%);
     background:radial-gradient(circle,rgba(159,191,186,.16) 0%,rgba(159,191,186,0) 62%);pointer-events:none;}
 
@@ -149,69 +154,118 @@
   <section>
     <div class="frame vessel-wrap">
       <div class="glow"></div>
-      <svg viewBox="0 0 600 560">
+      <svg width="0" height="0" style="position:absolute">
         <defs>
-          <linearGradient id="glaze" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#B3C9C4"/><stop offset=".22" stop-color="#C7D8D2"/>
-            <stop offset=".55" stop-color="#B6CBC5"/><stop offset=".8" stop-color="#9EB5B0"/>
-            <stop offset="1" stop-color="#8AA19D"/></linearGradient>
-          <linearGradient id="glazeL" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0" stop-color="#D8E3DE" stop-opacity=".48"/><stop offset=".28" stop-color="#D8E3DE" stop-opacity="0"/>
-            <stop offset=".72" stop-color="#3E5450" stop-opacity=".15"/><stop offset="1" stop-color="#2E4240" stop-opacity=".32"/></linearGradient>
-          <radialGradient id="spec" cx=".5" cy=".5" r=".5">
-            <stop offset="0" stop-color="#F4F8F4" stop-opacity=".65"/><stop offset="1" stop-color="#F4F8F4" stop-opacity="0"/></radialGradient>
-          <radialGradient id="mirror" cx=".5" cy=".5" r=".5">
-            <stop offset="0" stop-color="#FBFDFB" stop-opacity=".95"/><stop offset="1" stop-color="#FBFDFB" stop-opacity="0"/></radialGradient>
-          <radialGradient id="warm" cx=".5" cy=".5" r=".5">
-            <stop offset="0" stop-color="#E9C98F" stop-opacity=".3"/><stop offset="1" stop-color="#E9C98F" stop-opacity="0"/></radialGradient>
-          <linearGradient id="footg" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#8A6B4A"/><stop offset="1" stop-color="#67502F"/></linearGradient>
-          <linearGradient id="rim" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0" stop-color="#E8CB8E"/><stop offset=".5" stop-color="#C9A15E"/><stop offset="1" stop-color="#96762F"/></linearGradient>
-          <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" result="n"/>
-            <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.62  0 0 0 0 0.72  0 0 0 0 0.70  0 0 0 0.045 0"/>
-            <feComposite operator="in" in2="SourceGraphic"/></filter>
+          <path id="xqBody" d="M97 41 L96 150 Q94 158 78 162 L52 168 Q20 180 18 235 L18 268 Q20 322 50 352 Q72 372 90 380 L90 384 L130 384 L130 380 Q148 372 170 352 Q200 322 202 268 L202 235 Q200 180 168 168 L142 162 Q126 158 124 150 L123 41 Z"/>
+          <clipPath id="xqClip"><use href="#xqBody"/></clipPath>
+          <filter id="crack" x="-20%" y="-20%" width="140%" height="140%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="7" result="t"/>
+            <feDisplacementMap in="SourceGraphic" in2="t" scale="16"/>
+          </filter>
+          <filter id="crackBig" x="-20%" y="-20%" width="140%" height="140%">
+            <feTurbulence type="fractalNoise" baseFrequency="0.02" numOctaves="2" seed="3" result="t"/>
+            <feDisplacementMap in="SourceGraphic" in2="t" scale="24"/>
+          </filter>
+          <linearGradient id="glzQ" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#8CAAA6"/><stop offset=".3" stop-color="#AFC7C1"/><stop offset=".6" stop-color="#9DB9B3"/><stop offset="1" stop-color="#77948F"/></linearGradient>
+          <linearGradient id="glzM" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#D3DBD7"/><stop offset=".35" stop-color="#E4E8E4"/><stop offset="1" stop-color="#BFC9C4"/></linearGradient>
+          <linearGradient id="glzY" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#D9C9A8"/><stop offset=".35" stop-color="#E2D5B8"/><stop offset=".8" stop-color="#C9B58E"/><stop offset="1" stop-color="#B49E72"/></linearGradient>
+          <linearGradient id="side" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#DCE8E2" stop-opacity=".4"/><stop offset=".3" stop-color="#DCE8E2" stop-opacity="0"/>
+            <stop offset=".75" stop-color="#334A46" stop-opacity=".16"/><stop offset="1" stop-color="#243835" stop-opacity=".34"/></linearGradient>
+          <radialGradient id="soft" cx=".5" cy=".5" r=".5">
+            <stop offset="0" stop-color="#EFF6F0" stop-opacity=".5"/><stop offset="1" stop-color="#EFF6F0" stop-opacity="0"/></radialGradient>
+          <linearGradient id="sear" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#8A6B45" stop-opacity="0"/><stop offset="1" stop-color="#8A6B45" stop-opacity=".4"/></linearGradient>
+          <linearGradient id="band" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#E5C68C"/><stop offset=".5" stop-color="#B98F4E"/><stop offset="1" stop-color="#8A6A32"/></linearGradient>
+          <linearGradient id="taigan" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#9C8265"/><stop offset="1" stop-color="#6E5740"/></linearGradient>
         </defs>
-        <ellipse cx="300" cy="512" rx="128" ry="15" fill="#0B1216" opacity=".7"/>
-        <ellipse cx="300" cy="509" rx="92" ry="9" fill="#3E5450" opacity=".5"/>
-        <g>
-          <path id="body" d="M 278 100 C 278 106 281 110 284 114 L 285 120 C 285 160 286 200 286 230 C 250 252 212 284 210 348 C 208 394 222 434 254 458 L 262 464 C 252 468 248 476 249 486 L 250 496 L 350 496 L 351 486 C 352 476 348 468 338 464 L 346 458 C 378 434 392 394 390 348 C 388 284 350 252 314 230 C 314 200 315 160 315 120 L 316 114 C 319 106 322 100 322 98 C 310 92 290 92 278 100 Z" fill="url(#glaze)"/>
-          <path d="M 278 100 C 278 106 281 110 284 114 L 285 120 C 285 160 286 200 286 230 C 250 252 212 284 210 348 C 208 394 222 434 254 458 L 262 464 C 252 468 248 476 249 486 L 250 496 L 350 496 L 351 486 C 352 476 348 468 338 464 L 346 458 C 378 434 392 394 390 348 C 388 284 350 252 314 230 C 314 200 315 160 315 120 L 316 114 C 319 106 322 100 322 98 C 310 92 290 92 278 100 Z" fill="url(#glazeL)"/>
-          <g stroke="#7E9994" stroke-width=".8" fill="none" opacity=".42">
-            <path d="M236 300 l18 -6 14 10 16 -4"/><path d="M262 286 l10 12 14 -6"/>
-            <path d="M330 292 l16 -4 12 10 14 -6"/><path d="M296 310 l12 8 16 -6 12 8"/>
-            <path d="M226 340 l14 10 16 -4 12 10"/><path d="M356 338 l14 8 12 -6 14 8"/>
-            <path d="M246 382 l16 8 14 -6 12 10"/><path d="M322 380 l14 10 16 -6"/>
-            <path d="M270 420 l14 8 16 -6 12 8"/><path d="M310 424 l12 10 14 -6"/>
-            <path d="M240 436 l12 10 14 -6"/><path d="M334 442 l14 -8 12 6"/>
-          </g>
-          <g stroke="#54706C" stroke-width="1.2" fill="none" opacity=".38">
-            <path d="M282 320 l10 22 -6 20"/><path d="M318 344 l-8 20 8 18"/>
-            <path d="M250 362 l-8 18 10 16"/><path d="M352 386 l6 20 -8 16"/>
-            <path d="M296 404 l-6 18 8 14"/>
-          </g>
-          <ellipse cx="290" cy="170" rx="6" ry="46" fill="url(#spec)" transform="rotate(-2 290 170)"/>
-          <ellipse cx="266" cy="316" rx="26" ry="72" fill="url(#spec)" transform="rotate(-11 266 316)"/>
-          <ellipse cx="262" cy="306" rx="10" ry="30" fill="url(#mirror)" transform="rotate(-11 262 306)"/>
-          <ellipse cx="362" cy="360" rx="14" ry="64" fill="url(#warm)" transform="rotate(9 362 360)"/>
-          <path d="M288 126 q-2 24 -2 46 q0 20 -14 36" stroke="#DCE7E2" stroke-width="1.6" fill="none" opacity=".3"/>
-          <ellipse cx="300" cy="97" rx="22" ry="6.5" fill="url(#rim)"/>
-          <ellipse cx="300" cy="95" rx="16" ry="4.4" fill="#2E3E3C"/>
-          <ellipse cx="300" cy="95" rx="16" ry="4.4" fill="none" stroke="#E8CB8E" stroke-width="1.2"/>
-          <path d="M272 102 C 272 110 278 114 280 122 M 328 102 C 328 110 322 114 320 122" stroke="#96762F" stroke-width="2.2" fill="none"/>
-          <path d="M262 462 C 254 466 250 474 250 484 L 250 493 C 250 496 252 498 255 498 L 345 498 C 348 498 350 496 350 493 L 350 484 C 350 474 346 466 338 462 Z" fill="url(#footg)"/>
-          <ellipse cx="278" cy="482" rx="12" ry="5" fill="#5A4426" opacity=".55"/>
-          <ellipse cx="322" cy="488" rx="10" ry="4" fill="#5A4426" opacity=".5"/>
-          <path d="M262 462 L 338 462" stroke="#B08A5C" stroke-width="1.6" opacity=".7"/>
-          <path d="M252 495 L 348 495" stroke="#4E3A22" stroke-width="2.2" opacity=".8"/>
-          <g filter="url(#grain)" opacity=".95">
-            <path d="M 278 100 C 278 106 281 110 284 114 L 285 120 C 285 160 286 200 286 230 C 250 252 212 284 210 348 C 208 394 222 434 254 458 L 262 464 C 252 468 248 476 249 486 L 250 496 L 350 496 L 351 486 C 352 476 348 468 338 464 L 346 458 C 378 434 392 394 390 348 C 388 284 350 252 314 230 C 314 200 315 160 315 120 L 316 114 C 319 106 322 100 322 98 C 310 92 290 92 278 100 Z" fill="#B6CBC5"/>
-          </g>
-        </g>
-        <text x="300" y="546" text-anchor="middle" font-size="12" fill="#8FA5A2" letter-spacing="2">纸槌瓶（形制依北宋参考器）· 天青色 · 滋润细媚 · 有细纹 · 多足粗黄土（世传）</text>
       </svg>
+      <div class="vrow">
+        <div class="vcell">
+          <svg viewBox="0 0 220 460">
+            <ellipse cx="110" cy="412" rx="78" ry="10" fill="#0B1216" opacity=".65"/>
+            <use href="#xqBody" fill="url(#glzY)"/>
+            <g clip-path="url(#xqClip)">
+              <use href="#xqBody" fill="url(#side)"/>
+              <g filter="url(#crack)" stroke="#6B5E48" stroke-width="1" fill="none" opacity=".5">
+                <path d="M18 200 H202 M18 235 H202 M18 268 H202 M18 300 H202 M18 332 H202"/>
+                <path d="M45 168 V384 M70 168 V384 M95 168 V384 M125 168 V384 M150 168 V384 M175 168 V384"/>
+              </g>
+              <g filter="url(#crackBig)" stroke="#5A4E38" stroke-width="1.4" fill="none" opacity=".4">
+                <path d="M30 220 L196 260 M196 190 L34 330"/>
+              </g>
+              <ellipse cx="110" cy="356" rx="96" ry="58" fill="url(#sear)"/>
+              <ellipse cx="76" cy="250" rx="34" ry="86" fill="url(#soft)" opacity=".55" transform="rotate(-10 76 250)"/>
+            </g>
+            <use href="#xqBody" fill="none" stroke="#7A6A4C" stroke-width="1" opacity=".5"/>
+            <rect x="91" y="30" width="38" height="11" rx="3" fill="url(#band)"/>
+            <ellipse cx="110" cy="35" rx="14" ry="3.6" fill="#3A3327"/>
+            <rect x="88" y="384" width="44" height="16" rx="4" fill="url(#taigan)"/>
+            <ellipse cx="99" cy="394" rx="6" ry="2.6" fill="#3E2F1C" opacity=".55"/>
+            <ellipse cx="121" cy="396" rx="5" ry="2.2" fill="#3E2F1C" opacity=".5"/>
+            <text x="110" y="436" text-anchor="middle" font-size="11" fill="#8FA5A2">收集态 · 碎片色调</text>
+          </svg>
+          <div class="vlabel">米黄 · 土沁之片<span>玩家拾得的碎片即此色</span></div>
+        </div>
+        <div class="vcell">
+          <svg viewBox="0 0 220 460">
+            <ellipse cx="110" cy="412" rx="80" ry="10" fill="#0B1216" opacity=".7"/>
+            <ellipse cx="110" cy="408" rx="56" ry="7" fill="#3E5450" opacity=".5"/>
+            <use href="#xqBody" fill="url(#glzQ)"/>
+            <g clip-path="url(#xqClip)">
+              <use href="#xqBody" fill="url(#side)"/>
+              <g filter="url(#crack)" stroke="#647F7B" stroke-width=".9" fill="none" opacity=".42">
+                <path d="M18 200 H202 M18 235 H202 M18 268 H202 M18 300 H202 M18 332 H202"/>
+                <path d="M45 168 V384 M70 168 V384 M95 168 V384 M125 168 V384 M150 168 V384 M175 168 V384"/>
+              </g>
+              <ellipse cx="76" cy="250" rx="34" ry="86" fill="url(#soft)" transform="rotate(-10 76 250)"/>
+              <ellipse cx="66" cy="244" rx="12" ry="42" fill="url(#soft)" transform="rotate(-10 66 244)"/>
+              <ellipse cx="162" cy="300" rx="16" ry="66" fill="#E9C98F" opacity=".14" transform="rotate(8 162 300)"/>
+              <path d="M96 62 q-2 30 -2 58 q0 26 -16 44" stroke="#DCE7E2" stroke-width="1.4" fill="none" opacity=".28"/>
+            </g>
+            <use href="#xqBody" fill="none" stroke="#4E6A66" stroke-width="1" opacity=".55"/>
+            <rect x="91" y="30" width="38" height="11" rx="3" fill="url(#band)"/>
+            <ellipse cx="110" cy="35" rx="14" ry="3.6" fill="#2E4240"/>
+            <path d="M88 380 L132 380" stroke="#B08A5C" stroke-width="1.2" opacity=".6"/>
+            <rect x="88" y="384" width="44" height="16" rx="4" fill="url(#taigan)"/>
+            <ellipse cx="99" cy="394" rx="6" ry="2.6" fill="#4E3A22" opacity=".5"/>
+            <ellipse cx="121" cy="396" rx="5" ry="2.2" fill="#4E3A22" opacity=".45"/>
+            <text x="110" y="436" text-anchor="middle" font-size="11" fill="#8FA5A2">合瓮之器 · 完整形态</text>
+          </svg>
+          <div class="vlabel">天青 · 主道具<span>「青如天 · 明如镜 · 薄如纸 · 声如磬」（世传）</span></div>
+        </div>
+        <div class="vcell">
+          <svg viewBox="0 0 220 460">
+            <ellipse cx="110" cy="412" rx="78" ry="10" fill="#0B1216" opacity=".65"/>
+            <use href="#xqBody" fill="url(#glzM)"/>
+            <g clip-path="url(#xqClip)">
+              <use href="#xqBody" fill="url(#side)"/>
+              <g filter="url(#crack)" stroke="#9AA8A4" stroke-width=".9" fill="none" opacity=".5">
+                <path d="M18 200 H202 M18 235 H202 M18 268 H202 M18 300 H202 M18 332 H202"/>
+                <path d="M45 168 V384 M70 168 V384 M95 168 V384 M125 168 V384 M150 168 V384 M175 168 V384"/>
+              </g>
+              <g filter="url(#crackBig)" stroke="#7C8C88" stroke-width="1.6" fill="none" opacity=".45">
+                <path d="M26 230 L198 210 M198 300 L30 340 M110 168 L96 384"/>
+              </g>
+              <ellipse cx="76" cy="250" rx="34" ry="86" fill="url(#soft)" opacity=".7" transform="rotate(-10 76 250)"/>
+            </g>
+            <use href="#xqBody" fill="none" stroke="#8A9A96" stroke-width="1" opacity=".5"/>
+            <rect x="91" y="30" width="38" height="11" rx="3" fill="url(#band)"/>
+            <ellipse cx="110" cy="35" rx="14" ry="3.6" fill="#42423A"/>
+            <rect x="88" y="384" width="44" height="16" rx="4" fill="url(#taigan)"/>
+            <ellipse cx="101" cy="394" rx="6" ry="2.6" fill="#4E3A22" opacity=".45"/>
+            <text x="110" y="436" text-anchor="middle" font-size="11" fill="#8FA5A2">暗釉档 · 回忆插页</text>
+          </svg>
+          <div class="vlabel">月白 · 酉时档<span>大纹片 · 帝后追忆一幕用</span></div>
+        </div>
+      </div>
     </div>
-    <p class="cap">② 瓷器是全案关键道具，形制依参考器（传世汝窑纸槌瓶）校准：直颈 · 浅盘口 · 折肩 · 扁圆垂腹 · 矮圈足，高宽比 ≈2.2；**通体素面**——纸槌瓶以釉色与开片为饰，去纹雕。史料四象落位：青如天（釉偏蓝灰）· 明如镜（双层聚焦高光）· 薄如纸（极薄盘口沿 + 长柔光带）· 声如磬（音色在长卷中文字呈现）；「滋润细媚，有细纹」＝金丝级细网 + 铁线级深纹两组开片；「多足粗黄土」＝粗黄土胎足带深浅斑（《格古要论》原文）；金扣口参考传世汝窑扣工艺（演绎标注）。侧光换暖/冷主光即得「酉时暗釉档」。</p>
+    <p class="cap">② 瓷器道具 v3（形制依参考器校准）——纸槌瓶四要素：**直颈垂直等宽 / 折肩肩台 / 扁圆鼓腹（腹宽≈腹高）/ 矮圈足露胎**；三只参考器全部带金属包口，包口就此入设（酱/铜/金微差）。乳浊釉高光柔化：汝窑「滋润细媚」＝宽幅弱光斑，去掉玻璃锐芯；开片＝feTurbulence+feDisplacementMap 把规则网格扭成自然「金丝铁线」，月白档叠大纹片、米黄档深褐纹＋下腹土沁。**三釉色叙事分工：玩家全程拾得的是带土沁的米黄片，十六片归瓮方见完美天青——「碎而复圆、涩而复润」**；月白仅用于酉时暗釉档与回忆插页。</p>
   </section>
 
   <!-- S3+S4 -->
@@ -222,22 +276,27 @@
       </div>
       <div class="stage" id="stage"></div>
       <div class="halo" id="halo"></div>
-      <svg class="vessel-final" id="vessel" viewBox="0 0 190 260">
+      <svg class="vessel-final" id="vessel" viewBox="0 0 190 290">
         <defs><linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
           <stop offset="0" stop-color="#B3C9C4"/><stop offset=".5" stop-color="#C7D8D2"/><stop offset="1" stop-color="#8AA19D"/></linearGradient>
         <linearGradient id="r2" x1="0" y1="0" x2="0" y2="1">
-          <stop offset="0" stop-color="#E8CB8E"/><stop offset=".5" stop-color="#C9A15E"/><stop offset="1" stop-color="#96762F"/></linearGradient></defs>
-        <path d="M 85 33 C 85 38 89 40 89 45 L 89 68 C 89 76 83 80 75 87 C 61 95 44 108 44 121 C 44 144 66 156 95 156 C 124 156 146 144 146 121 C 146 108 129 95 115 87 C 107 80 101 76 101 68 L 101 45 C 101 40 105 38 105 33 C 105 30 100 28 95 28 C 90 28 85 30 85 33 Z" fill="url(#g2)"/>
-        <ellipse cx="95" cy="31" rx="11" ry="3.4" fill="url(#r2)"/>
-        <ellipse cx="95" cy="30.4" rx="8" ry="2.2" fill="#2E3E3C"/>
+          <stop offset="0" stop-color="#E8CB8E"/><stop offset=".5" stop-color="#C9A15E"/><stop offset="1" stop-color="#96762F"/></linearGradient>
+        <linearGradient id="s2" x1="0" y1="0" x2="1" y2="0">
+          <stop offset="0" stop-color="#DCE8E2" stop-opacity=".38"/><stop offset=".3" stop-color="#DCE8E2" stop-opacity="0"/>
+          <stop offset=".75" stop-color="#334A46" stop-opacity=".16"/><stop offset="1" stop-color="#243835" stop-opacity=".32"/></linearGradient></defs>
+        <path d="M95 10 L94 78 Q93 85 82 88 L58 93 Q30 101 28 136 L28 158 Q30 198 56 222 Q72 238 84 244 L84 248 L106 248 L106 244 Q118 238 134 222 Q160 198 162 158 L162 136 Q160 101 132 93 L108 85 Q97 82 96 78 L95 10 Z" fill="url(#g2)"/>
+        <path d="M95 10 L94 78 Q93 85 82 88 L58 93 Q30 101 28 136 L28 158 Q30 198 56 222 Q72 238 84 244 L84 248 L106 248 L106 244 Q118 238 134 222 Q160 198 162 158 L162 136 Q160 101 132 93 L108 85 Q97 82 96 78 L95 10 Z" fill="url(#s2)"/>
+        <rect x="89" y="5" width="12" height="7" rx="2" fill="url(#r2)"/>
+        <ellipse cx="95" cy="10.5" rx="7" ry="2.4" fill="#2E3E3C"/>
         <g stroke="#7E9994" stroke-width=".7" fill="none" opacity=".45">
-          <path d="M76 112 l7 -4 6 5 8 -3"/><path d="M116 110 l8 3 6 -4"/>
-          <path d="M92 130 l6 4 8 -3"/><path d="M104 126 l-4 5 6 4"/>
-          <path d="M60 124 l8 6 8 -3"/>
+          <path d="M60 130 l7 -4 6 5 8 -3"/><path d="M120 128 l8 3 6 -4"/>
+          <path d="M92 150 l6 4 8 -3"/><path d="M104 146 l-4 5 6 4"/>
+          <path d="M55 170 l8 6 8 -3"/><path d="M136 180 l6 -5 7 4"/>
         </g>
-        <ellipse cx="83" cy="98" rx="7" ry="24" fill="#F4F8F4" opacity=".5" transform="rotate(-11 83 98)"/>
-        <path d="M 70 152 C 69.6 157 71 160 74 161 L 116 161 C 119 160 120.4 157 120 152 Z" fill="url(#footg)"/>
-        <path d="M 71 161 L 119 161" stroke="#4E3A22" stroke-width="1.4" opacity=".8"/>
+        <ellipse cx="70" cy="150" rx="11" ry="38" fill="#F4F8F4" opacity=".45" transform="rotate(-12 70 150)"/>
+        <path d="M84 244 L106 244" stroke="#B08A5C" stroke-width="1" opacity=".55"/>
+        <path d="M 82 248 L 108 248 L 108 258 Q 108 262 104 262 L 86 262 Q 82 262 82 258 Z" fill="url(#footg)"/>
+        <path d="M 82 260 L 108 260" stroke="#4E3A22" stroke-width="1.4" opacity=".8"/>
       </svg>
       <div class="fest" style="position:absolute;inset:0;opacity:0;pointer-events:none;" id="fest">
         <div class="inner" id="festInner">
