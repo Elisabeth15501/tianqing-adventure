@@ -1,0 +1,9 @@
+# 开发者文档（设计定稿/路线定案/里程碑纪要）留在 workspace，不入仓库
+天清节_*.md
+*.plan.md
+plans/
+.DS_Store
+Thumbs.db
+node_modules/
+dist/
+*.zip
