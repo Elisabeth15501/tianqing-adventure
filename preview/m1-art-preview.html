@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>M1 美术预览 · 天清往事（泥木釉画风）</title>
+<style>
+  :root{
+    --qing:#8FB5B0; --qing-dp:#5E8C8A; --fen:#DDE9E5; --yue:#EFF5F3;
+    --ink:#24333A; --muted:#6B7F84; --gold:#D9B36C; --zhi:#B96A62; --dai:#3E5460;
+  }
+  html,body{margin:0;padding:0;background:#0F1A1D;color:var(--ink);
+    font-family:-apple-system,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;}
+  .page{max-width:960px;margin:0 auto;padding:24px 16px 64px;}
+  .hd{color:var(--yue);opacity:.75;font-size:13px;letter-spacing:2px;margin:0 0 4px;}
+  h1{color:var(--yue);font-size:22px;font-weight:500;margin:0 0 6px;letter-spacing:4px;}
+  .sub{color:#9FB6BA;font-size:13px;margin:0 0 28px;line-height:1.7;}
+  section{margin:0 0 40px;}
+  .cap{color:#9FB6BA;font-size:12px;letter-spacing:1px;margin:8px 4px 0;line-height:1.7;}
+  .frame{border-radius:16px;overflow:hidden;border:1px solid rgba(143,181,176,.25);}
+
+  /* ---------- S1 视差场景 ---------- */
+  .scene{position:relative;height:420px;overflow:hidden;touch-action:none;cursor:crosshair;
+    background:linear-gradient(180deg,#20343B 0%,#33505A 30%,#5E7F84 62%,#93ADA9 100%);}
+  .layer{position:absolute;inset:-6% -8%;will-change:transform;}
+  svg{display:block;width:100%;height:100%;}
+  .fog{position:absolute;left:-10%;right:-10%;height:34%;bottom:14%;
+    background:linear-gradient(180deg,rgba(147,173,169,0) 0%,rgba(183,203,199,.38) 55%,rgba(147,173,169,0) 100%);}
+
+  /* ---------- S2 瓷器特写 ---------- */
+  .vessel-wrap{position:relative;background:radial-gradient(120% 90% at 50% 20%,#2A3E45 0%,#16232A 60%,#0E171C 100%);
+    padding:8px 0 0;}
+  .glow{position:absolute;left:50%;top:58%;width:560px;height:560px;transform:translate(-50%,-50%);
+    background:radial-gradient(circle,rgba(159,191,186,.16) 0%,rgba(159,191,186,0) 62%);pointer-events:none;}
+
+  /* ---------- S3 汇聚动画 ---------- */
+  .merge{position:relative;height:480px;background:radial-gradient(120% 100% at 50% 18%,#22363E 0%,#121E24 68%,#0C1418 100%);
+    overflow:hidden;}
+  .stage{position:absolute;left:50%;top:54%;width:0;height:0;}
+  .shard{position:absolute;width:74px;height:74px;margin:-37px 0 0 -37px;opacity:.95;
+    transition:transform 1.05s cubic-bezier(.22,.9,.24,1),opacity 1.05s ease;will-change:transform,opacity;}
+  .vessel-final{position:absolute;left:50%;top:52%;width:190px;margin-left:-95px;opacity:0;
+    transform:scale(.86);transition:opacity 1.4s ease .15s,transform 1.4s cubic-bezier(.2,.8,.2,1) .15s;}
+  .halo{position:absolute;left:50%;top:52%;width:80px;height:80px;margin:-40px 0 0 -40px;border-radius:50%;
+    background:radial-gradient(circle,rgba(217,214,178,.5) 0%,rgba(159,191,186,.22) 45%,rgba(159,191,186,0) 72%);
+    opacity:0;transform:scale(.2);pointer-events:none;}
+  .halo.on{transition:opacity 1s ease,transform 1.6s cubic-bezier(.16,.8,.2,1);opacity:1;transform:scale(5.2);}
+  .vessel-final.on{opacity:1;transform:scale(1);}
+  .shard.gone{opacity:0;}
+  .cta{position:relative;z-index:5;text-align:center;}
+  .cta button{background:transparent;color:#C9DAD6;border:1px solid rgba(143,181,176,.55);
+    border-radius:20px;padding:9px 26px;font-size:14px;letter-spacing:2px;cursor:pointer;}
+  .cta button:active{transform:translateY(1px);}
+
+  /* ---------- S4 庆生 ---------- */
+  .fest{position:relative;height:480px;background:linear-gradient(180deg,#1C2A30 0%,#2E4348 46%,#4A5F5B 100%);
+    overflow:hidden;}
+  .fest .inner{position:absolute;inset:0;opacity:0;transition:opacity 1.6s ease;}
+  .fest .inner.on{opacity:1;}
+  .candle{animation:fl 2.6s ease-in-out infinite;}
+  .candle.c2{animation-delay:.9s}.candle.c3{animation-delay:1.5s}
+  @keyframes fl{0%,100%{opacity:.82}45%{opacity:1}70%{opacity:.9}}
+  .lamp{animation:lp 4.2s ease-in-out infinite;}
+  @keyframes lp{0%,100%{opacity:.86}50%{opacity:1}}
+  .fade-white{position:absolute;inset:0;background:#EFF5F3;opacity:0;pointer-events:none;}
+</style>
+</head>
+<body>
+<div class="page">
+  <p class="hd">M1 美术预览 · 泥木釉画风</p>
+  <h1>天清往事</h1>
+  <p class="sub">三段演示：① 广德殿五层视差场景（移动指针/手指滑动看纵深）② 天青瓷器光影特写 ③ 十六片碎片汇聚合瓮 → 平滑过渡庆生画面。低饱和国风 · 非卡通平面 · 全部为 Chrome 61 可用实现（无 3D 引擎、无 WASM）。</p>
+
+  <!-- S1 -->
+  <section>
+    <div class="frame"><div class="scene" id="scene">
+      <div class="layer" data-d="6"><svg viewBox="0 0 1000 420" preserveAspectRatio="xMidYMid slice">
+        <defs><linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#22363E"/><stop offset=".55" stop-color="#41606A"/><stop offset="1" stop-color="#8FA9A5"/></linearGradient></defs>
+        <rect width="1000" height="420" fill="url(#sky)"/>
+        <circle cx="760" cy="96" r="34" fill="#E8E4D2" opacity=".85"/>
+        <circle cx="760" cy="96" r="52" fill="#E8E4D2" opacity=".14"/>
+        <path d="M0 300 Q140 236 300 268 T640 252 T1000 276 V420 H0 Z" fill="#3E5A62" opacity=".8"/>
+        <path d="M0 330 Q220 280 430 306 T1000 300 V420 H0 Z" fill="#4A686E" opacity=".65"/>
+      </svg></div>
+      <div class="layer" data-d="14"><svg viewBox="0 0 1000 420" preserveAspectRatio="xMidYMid slice">
+        <g opacity=".8" fill="#31484F">
+          <path d="M120 330 h64 l-8-14 h-48 Z M132 316 h40 v-46 h-40 Z M126 270 h48 l-24-26 Z"/>
+          <path d="M840 336 h56 l-7-12 h-42 Z M850 324 h36 v-40 h-36 Z M845 284 h46 l-23-24 Z"/>
+          <rect x="470" y="150" width="10" height="180" fill="#2C4249"/>
+          <path d="M452 152 h46 l-23-30 Z" fill="#2C4249"/>
+        </g>
+      </svg></div>
+      <div class="layer" data-d="26"><svg viewBox="0 0 1000 420" preserveAspectRatio="xMidYMid slice">
+        <defs><linearGradient id="hall" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#57737A"/><stop offset="1" stop-color="#3B555D"/></linearGradient>
+        <linearGradient id="roof" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#2E444C"/><stop offset="1" stop-color="#3D5960"/></linearGradient></defs>
+        <path d="M180 292 L500 208 L820 292 L790 302 L500 226 L210 302 Z" fill="url(#roof)"/>
+        <path d="M236 302 h528 v118 h-528 Z" fill="url(#hall)"/>
+        <g fill="#334B52">
+          <path d="M268 302 h20 v118 h-20 Z M380 302 h20 v118 h-20 Z M494 302 h20 v118 h-20 Z M608 302 h20 v118 h-20 Z M718 302 h16 v118 h-16 Z"/>
+        </g>
+        <rect x="418" y="318" width="164" height="46" rx="4" fill="#20343B"/>
+        <text x="500" y="350" text-anchor="middle" font-size="30" letter-spacing="10" fill="#D9CFA8" opacity=".92">广德殿</text>
+        <path d="M180 292 Q160 288 150 300 M820 292 Q840 288 850 300" stroke="#2E444C" stroke-width="6" fill="none"/>
+      </svg></div>
+      <div class="layer" data-d="42"><svg viewBox="0 0 1000 420" preserveAspectRatio="xMidYMid slice">
+        <defs><radialGradient id="lamp" cx=".5" cy=".5" r=".5">
+          <stop offset="0" stop-color="#E9C98F"/><stop offset=".4" stop-color="#D9B36C" stop-opacity=".55"/><stop offset="1" stop-color="#D9B36C" stop-opacity="0"/></radialGradient></defs>
+        <g class="lamp">
+          <line x1="150" y1="292" x2="150" y2="330" stroke="#22343B" stroke-width="2"/>
+          <circle cx="150" cy="352" r="30" fill="url(#lamp)"/>
+          <rect x="138" y="336" width="24" height="30" rx="9" fill="#B96A62"/>
+          <rect x="142" y="366" width="16" height="6" fill="#A67C52"/>
+          <line x1="330" y1="292" x2="330" y2="336" stroke="#22343B" stroke-width="2"/>
+          <circle cx="330" cy="362" r="30" fill="url(#lamp)"/>
+          <rect x="318" y="346" width="24" height="30" rx="9" fill="#B96A62"/>
+          <rect x="322" y="376" width="16" height="6" fill="#A67C52"/>
+          <line x1="672" y1="292" x2="672" y2="334" stroke="#22343B" stroke-width="2"/>
+          <circle cx="672" cy="360" r="30" fill="url(#lamp)"/>
+          <rect x="660" y="344" width="24" height="30" rx="9" fill="#B96A62"/>
+          <rect x="664" y="374" width="16" height="6" fill="#A67C52"/>
+          <line x1="854" y1="292" x2="854" y2="338" stroke="#22343B" stroke-width="2"/>
+          <circle cx="854" cy="364" r="30" fill="url(#lamp)"/>
+          <rect x="842" y="348" width="24" height="30" rx="9" fill="#B96A62"/>
+          <rect x="846" y="378" width="16" height="6" fill="#A67C52"/>
+        </g>
+        <rect x="0" y="392" width="1000" height="28" fill="#2A3E44"/>
+      </svg></div>
+      <div class="layer" data-d="64"><svg viewBox="0 0 1000 420" preserveAspectRatio="xMidYMid slice">
+        <g fill="#1B2A30">
+          <path d="M96 420 v-64 q0-16 14-16 t14 16 v64 Z M84 344 a26 26 0 1 1 52 0 a26 26 0 1 1 -52 0"/>
+          <path d="M282 420 v-58 q0-15 13-15 t13 15 v58 Z M271 350 a24 24 0 1 1 48 0 a24 24 0 1 1 -48 0"/>
+          <path d="M706 420 v-60 q0-15 13-15 t13 15 v60 Z M695 352 a25 25 0 1 1 50 0 a25 25 0 1 1 -50 0"/>
+          <path d="M886 420 v-56 q0-14 12-14 t12 14 v56 Z M876 354 a23 23 0 1 1 46 0 a23 23 0 1 1 -46 0"/>
+        </g>
+        <ellipse cx="498" cy="398" rx="34" ry="12" fill="#22343B"/>
+        <rect x="478" y="352" width="40" height="44" rx="4" fill="#22343B"/>
+        <path d="M498 352 q-10 -22 0 -40 q10 -18 0 -34" stroke="#9FB6BA" stroke-width="3" opacity=".3" fill="none"/>
+        <rect x="0" y="404" width="1000" height="16" fill="#141F24"/>
+      </svg></div>
+      <div class="fog"></div>
+    </div></div>
+    <p class="cap">① 广德殿 · 五层视差（天空月轮 / 远殿塔影 / 殿身匾额 / 柱列宫灯 / 前景人物香炉）。指针横向移动或手机滑动体验纵深；雾带承担层间融合，消除「剪纸感」。</p>
+  </section>
+
+  <!-- S2 -->
+  <section>
+    <div class="frame vessel-wrap">
+      <div class="glow"></div>
+      <svg viewBox="0 0 600 560">
+        <defs>
+          <linearGradient id="glaze" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#8CAAA6"/><stop offset=".28" stop-color="#A9C4BE"/>
+            <stop offset=".55" stop-color="#9DB9B3"/><stop offset=".82" stop-color="#7E9C97"/>
+            <stop offset="1" stop-color="#6C8A86"/></linearGradient>
+          <linearGradient id="glazeL" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0" stop-color="#C6D8D2" stop-opacity=".55"/><stop offset=".3" stop-color="#C6D8D2" stop-opacity="0"/>
+            <stop offset=".78" stop-color="#3E5450" stop-opacity=".22"/><stop offset="1" stop-color="#2E4240" stop-opacity=".4"/></linearGradient>
+          <radialGradient id="spec" cx=".5" cy=".5" r=".5">
+            <stop offset="0" stop-color="#F2F7F2" stop-opacity=".85"/><stop offset="1" stop-color="#F2F7F2" stop-opacity="0"/></radialGradient>
+          <radialGradient id="warm" cx=".5" cy=".5" r=".5">
+            <stop offset="0" stop-color="#E9C98F" stop-opacity=".4"/><stop offset="1" stop-color="#E9C98F" stop-opacity="0"/></radialGradient>
+          <linearGradient id="foot" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0" stop-color="#9C8265"/><stop offset="1" stop-color="#7A6249"/></linearGradient>
+          <filter id="grain"><feTurbulence type="fractalNoise" baseFrequency="0.9" numOctaves="2" result="n"/>
+            <feColorMatrix in="n" type="matrix" values="0 0 0 0 0.62  0 0 0 0 0.72  0 0 0 0 0.70  0 0 0 0.05 0"/>
+            <feComposite operator="in" in2="SourceGraphic"/></filter>
+        </defs>
+        <ellipse cx="300" cy="512" rx="132" ry="16" fill="#0B1216" opacity=".7"/>
+        <ellipse cx="300" cy="509" rx="98" ry="10" fill="#3E5450" opacity=".5"/>
+        <g>
+          <path d="M300 96 c-9 0 -14 5 -14 12 c0 8 5 12 5 20 c0 16 -22 42 -52 78 c-34 41 -67 92 -67 152 c0 78 56 128 128 128 s128 -50 128 -128 c0 -60 -33 -111 -67 -152 c-30 -36 -52 -62 -52 -78 c0 -8 5 -12 5 -20 c0 -7 -5 -12 -14 -12 Z" fill="url(#glaze)"/>
+          <path d="M300 96 c-9 0 -14 5 -14 12 c0 8 5 12 5 20 c0 16 -22 42 -52 78 c-34 41 -67 92 -67 152 c0 78 56 128 128 128 s128 -50 128 -128 c0 -60 -33 -111 -67 -152 c-30 -36 -52 -62 -52 -78 c0 -8 5 -12 5 -20 c0 -7 -5 -12 -14 -12 Z" fill="url(#glazeL)"/>
+          <path d="M254 190 q46 14 92 0 M240 224 q60 18 120 0" stroke="#6E8C87" stroke-width="2.4" fill="none" opacity=".7"/>
+          <path d="M258 252 q42 22 84 0 q-8 20 -42 20 t-42 -20 Z" fill="#6E8C87" opacity=".28"/>
+          <path d="M212 300 h176 M208 322 h184" stroke="#6E8C87" stroke-width="2" opacity=".55"/>
+          <g stroke="#627F7B" stroke-width="1" fill="none" opacity=".5">
+            <path d="M246 384 l14 -12 10 14 12 -10"/><path d="M318 372 l12 12 14 -10 10 12"/>
+            <path d="M262 420 l16 -10 12 12 16 -12"/><path d="M330 416 l14 12 16 -14 12 10"/>
+            <path d="M296 446 l12 -12 12 12"/><path d="M238 352 l10 -10 12 10"/>
+          </g>
+          <g stroke="#3E5450" stroke-width="1.2" fill="none" opacity=".45">
+            <path d="M280 396 l8 16 -6 12"/><path d="M336 440 l-8 -14 4 -12"/>
+          </g>
+          <ellipse cx="262" cy="252" rx="26" ry="60" fill="url(#spec)" opacity=".8" transform="rotate(-14 262 252)"/>
+          <ellipse cx="262" cy="248" rx="12" ry="30" fill="url(#spec)" transform="rotate(-14 262 248)"/>
+          <ellipse cx="352" cy="330" rx="18" ry="72" fill="url(#warm)" transform="rotate(10 352 330)"/>
+          <ellipse cx="300" cy="106" rx="15" ry="4.5" fill="#5E7C78"/>
+          <ellipse cx="300" cy="104" rx="11" ry="3" fill="#31484F" opacity=".8"/>
+          <path d="M270 486 h60 v14 q0 8 -10 8 h-40 q-10 0 -10 -8 Z" fill="url(#foot)"/>
+          <path d="M270 486 h60 v5 h-60 Z" fill="#B99A76" opacity=".7"/>
+          <g filter="url(#grain)" opacity=".9">
+            <path d="M300 96 c-9 0 -14 5 -14 12 c0 8 5 12 5 20 c0 16 -22 42 -52 78 c-34 41 -67 92 -67 152 c0 78 56 128 128 128 s128 -50 128 -128 c0 -60 -33 -111 -67 -152 c-30 -36 -52 -62 -52 -78 c0 -8 5 -12 5 -20 c0 -7 -5 -12 -14 -12 Z" fill="#9FBFBA"/>
+          </g>
+        </g>
+        <text x="300" y="546" text-anchor="middle" font-size="12" fill="#8FA5A2" letter-spacing="3">御窑天青瓷 · 纸槌瓶（游戏内称谓；后世称柴窑 · 世传）</text>
+      </svg>
+    </div>
+    <p class="cap">② 瓷器是全案关键道具：釉面四段纵向渐变 + 左右冷暖双层光（左暖宫灯 / 右冷青环境反光）+ 椭圆高光斑（双层：宽弱光带 + 窄强光芯）+ 细噪滤镜模拟釉面肌理 + 开片纹（金丝级细纹 + 铁线级深纹两组）+ 肩部莲瓣浅刻与两道弦纹 + 暴胎足（胎土色）。侧光晨昏可切换：同一器物换暖/冷主光即得「酉时暗釉档」。</p>
+  </section>
+
+  <!-- S3+S4 -->
+  <section>
+    <div class="frame"><div class="merge" id="merge">
+      <div class="cta" style="position:absolute;top:16px;left:0;right:0;">
+        <button id="btnMerge">观看 · 瓷片归瓮</button>
+      </div>
+      <div class="stage" id="stage"></div>
+      <div class="halo" id="halo"></div>
+      <svg class="vessel-final" id="vessel" viewBox="0 0 190 260">
+        <defs><linearGradient id="g2" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#9CBAB4"/><stop offset=".5" stop-color="#B4CCC6"/><stop offset="1" stop-color="#7E9C97"/></linearGradient></defs>
+        <path d="M95 22 c-5 0 -8 3 -8 7 c0 5 3 7 3 12 c0 10 -13 25 -31 46 c-20 24 -40 54 -40 90 c0 46 33 76 76 76 s76 -30 76 -76 c0 -36 -20 -66 -40 -90 c-18 -21 -31 -36 -31 -46 c0 -5 3 -7 3 -12 c0 -4 -3 -7 -8 -7 Z" fill="url(#g2)"/>
+        <path d="M72 96 q23 8 46 0 M66 112 q29 10 58 0" stroke="#6E8C87" stroke-width="1.6" fill="none" opacity=".7"/>
+        <path d="M62 140 q33 16 66 0" stroke="#6E8C87" stroke-width="1.4" fill="none" opacity=".5"/>
+        <g stroke="#627F7B" stroke-width=".8" fill="none" opacity=".5">
+          <path d="M74 176 l9 -7 6 8 7 -6"/><path d="M112 170 l7 7 8 -6 6 7"/><path d="M84 204 l10 -6 7 7 9 -7"/><path d="M116 200 l8 7 9 -8 7 6"/>
+        </g>
+        <ellipse cx="79" cy="140" rx="14" ry="34" fill="#F2F7F2" opacity=".5" transform="rotate(-14 79 140)"/>
+        <ellipse cx="95" cy="26" rx="8" ry="2.6" fill="#5E7C78"/>
+        <path d="M82 232 h26 v8 q0 5 -6 5 h-14 q-6 0 -6 -5 Z" fill="#9C8265"/>
+      </svg>
+      <div class="fest" style="position:absolute;inset:0;opacity:0;pointer-events:none;" id="fest">
+        <div class="inner" id="festInner">
+          <svg viewBox="0 0 800 480" preserveAspectRatio="xMidYMid slice" style="width:100%;height:100%;">
+            <defs><linearGradient id="fw" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#243740"/><stop offset=".6" stop-color="#3C565C"/><stop offset="1" stop-color="#57706C"/></linearGradient>
+            <radialGradient id="cnd" cx=".5" cy=".5" r=".5">
+              <stop offset="0" stop-color="#F0D6A0"/><stop offset="1" stop-color="#E9C98F" stop-opacity="0"/></radialGradient></defs>
+            <rect width="800" height="480" fill="url(#fw)"/>
+            <g class="lamp">
+              <g fill="#B96A62"><rect x="80" y="52" width="30" height="38" rx="11"/><rect x="180" y="40" width="30" height="38" rx="11"/><rect x="620" y="44" width="30" height="38" rx="11"/><rect x="720" y="56" width="30" height="38" rx="11"/></g>
+              <g fill="#E9C98F" opacity=".35"><circle cx="95" cy="71" r="34"/><circle cx="195" cy="59" r="34"/><circle cx="635" cy="63" r="34"/><circle cx="735" cy="75" r="34"/></g>
+            </g>
+            <path d="M120 150 L400 88 L680 150 L660 160 L400 104 L140 160 Z" fill="#2E444C"/>
+            <rect x="160" y="160" width="480" height="150" fill="url(#fw)" stroke="#334B52"/>
+            <g fill="#2A3F46"><rect x="200" y="160" width="16" height="150"/><rect x="300" y="160" width="16" height="150"/><rect x="492" y="160" width="16" height="150"/><rect x="590" y="160" width="16" height="150"/></g>
+            <text x="400" y="252" text-anchor="middle" font-size="44" letter-spacing="16" fill="#E3D9B0" opacity=".95">寿</text>
+            <rect x="120" y="330" width="560" height="14" rx="4" fill="#4A3B2C" opacity=".85"/>
+            <rect x="150" y="344" width="500" height="10" rx="3" fill="#3A2E22" opacity=".85"/>
+            <g class="candle"><circle cx="252" cy="322" r="26" fill="url(#cnd)"/><rect x="248" y="312" width="8" height="18" rx="3" fill="#E9C98F"/></g>
+            <g class="candle c2"><circle cx="400" cy="318" r="30" fill="url(#cnd)"/><rect x="395" y="306" width="9" height="22" rx="3" fill="#E9C98F"/></g>
+            <g class="candle c3"><circle cx="548" cy="322" r="26" fill="url(#cnd)"/><rect x="544" y="312" width="8" height="18" rx="3" fill="#E9C98F"/></g>
+            <g fill="#1C2B31">
+              <path d="M180 480 v-70 q0 -14 12 -14 t12 14 v70 Z M172 386 a20 20 0 1 1 40 0 a20 20 0 1 1 -40 0"/>
+              <path d="M256 480 v-64 q0 -13 11 -13 t11 13 v64 Z M249 394 a19 19 0 1 1 38 0 a19 19 0 1 1 -38 0"/>
+              <path d="M330 480 v-68 q0 -14 12 -14 t12 14 v68 Z M322 388 a20 20 0 1 1 40 0 a20 20 0 1 1 -40 0"/>
+              <path d="M420 480 v-60 q0 -12 11 -12 t11 12 v60 Z M413 398 a18 18 0 1 1 36 0 a18 18 0 1 1 -36 0"/>
+              <path d="M498 480 v-68 q0 -14 12 -14 t12 14 v68 Z M490 388 a20 20 0 1 1 40 0 a20 20 0 1 1 -40 0"/>
+              <path d="M578 480 v-64 q0 -13 11 -13 t11 13 v64 Z M571 394 a19 19 0 1 1 38 0 a19 19 0 1 1 -38 0"/>
+              <path d="M652 480 v-70 q0 -14 12 -14 t12 14 v70 Z M644 386 a20 20 0 1 1 40 0 a20 20 0 1 1 -40 0"/>
+            </g>
+            <text x="400" y="452" text-anchor="middle" font-size="15" letter-spacing="6" fill="#D8CFA9" opacity=".85">显德五年九月廿四 · 天清节 · 群臣上寿</text>
+          </svg>
+        </div>
+        <div class="fade-white" id="fadeWhite"></div>
+      </div>
+    </div></div>
+    <p class="cap">③ 点「瓷片归瓮」：16 片碎瓷自环周依次（40ms 错拍）飞向合瓮点 → 瓷瓶自碎片中显形（透明度+缩放双轨）→ 光晕脉冲 → 白釉闪光转场 → 庆生画面（暖烛低饱和 + 群臣剪影举杯 + 合瓮居案）。整个链路只用 transform/opacity，Chrome 61 GPU 加速可满帧。</p>
+  </section>
+</div>
+
+<script>
+(function () {
+  'use strict';
+  /* S1 视差：pointer 归一化 → 各层按 depth 平移；无输入时自动缓动游移 */
+  var scene = document.getElementById('scene');
+  var layers = scene.querySelectorAll('.layer');
+  var tx = 0, ty = 0, cx = 0, cy = 0, auto = true, t0 = 0;
+  function apply() {
+    cx += (tx - cx) * 0.06; cy += (ty - cy) * 0.06;
+    for (var i = 0; i < layers.length; i++) {
+      var d = parseFloat(layers[i].getAttribute('data-d'));
+      layers[i].style.transform = 'translate(' + (cx * d).toFixed(2) + 'px,' + (cy * d * 0.35).toFixed(2) + 'px)';
+    }
+    requestAnimationFrame(apply);
+  }
+  requestAnimationFrame(apply);
+  scene.addEventListener('pointermove', function (e) {
+    auto = false;
+    var r = scene.getBoundingClientRect();
+    tx = ((e.clientX - r.left) / r.width - 0.5) * -2;
+    ty = ((e.clientY - r.top) / r.height - 0.5) * -1;
+  });
+  scene.addEventListener('pointerleave', function () { auto = true; });
+  setInterval(function () {
+    if (!auto) { return; }
+    t0 += 0.016;
+    tx = Math.sin(t0 * 0.5) * 0.5; ty = Math.cos(t0 * 0.34) * 0.22;
+  }, 16);
+
+  /* S3 汇聚：16 片从环周错拍飞向中心 → 显瓶 → 光晕 → 白闪 → 庆生 */
+  var stage = document.getElementById('stage');
+  var btn = document.getElementById('btnMerge');
+  var halo = document.getElementById('halo');
+  var vessel = document.getElementById('vessel');
+  var fest = document.getElementById('fest');
+  var inner = document.getElementById('festInner');
+  var fadeWhite = document.getElementById('fadeWhite');
+  var N = 16, R = 190, nodes = [], played = false;
+
+  for (var i = 0; i < N; i++) {
+    var a = (i / N) * Math.PI * 2;
+    var d = document.createElement('div');
+    d.className = 'shard';
+    var hue = 168 + Math.sin(i * 2.1) * 8;
+    d.style.background = 'linear-gradient(' + (i * 23) + 'deg,hsl(' + hue + ',22%,66%),hsl(' + (hue + 6) + ',20%,52%))';
+    d.style.borderRadius = i % 3 === 0 ? '46% 54% 60% 40% / 52% 44% 56% 48%' : '58% 42% 48% 52% / 44% 58% 42% 56%';
+    d.style.boxShadow = 'inset 0 0 0 1px rgba(255,255,255,.28), 0 4px 10px rgba(0,0,0,.4)';
+    d.style.left = (Math.cos(a) * R) + 'px';
+    d.style.top = (Math.sin(a) * R * 0.72) + 'px';
+    stage.appendChild(d);
+    nodes.push({ el: d, a: a });
+  }
+  btn.addEventListener('click', function () {
+    if (played) { return; }
+    played = true;
+    btn.disabled = true; btn.style.opacity = '0.35';
+    nodes.forEach(function (n, k) {
+      setTimeout(function () {
+        n.el.style.transform = 'translate(' + (-Math.cos(n.a) * R) + 'px,' + (-Math.sin(n.a) * R * 0.72) + 'px) rotate(' + (180 + k * 20) + 'deg) scale(.4)';
+        n.el.classList.add('gone');
+      }, 80 + k * 40);
+    });
+    setTimeout(function () { halo.classList.add('on'); }, 80 + N * 40 + 260);
+    setTimeout(function () { vessel.classList.add('on'); }, 80 + N * 40 + 420);
+    setTimeout(function () { fadeWhite.style.transition = 'opacity 1.1s ease'; fadeWhite.style.opacity = '1'; }, 2400);
+    setTimeout(function () {
+      fest.style.opacity = '1'; fest.style.pointerEvents = 'auto';
+      requestAnimationFrame(function () { inner.classList.add('on'); });
+      setTimeout(function () { fadeWhite.style.opacity = '0'; }, 500);
+    }, 3350);
+  });
+})();
+</script>
+</body>
+</html>
