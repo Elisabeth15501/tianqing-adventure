@@ -165,8 +165,8 @@
           <path id="xqBody" d="M89 41 L88 150 Q86 158 78 162 L52 168 Q20 180 18 235 L18 268 Q18 320 36 352 Q46 368 66 374 L78 377 L142 377 L154 374 Q174 368 184 352 Q202 320 202 268 L202 235 Q200 180 168 168 L142 162 Q134 158 132 150 L131 41 Z"/>
           <clipPath id="xqClip"><use href="#xqBody"/></clipPath>
           <filter id="crack" x="-20%" y="-20%" width="140%" height="140%">
-            <feTurbulence type="fractalNoise" baseFrequency="0.045" numOctaves="2" seed="7" result="t"/>
-            <feDisplacementMap in="SourceGraphic" in2="t" scale="16"/>
+            <feTurbulence type="fractalNoise" baseFrequency="0.028" numOctaves="3" seed="7" result="t"/>
+            <feDisplacementMap in="SourceGraphic" in2="t" scale="30"/>
           </filter>
           <linearGradient id="glzQ" x1="0" y1="0" x2="0" y2="1">
             <stop offset="0" stop-color="#8CAAA6"/><stop offset=".3" stop-color="#AFC7C1"/><stop offset=".6" stop-color="#9DB9B3"/><stop offset="1" stop-color="#77948F"/></linearGradient>
@@ -193,9 +193,30 @@
             <use href="#xqBody" fill="url(#glzQ)"/>
             <g clip-path="url(#xqClip)">
               <use href="#xqBody" fill="url(#side)"/>
-              <g filter="url(#crack)" stroke="#647F7B" stroke-width=".9" fill="none" opacity=".42">
-                <path d="M18 200 H202 M18 235 H202 M18 268 H202 M18 300 H202 M18 332 H202"/>
-                <path d="M45 168 V384 M70 168 V384 M95 168 V384 M125 168 V384 M150 168 V384 M175 168 V384"/>
+              <g filter="url(#crack)" stroke="#647F7B" stroke-width=".9" fill="none" opacity=".45">
+                <path d="M32 196 L58 188 L82 200 L104 190"/>
+                <path d="M24 224 L52 216 L74 230 L98 222 L124 232"/>
+                <path d="M30 252 L60 244 L86 258 L112 250 L140 260 L166 250"/>
+                <path d="M22 282 L48 272 L76 286 L102 276 L130 288 L156 278 L182 290"/>
+                <path d="M34 312 L62 302 L88 316 L116 306 L144 318 L172 308"/>
+                <path d="M26 344 L54 334 L80 348 L108 338 L136 350"/>
+                <path d="M40 372 L68 362 L94 374 L122 366"/>
+                <path d="M58 188 L54 216 L48 244 L44 274"/>
+                <path d="M82 200 L78 230 L70 258 L64 286 L60 316 L56 344 L54 362"/>
+                <path d="M104 190 L100 222 L96 250 L92 278 L88 306 L84 336 L82 362"/>
+                <path d="M124 232 L120 260 L116 288 L112 316 L110 344"/>
+                <path d="M148 258 L142 284 L138 312 L134 340"/>
+                <path d="M166 250 L160 278 L156 306 L152 334"/>
+                <path d="M40 220 L36 250 L32 280 L30 306"/>
+                <path d="M170 262 L176 292 L178 322"/>
+                <path d="M66 268 L74 282 L68 298 M118 262 L124 276 M90 358 L98 344"/>
+              </g>
+              <g filter="url(#crack)" stroke="#4A615E" stroke-width="1.3" fill="none" opacity=".35">
+                <path d="M28 236 Q52 260 74 292 T120 348"/>
+                <path d="M96 196 Q100 250 92 306 T76 372"/>
+                <path d="M158 240 Q150 286 132 330 T96 374"/>
+                <path d="M44 300 Q80 316 118 308 T178 318"/>
+                <path d="M110 214 Q118 252 112 288"/>
               </g>
               <ellipse cx="76" cy="250" rx="34" ry="86" fill="url(#soft)" transform="rotate(-10 76 250)"/>
               <ellipse cx="66" cy="244" rx="12" ry="42" fill="url(#soft)" transform="rotate(-10 66 244)"/>
