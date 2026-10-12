@@ -77,3 +77,17 @@ body { margin: 0; background: var(--tq-yuebai); color: var(--tq-ink);
 .footbar { padding: 10px 16px calc(var(--safe-bottom) + 12px); }
 .role-item { display: block; width: 100%; text-align: left; }
 .role-item .desc { display: block; font-size: 12px; font-weight: 400; margin-top: 4px; opacity: 0.85; }
+
+/* ---------- M1：背景画 / 选择 / 执觞节奏条 ---------- */
+.app{position:relative;}
+.bg-art{position:absolute;left:0;right:0;top:52px;bottom:0;opacity:.42;pointer-events:none;z-index:0;}
+.bg-art svg{width:100%;height:100%;}
+.main{position:relative;z-index:1;}
+.choice-box{background:var(--tq-fenqing);border:1px solid var(--tq-qing);border-radius:12px;padding:14px 16px;margin:12px 0;}
+.choice-box .speaker{font-size:13px;font-weight:500;color:var(--tq-qing-deep);margin-bottom:6px;}
+.choice-box .prompt{font-size:14px;line-height:1.7;margin-bottom:8px;}
+.panel{background:var(--tq-fenqing);border:1px solid var(--tq-qing);border-radius:12px;padding:14px 16px;margin:12px 0;}
+.beat-label{font-size:20px;font-weight:500;color:var(--tq-qing-deep);text-align:center;margin:6px 0 12px;letter-spacing:6px;}
+.meter{position:relative;height:22px;border-radius:11px;background:var(--tq-yuebai);border:1px solid var(--tq-qing);overflow:hidden;cursor:pointer;}
+.meter-zone{position:absolute;top:0;bottom:0;background:rgba(143,181,176,.45);border-left:1px solid var(--tq-qing-deep);border-right:1px solid var(--tq-qing-deep);}
+.meter-cursor{position:absolute;top:0;bottom:0;width:3px;margin-left:-1.5px;background:var(--tq-qing-deep);}
