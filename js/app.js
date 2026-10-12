@@ -90,7 +90,9 @@
     var act = D.acts[idx];
     if (!act || !act.unlocked || !act.steps.length) { showMemo(false, '此后时辰尚未开启。'); return; }
     if (save.actIndex < idx) { save.actIndex = idx; }
-    buildActShell(act, idx, 0);
+    // 断点续玩：同一幕内从存档步数继续；新开一幕从 0 起
+    var from = (save.actIndex === idx && save.step > 0 && save.step < act.steps.length) ? save.step : 0;
+    buildActShell(act, idx, from);
   }
 
   function buildActShell(act, idx, fromStep) {
@@ -140,13 +142,12 @@
     }
     function after() {
       save.step = i;
+      // 先清掉上一个「继续」/「上宴」，保证任何时刻只有一个步骤尾按钮
+      var olds = main.querySelectorAll('.step-tail');
+      for (var q = 0; q < olds.length; q++) { olds[q].parentNode.removeChild(olds[q]); }
       main.scrollTop = main.scrollHeight;
       if (i < act.steps.length) {
-        main.appendChild(btn('继续', 'ghost', function () {
-          var bs = main.querySelectorAll('.step-tail');
-          for (var q = 0; q < bs.length; q++) { bs[q].parentNode.removeChild(bs[q]); }
-          next();
-        }));
+        main.appendChild(btn('继续', 'ghost step-tail', next));
         main.scrollTop = main.scrollHeight;
       } else {
         finishAct(idx, main);
@@ -221,14 +222,15 @@
 
     var beat = 0, pos = 0, dir = 1, zoneL = 30, zoneR = 55, raf = 0, over = false;
     function placeZone() {
-      zoneL = 22 + Math.random() * 56;
-      zoneR = zoneL + 18;
+      zoneL = 20 + Math.random() * 56;
+      zoneR = zoneL + 24; // 命中区 24% 宽，宽容判定
       zone.style.left = zoneL + '%';
       zone.style.width = (zoneR - zoneL) + '%';
     }
     function loop() {
-      if (over) { return; }
-      pos += dir * 1.6;
+      // 面板已被移除（中途开手札等）即停表，防幽灵循环
+      if (over || !panel.isConnected) { over = true; return; }
+      pos += dir * 0.55; // 慢速：整程约 3 秒，命中窗口约 0.9 秒
       if (pos > 100) { pos = 100; dir = -1; }
       if (pos < 0) { pos = 0; dir = 1; }
       cursor.style.left = pos + '%';
@@ -244,7 +246,7 @@
           label.textContent = cfg.done;
           tip.textContent = '';
           awardDeco('jinzang', '金觞', main);
-          main.appendChild(btn('上宴', '', function () { done(); }));
+          main.appendChild(btn('上宴', 'step-tail', function () { done(); }));
           main.scrollTop = main.scrollHeight;
           return;
         }
@@ -255,7 +257,8 @@
         tip.textContent = cfg.retry;
       }
     }
-    track.addEventListener('click', tap);
+    // 整块面板可点（含拍名与说明区），手机上更好按
+    panel.addEventListener('click', tap);
     placeZone();
     raf = requestAnimationFrame(loop);
   }
