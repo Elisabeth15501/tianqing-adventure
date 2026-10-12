@@ -147,7 +147,10 @@
       for (var q = 0; q < olds.length; q++) { olds[q].parentNode.removeChild(olds[q]); }
       main.scrollTop = main.scrollHeight;
       if (i < act.steps.length) {
-        main.appendChild(btn('继续', 'ghost step-tail', next));
+        main.appendChild(btn('继续', 'ghost step-tail', function () {
+          lockChoiceBoxes(main); // 推进即锁定已答选项，防止回头改档
+          next();
+        }));
         main.scrollTop = main.scrollHeight;
       } else {
         finishAct(idx, main);
@@ -179,27 +182,58 @@
     done();
   }
 
-  /* ---------- 选择 ---------- */
+  /* ---------- 选择（单选互斥：可改选，推进后锁定） ---------- */
   function showChoice(main, st, done) {
     var box = el('div', 'choice-box');
+    box.setAttribute('role', 'radiogroup');
     box.appendChild(el('div', 'speaker', st.speaker || ''));
     box.appendChild(el('div', 'prompt', st.prompt || ''));
+    var chosenBtn = null;
+    var replyEl = null;
+    var advanced = false;
+
     st.options.forEach(function (op) {
       var b = el('button', 'btn ghost opt', op.label);
+      b.setAttribute('role', 'radio');
+      b.setAttribute('aria-checked', 'false');
       b.appendChild(el('span', 'desc', op.text));
       b.addEventListener('click', function () {
+        // 锁定后（流程已推进）不再接受改选
+        if (box.getAttribute('data-locked')) { return; }
+        // 互斥：同一项重复点击不重复处理
+        if (chosenBtn === b) { return; }
+        // 撤销上一项：取消高亮、移除旧回复
+        if (chosenBtn) {
+          chosenBtn.classList.remove('selected');
+          chosenBtn.setAttribute('aria-checked', 'false');
+        }
+        if (replyEl && replyEl.parentNode) { replyEl.parentNode.removeChild(replyEl); }
+        // 选中新项
+        chosenBtn = b;
+        b.classList.add('selected');
+        b.setAttribute('aria-checked', 'true');
         save.choices[st.key] = op.label;
         persist();
-        var reply = el('div', 'card');
-        reply.appendChild(el('div', 'text', op.reply));
-        main.appendChild(reply);
+        replyEl = el('div', 'card');
+        replyEl.appendChild(el('div', 'text', op.reply));
+        main.appendChild(replyEl);
         main.scrollTop = main.scrollHeight;
-        done();
+        if (!advanced) {
+          advanced = true;
+          done(); // 仅首次选择推进流程；改选只换回复不重复推进
+        }
       });
       box.appendChild(b);
     });
     main.appendChild(box);
     main.scrollTop = main.scrollHeight;
+  }
+
+  function lockChoiceBoxes(main) {
+    var boxes = main.querySelectorAll('.choice-box');
+    for (var i = 0; i < boxes.length; i++) {
+      boxes[i].setAttribute('data-locked', '1');
+    }
   }
 
   /* ---------- 执觞上寿（四拍节奏，失败零惩罚） ---------- */

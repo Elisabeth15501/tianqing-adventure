@@ -86,6 +86,10 @@ body { margin: 0; background: var(--tq-yuebai); color: var(--tq-ink);
 .choice-box{background:var(--tq-fenqing);border:1px solid var(--tq-qing);border-radius:12px;padding:14px 16px;margin:12px 0;}
 .choice-box .speaker{font-size:13px;font-weight:500;color:var(--tq-qing-deep);margin-bottom:6px;}
 .choice-box .prompt{font-size:14px;line-height:1.7;margin-bottom:8px;}
+.choice-box .opt.selected{background:var(--tq-qing-deep);color:var(--tq-yuebai);border-color:var(--tq-qing-deep);}
+.choice-box .opt.selected .desc{opacity:.85;}
+.choice-box[data-locked="1"] .opt{pointer-events:none;}
+.choice-box[data-locked="1"] .opt:not(.selected){opacity:.5;}
 .panel{background:var(--tq-fenqing);border:1px solid var(--tq-qing);border-radius:12px;padding:14px 16px;margin:12px 0;}
 .beat-label{font-size:20px;font-weight:500;color:var(--tq-qing-deep);text-align:center;margin:6px 0 12px;letter-spacing:6px;}
 .meter{position:relative;height:36px;border-radius:12px;background:var(--tq-yuebai);border:1px solid var(--tq-qing);overflow:hidden;cursor:pointer;}
