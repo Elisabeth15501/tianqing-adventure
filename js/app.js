@@ -222,7 +222,9 @@
         persist();
         replyEl = el('div', 'card');
         replyEl.appendChild(el('div', 'text', op.reply));
-        main.appendChild(replyEl);
+        // 回复固定插在本选项盒之后：改选换卡时不会被步骤尾按钮（继续）隔断
+        if (box.parentNode) { box.parentNode.insertBefore(replyEl, box.nextSibling); }
+        else { main.appendChild(replyEl); }
         main.scrollTop = main.scrollHeight;
         if (!advanced) {
           advanced = true;
@@ -329,7 +331,7 @@
     main.scrollTop = main.scrollHeight;
   }
 
-  /* ---------- 手札（存档中心） ---------- */
+  /* ---------- 手札（存档中心 + 瓷片图鉴） ---------- */
   function showMemo(fromTopbar, notice) {
     clear(app);
     app.appendChild(topbar(D.memoCopy.title));
@@ -337,20 +339,52 @@
     main.appendChild(el('div', 'memo-head', D.memoCopy.title));
     main.appendChild(el('div', 'memo-sub', notice || D.memoCopy.sub));
 
+    // 瓷片图鉴：已拾得的瓷片可点开重读知识点
     var grid = el('div', 'memo-grid');
+    var detail = el('div', 'shiliao shard-detail');
+    function showDetail(key) {
+      var sh = D.shards[key];
+      if (!sh) { return; }
+      while (detail.firstChild) { detail.removeChild(detail.firstChild); }
+      var head = el('div', 'head', '瓷片 · ' + sh.name);
+      head.appendChild(el('span', 'prov', sh.prov));
+      detail.appendChild(head);
+      detail.appendChild(el('div', 'quote', sh.text));
+      detail.appendChild(el('div', 'source', '——' + sh.source));
+      detail.setAttribute('data-on', '1');
+      main.scrollTop = main.scrollHeight;
+    }
     for (var id = 1; id <= 16; id++) {
       var key = String(id);
       var got = save && save.shards && save.shards[key];
       var label = got && D.shards[key] ? D.shards[key].name : String(id);
-      grid.appendChild(el('div', 'memo-cell' + (got ? ' got' : ''), label));
+      var cell = el('div', 'memo-cell' + (got ? ' got' : ''), label);
+      if (got && D.shards[key]) {
+        cell.setAttribute('role', 'button');
+        (function (k) {
+          cell.addEventListener('click', function () { showDetail(k); });
+        })(key);
+      }
+      grid.appendChild(cell);
     }
     main.appendChild(grid);
+    detail.appendChild(el('div', 'head', '瓷片图鉴'));
+    detail.appendChild(el('div', 'quote', '点上方已拾得的瓷片，可随时重读记下的内容。'));
+    main.appendChild(detail);
+
     var count = save ? countShards() : 0;
+    var cur = save ? D.acts[save.actIndex] : null;
+    // 继续值守仅在当前幕真正可玩（已解锁且有内容）时提供，避免死端
+    var canContinue = !!(cur && cur.unlocked && cur.steps.length > 0);
     main.appendChild(el('div', 'memo-sub', '瓷片 ' + count + '/16 · ' +
-      (save ? (D.acts[save.actIndex] ? '当前：' + D.acts[save.actIndex].name : '') : '尚未入宫')));
+      (cur ? '当前：' + cur.name + (canContinue ? '' : '（尚未开启）') : '尚未入宫')));
 
     if (save && save.role) {
-      main.appendChild(btn('继续值守', '', function () { enterAct(save.actIndex); }));
+      if (canContinue) {
+        main.appendChild(btn('继续值守', '', function () { enterAct(save.actIndex); }));
+      } else {
+        main.appendChild(el('div', 'memo-sub', '下一时辰尚未开启——今日当值至此，先歇歇。已有的瓷片随时可翻看。'));
+      }
       main.appendChild(btn(D.memoCopy.saveNow, 'ghost', function () {
         persist();
         showMemo(false, D.memoCopy.saved);

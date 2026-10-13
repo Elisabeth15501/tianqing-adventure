@@ -69,7 +69,10 @@ body { margin: 0; background: var(--tq-yuebai); color: var(--tq-ink);
   background: var(--tq-fenqing); border: 1px solid var(--tq-qing);
   display: flex; align-items: center; justify-content: center; font-size: 12px; color: var(--tq-muted);
   text-align: center; padding: 2px; box-sizing: border-box; }
-.memo-cell.got { background: var(--tq-qing-deep); color: var(--tq-yuebai); border-color: var(--tq-qing-deep); }
+.memo-cell.got { background: var(--tq-qing-deep); color: var(--tq-yuebai); border-color: var(--tq-qing-deep); cursor: pointer; }
+.memo-cell.got:active { transform: translateY(1px); }
+.shard-detail { margin-top: 12px; }
+.shard-detail:not([data-on="1"]) { opacity: .75; }
 .memo-head { font-size: 14px; font-weight: 500; margin: 6px 2px; }
 .memo-sub { font-size: 12px; color: var(--tq-muted); margin: 4px 2px 12px; }
 
