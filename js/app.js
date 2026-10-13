@@ -148,7 +148,13 @@
       main.scrollTop = main.scrollHeight;
       if (i < act.steps.length) {
         main.appendChild(btn('继续', 'ghost step-tail', function () {
-          lockChoiceBoxes(main); // 推进即锁定已答选项，防止回头改档
+          // 先摘掉按钮自身（连同一切 step-tail）：防双击/悬空期间二次触发
+          var olds = main.querySelectorAll('.step-tail');
+          for (var q = 0; q < olds.length; q++) {
+            if (olds[q].parentNode) { olds[q].parentNode.removeChild(olds[q]); }
+          }
+          // 此刻尚存的选项盒必然已作答（作答才会走到 after/继续），锁定安全
+          lockChoiceBoxes(main);
           next();
         }));
         main.scrollTop = main.scrollHeight;
