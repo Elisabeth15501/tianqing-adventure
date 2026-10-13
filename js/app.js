@@ -145,6 +145,29 @@
       } else if (st.type === 'touhu') {
         busy = true;
         runTouhu(main, function () { busy = false; after(); });
+      } else if (st.type === 'role') {
+        // 角色专属支线：主线共享（碎片数一致），视角与私事因身份而异
+        busy = true;
+        var sub = (st.branches && st.branches[save.role]) || [];
+        var j = 0;
+        (function nextSub() {
+          if (j >= sub.length) { busy = false; after(); return; }
+          var s2 = sub[j]; j += 1;
+          if (s2.type === 'card') {
+            var cc = el('div', 'card');
+            cc.appendChild(el('div', 'speaker', s2.speaker || ''));
+            cc.appendChild(el('div', 'text', s2.text));
+            main.appendChild(cc);
+            main.scrollTop = main.scrollHeight;
+            nextSub();
+          } else if (s2.type === 'choice') {
+            showChoice(main, s2, nextSub);
+          } else {
+            main.appendChild(el('div', 'narr', s2.text || ''));
+            main.scrollTop = main.scrollHeight;
+            nextSub();
+          }
+        })();
       } else {
         after();
       }
@@ -390,6 +413,9 @@
       + '</svg>';
     wrap.appendChild(svgBox);
     E.lines.forEach(function (t) { wrap.appendChild(el('div', 'memory-line', t)); });
+    if (E.roleLine && save.role && E.roleLine[save.role]) {
+      wrap.appendChild(el('div', 'memory-line', E.roleLine[save.role]));
+    }
     var nMem = 0, k;
     for (k in save.memories) { if (save.memories[k]) { nMem += 1; } }
     var nDeco = 0;
