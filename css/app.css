@@ -98,3 +98,15 @@ body { margin: 0; background: var(--tq-yuebai); color: var(--tq-ink);
 .meter{position:relative;height:36px;border-radius:12px;background:var(--tq-yuebai);border:1px solid var(--tq-qing);overflow:hidden;cursor:pointer;}
 .meter-zone{position:absolute;top:0;bottom:0;background:rgba(143,181,176,.45);border-left:1px solid var(--tq-qing-deep);border-right:1px solid var(--tq-qing-deep);}
 .meter-cursor{position:absolute;top:0;bottom:0;width:3px;margin-left:-1.5px;background:var(--tq-qing-deep);}
+
+/* ---------- 瓷心回忆 / 结算 ---------- */
+.memory-panel { background: #1E3138; border-color: #2E444C; }
+.memory-panel .memo-head { color: #AFC7C1; }
+.memory-panel .memo-sub { color: #7E948F; }
+.memory-line { font-size: 15px; line-height: 1.9; color: #DCE8E2; margin: 10px 2px; }
+.ending { text-align: center; padding: 20px 0; }
+.ending-title { font-size: 26px; font-weight: 500; letter-spacing: 6px; color: var(--tq-ink); margin-bottom: 8px; }
+.ending-vessel { width: 200px; margin: 6px auto 4px; }
+.ending-vessel svg { width: 100%; display: block; filter: drop-shadow(0 8px 14px rgba(0,0,0,.25)); }
+.ending .memory-line { color: var(--tq-ink); }
+.ending .memo-sub { text-align: center; }
