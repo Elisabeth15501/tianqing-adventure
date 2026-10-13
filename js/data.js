@@ -10,8 +10,8 @@ window.TQ_DATA = {
   },
 
   roles: [
-    { id: 'nv', name: '宫中女官', desc: '掌灯烛宴席，出入后宫与寿宴两处——比旁人多看见一分宫闱的近处' },
-    { id: 'shi', name: '随驾史官', desc: '执笔记注，见闻皆入起居之册——比旁人多想一寸真伪' }
+    { id: 'nv', name: '宫中女官', desc: '掌灯烛汤食，出入内廷——汤饼与灯，都在你手里' },
+    { id: 'shi', name: '随驾史官', desc: '执笔记注，见闻皆入起居之册——笔，就是你的差事' }
   ],
 
   /* ---------- 背景（简版场景画，正式资产并入后替换） ---------- */
@@ -83,9 +83,18 @@ window.TQ_DATA = {
         { type: 'narr', text: '天未亮，宫灯次第亮起。万寿门内，今日仪注已铺满长案。' },
         { type: 'narr', text: '显德五年九月廿四，天清节。官家的三十八岁生日。' },
         { type: 'shard', id: '1' },
-        { type: 'narr', text: '你展开第一份仪程。头一项差事不在门下——在尚食局。官家生辰的汤饼，今年由你掌勺。' },
-        { type: 'narr', text: '尚食局的灶已经热了。九月近冬，汤饼正当时。' },
-        { type: 'rhythm', cfg: 'tangbing', deco: 'tangwan', decoName: '汤饼碗' },
+        { type: 'narr', text: '你展开第一份仪程。头一项差事，不在门下。' },
+        { type: 'role', branches: {
+          nv: [
+            { type: 'narr', text: '在尚食局——官家生辰的汤饼，今年由你掌勺。' },
+            { type: 'narr', text: '尚食局的灶已经热了。九月近冬，汤饼正当时。' },
+            { type: 'rhythm', cfg: 'tangbing', deco: 'tangwan', decoName: '汤饼碗' }
+          ],
+          shi: [
+            { type: 'narr', text: '在廊下——执笔随记。起居册今日的第一条，是尚食局进汤饼的礼数。' },
+            { type: 'rhythm', cfg: 'tangbing_shi', deco: 'tangwan', decoName: '汤饼碗' }
+          ]
+        } },
         { type: 'shard', id: '3' },
         { type: 'narr', text: '面送到万寿门侧殿候着。你回廊下过仪注，殿檐下挂着一方旧寺额的拓样——天清寺进贡的贺仪单子就压在下面。' },
         { type: 'role', branches: {
@@ -171,8 +180,17 @@ window.TQ_DATA = {
         { type: 'narr', text: '午时，宫门开半扉。今日赐民宴乐，依唐千秋节旧制（演绎）——金吾不禁，汴桥上下人声如沸。' },
         { type: 'narr', text: '你捧着赐出的面出宫。桥头第一眼看见的，是水——浚汴口后，江淮的漕船第一次这样列队进京。' },
         { type: 'shard', id: '9' },
-        { type: 'narr', text: '桥市上一个丝线摊子围满了人。今日士庶互赠丝囊，也是沿唐旧俗（演绎）——摊主招呼你：官家身边的礼官，不做一个？' },
-        { type: 'rhythm', cfg: 'chenglu', deco: 'nang', decoName: '承露囊' },
+        { type: 'narr', text: '桥市上一个丝线摊子围满了人。今日士庶互赠丝囊，也是沿唐旧俗（演绎）。' },
+        { type: 'role', branches: {
+          nv: [
+            { type: 'narr', text: '摊主招呼你：官家身边的礼官，不做一个？' },
+            { type: 'rhythm', cfg: 'chenglu', deco: 'nang', decoName: '承露囊' }
+          ],
+          shi: [
+            { type: 'narr', text: '摊主认出你腰间的笔囊，招呼你：史官记了我们三年市声，今日不记一个囊？' },
+            { type: 'rhythm', cfg: 'chenglu_shi', deco: 'nang', decoName: '承露囊' }
+          ]
+        } },
         { type: 'shard', id: '10' },
         { type: 'narr', text: '贡品的车队正好从桥南过。九月廿一占城刚入贡，那天贡的三百匹沉香还在礼部的库里。' },
         { type: 'shard', id: '11' },
@@ -217,6 +235,7 @@ window.TQ_DATA = {
           shi: [
             { type: 'narr', text: '残页在你手里。史官的职业病又犯了：这一页，要不要入起居注？' },
             { type: 'narr', text: '帝后之私，史册向来不载。可「谏征」二字之后跟着的，是一场大战和她的死——不载，它就只剩话本。' },
+            { type: 'rhythm', cfg: 'you_jiao' },
             { type: 'choice', key: 'shi_qijuzhu', speaker: '残页在灯下', prompt: '载，还是不载？',
               options: [
                 { label: '载', text: '只载事，不载情：「三年，后谏征淮南，不听。从行，还而疾。」', reply: '你一笔一笔抄进随身的小册。字越少，越重。' },
@@ -224,8 +243,8 @@ window.TQ_DATA = {
               ] }
           ],
           nv: [
-            { type: 'narr', text: '你把那盏旧灯的罩子擦净了。灯油早干了，你从怀里的油囊倒了一点点，点着——就一炷香的工夫。' },
-            { type: 'narr', text: '灯亮起来的时候，这间空了两年的殿，忽然像有人在等谁回来。' },
+            { type: 'narr', text: '你把那盏旧灯的罩子擦净了。灯油早干了——你从怀里的油囊倒了一点点。' },
+            { type: 'rhythm', cfg: 'you_deng' },
             { type: 'narr', text: '香尽，你熄了灯，把灯座放回原位。放稳的那一下，手比来时轻。' }
           ]
         } },
@@ -431,6 +450,34 @@ window.TQ_DATA = {
     hint: '跟着金线绕——囊成，赠与桥头有缘人。',
     retry: '针脚松了，绕紧些。',
     done: '囊成。桥头的孩子得了它，一路笑着跑远了。'
+  },
+  tangbing_shi: {
+    title: '廊下 · 食单记注',
+    beats: ['研墨', '蘸笔', '落笔', '钤印'],
+    hint: '跟着金线运笔——记注务实，一字不苟。',
+    retry: '墨洇了。镇纸压住，重来。',
+    done: '记毕。汤饼之典，入起居之册。'
+  },
+  chenglu_shi: {
+    title: '汴桥 · 民俗记注',
+    beats: ['观俗', '问俗', '落笔'],
+    hint: '跟着金线记——丝囊系着的，是百姓的寿愿。',
+    retry: '这一笔虚了。再问一句，落笔。',
+    done: '记毕。摊主把成囊塞给你：「换你这几行字。」'
+  },
+  you_deng: {
+    title: '滋德殿 · 挑灯',
+    beats: ['净尘', '挑芯', '点火'],
+    hint: '灯芯挑亮些——她曾在这盏灯下等门。',
+    retry: '火苗晃了。稳一稳手。',
+    done: '灯亮了。一炷香的工夫，空殿里像有人在。'
+  },
+  you_jiao: {
+    title: '滋德殿 · 校字',
+    beats: ['展卷', '核字', '补阙'],
+    hint: '跟着金线校——残页上的字，到「不听」为止。',
+    retry: '认错了字。朱笔圈出，重校。',
+    done: '校毕。字句归位，轻重也归位。'
   },
 
   /* ---------- 投壶（终幕） ---------- */

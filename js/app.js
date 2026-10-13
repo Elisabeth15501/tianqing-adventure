@@ -95,6 +95,19 @@
     buildActShell(act, idx, from);
   }
 
+  /* ---------- 角色分叉展开：split 步骤按 save.role 解析为线性序列 ---------- */
+  function expandSteps(steps, role) {
+    var out = [];
+    (steps || []).forEach(function (st) {
+      if (st && st.type === 'split') {
+        expandSteps(st[role] || [], role).forEach(function (x) { out.push(x); });
+      } else if (st) {
+        out.push(st);
+      }
+    });
+    return out;
+  }
+
   function buildActShell(act, idx, fromStep) {
     clear(app);
     app.appendChild(topbar(act.name));
@@ -105,17 +118,18 @@
     }
     var main = el('div', 'main');
     app.appendChild(main);
-    runSteps(act, idx, main, fromStep || 0);
+    runSteps(act, idx, main, fromStep || 0, expandSteps(act.steps, save.role));
   }
 
-  function runSteps(act, idx, main, fromStep) {
+  function runSteps(act, idx, main, fromStep, steps) {
     var i = fromStep;
     var busy = false;
+    steps = steps || act.steps;
 
     function next() {
       if (busy) { return; }
-      if (i >= act.steps.length) { finishAct(idx, main); return; }
-      var st = act.steps[i];
+      if (i >= steps.length) { finishAct(idx, main); return; }
+      var st = steps[i];
       i += 1;
       if (st.type === 'narr') {
         main.appendChild(el('div', 'narr', st.text));
@@ -160,6 +174,10 @@
             main.appendChild(cc);
             main.scrollTop = main.scrollHeight;
             nextSub();
+          } else if (s2.type === 'rhythm') {
+            runRhythm(main, D[s2.cfg] || D.shangshu, { deco: s2.deco, decoName: s2.decoName }, nextSub);
+          } else if (s2.type === 'shard') {
+            showShard(main, s2.id, nextSub);
           } else if (s2.type === 'choice') {
             showChoice(main, s2, nextSub);
           } else {
@@ -179,7 +197,7 @@
       var olds = main.querySelectorAll('.step-tail');
       for (var q = 0; q < olds.length; q++) { olds[q].parentNode.removeChild(olds[q]); }
       main.scrollTop = main.scrollHeight;
-      if (i < act.steps.length) {
+      if (i < steps.length) {
         main.appendChild(btn('继续', 'ghost step-tail', function () {
           // 先摘掉按钮自身（连同一切 step-tail）：防双击/悬空期间二次触发
           var olds = main.querySelectorAll('.step-tail');
