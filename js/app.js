@@ -134,7 +134,17 @@
         showChoice(main, st, function () { busy = false; after(); });
       } else if (st.type === 'shangshu') {
         busy = true;
-        runShangshu(main, function () { busy = false; after(); });
+        runRhythm(main, D.shangshu, { deco: 'jinzang', decoName: '金觞' }, function () { busy = false; after(); });
+      } else if (st.type === 'rhythm') {
+        busy = true;
+        var rcfg = D[st.cfg] || D.shangshu;
+        runRhythm(main, rcfg, { deco: st.deco, decoName: st.decoName }, function () { busy = false; after(); });
+      } else if (st.type === 'memory') {
+        busy = true;
+        runMemory(main, st.id, function () { busy = false; after(); });
+      } else if (st.type === 'touhu') {
+        busy = true;
+        runTouhu(main, function () { busy = false; after(); });
       } else {
         after();
       }
@@ -244,13 +254,17 @@
     }
   }
 
-  /* ---------- 执觞上寿（四拍节奏，失败零惩罚） ---------- */
-  function runShangshu(main, done) {
-    var cfg = D.shangshu;
+  /* ---------- 通用节奏小节（执觞/汤饼/承露囊/投壶掷矢） ----------
+   * cfg: { title, beats[], hint, retry, done, beatNames? }
+   * opts: { deco?, decoName?, advanceOnMiss? } —— advanceOnMiss=true 时落空也推进并计数（投壶用）
+   * cb(hits)：完成回调，hits=成功拍数
+   */
+  function runRhythm(main, cfg, opts, cb) {
     var panel = el('div', 'panel');
-    panel.appendChild(el('div', 'memo-head', '习礼 · 执觞上寿'));
+    panel.appendChild(el('div', 'memo-head', cfg.title || '习礼'));
     panel.appendChild(el('div', 'memo-sub', cfg.hint));
-    var label = el('div', 'beat-label', cfg.beats[0]);
+    var beats = cfg.beatNames || cfg.beats;
+    var label = el('div', 'beat-label', beats[0]);
     panel.appendChild(label);
     var track = el('div', 'meter');
     var zone = el('div', 'meter-zone');
@@ -262,7 +276,8 @@
     panel.appendChild(tip);
     main.appendChild(panel);
 
-    var beat = 0, pos = 0, dir = 1, zoneL = 30, zoneR = 55, raf = 0, over = false;
+    var advanceOnMiss = !!(opts && opts.advanceOnMiss);
+    var beat = 0, hits = 0, pos = 0, dir = 1, zoneL = 30, zoneR = 55, raf = 0, over = false;
     function placeZone() {
       zoneL = 20 + Math.random() * 56;
       zoneR = zoneL + 24; // 命中区 24% 宽，宽容判定
@@ -270,8 +285,7 @@
       zone.style.width = (zoneR - zoneL) + '%';
     }
     function loop() {
-      // 面板已被移除（中途开手札等）即停表，防幽灵循环
-      if (over || !panel.isConnected) { over = true; return; }
+      if (over || !panel.isConnected) { over = true; return; } // 离场即停表
       pos += dir * 0.55; // 慢速：整程约 3 秒，命中窗口约 0.9 秒
       if (pos > 100) { pos = 100; dir = -1; }
       if (pos < 0) { pos = 0; dir = 1; }
@@ -280,29 +294,116 @@
     }
     function tap() {
       if (over) { return; }
-      if (pos >= zoneL && pos <= zoneR) {
-        beat += 1;
-        if (beat >= cfg.beats.length) {
-          over = true;
-          cancelAnimationFrame(raf);
-          label.textContent = cfg.done;
-          tip.textContent = '';
-          awardDeco('jinzang', '金觞', main);
-          main.appendChild(btn('上宴', 'step-tail', function () { done(); }));
-          main.scrollTop = main.scrollHeight;
-          return;
-        }
-        label.textContent = cfg.beats[beat];
-        placeZone();
-        tip.textContent = '好。下一拍。';
-      } else {
+      var hit = pos >= zoneL && pos <= zoneR;
+      if (hit) { hits += 1; }
+      if (!hit && !advanceOnMiss) {
         tip.textContent = cfg.retry;
+        return;
       }
+      beat += 1;
+      if (beat >= beats.length) {
+        over = true;
+        cancelAnimationFrame(raf);
+        label.textContent = cfg.done || '毕。';
+        tip.textContent = '';
+        if (opts && opts.deco) { awardDeco(opts.deco, opts.decoName, main); }
+        main.scrollTop = main.scrollHeight;
+        cb(hits);
+        return;
+      }
+      label.textContent = beats[beat];
+      placeZone();
+      tip.textContent = hit ? '好。下一拍。' : '落了。拾起来，再来。';
     }
-    // 整块面板可点（含拍名与说明区），手机上更好按
     panel.addEventListener('click', tap);
     placeZone();
     raf = requestAnimationFrame(loop);
+  }
+
+  /* ---------- 瓷心回忆（五段） ---------- */
+  function runMemory(main, id, done) {
+    var m = D.memories[id];
+    if (!m) { done(); return; }
+    save.memories[id] = true;
+    persist();
+    var panel = el('div', 'panel memory-panel');
+    var head = el('div', 'memo-head', m.title);
+    head.appendChild(el('span', 'prov', m.prov));
+    panel.appendChild(head);
+    panel.appendChild(el('div', 'memo-sub', m.era));
+    m.lines.forEach(function (t) {
+      panel.appendChild(el('div', 'memory-line', t));
+    });
+    main.appendChild(panel);
+    main.appendChild(btn('从回忆里回来', 'ghost step-tail', done));
+    main.scrollTop = main.scrollHeight;
+  }
+
+  /* ---------- 玉津园 · 投壶（终幕） ---------- */
+  function runTouhu(main, done) {
+    var cfg = D.touhu;
+    function card(speaker, text) {
+      var c = el('div', 'card');
+      c.appendChild(el('div', 'speaker', speaker || ''));
+      c.appendChild(el('div', 'text', text));
+      main.appendChild(c);
+      main.scrollTop = main.scrollHeight;
+    }
+    // 群臣轮番（各自两矢，一卡带过）
+    cfg.ministers.forEach(function (mst) { card(mst.speaker, mst.text); });
+    card('司正', '礼官请矢——两矢，中者为胜。');
+    // 玩家两矢：落空也推进，计命中数
+    runRhythm(main, {
+      title: cfg.title,
+      beats: cfg.beatNames,
+      hint: cfg.hint,
+      retry: cfg.retry,
+      done: '两矢已毕。'
+    }, { advanceOnMiss: true }, function (hits) {
+      // 压轴：官家对投（首矢中、次矢偏——与玩家 hits 比较）
+      card('官家', cfg.rongIntro);
+      cfg.rong.forEach(function (t) { card('', t); });
+      var rongHits = 1;
+      var verdict = hits > rongHits ? cfg.verdictWin : (hits === rongHits ? cfg.verdictDraw : cfg.verdictLose);
+      card('园中', verdict);
+      awardDeco('jinzhi', '金矢', main); // 胜负零惩罚，参与即纪念
+      main.appendChild(btn('献瓮', 'step-tail', done));
+      main.scrollTop = main.scrollHeight;
+    });
+  }
+
+  /* ---------- 终幕结算（合瓮长卷·简版） ---------- */
+  function showEnding(main) {
+    var E = D.ending;
+    var wrap = el('div', 'ending');
+    wrap.appendChild(el('div', 'ending-title', E.title));
+    var svgBox = el('div', 'ending-vessel');
+    svgBox.innerHTML = '<svg viewBox="0 0 220 320">'
+      + '<defs><radialGradient id="eGlow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#E9C98F" stop-opacity=".4"/><stop offset="1" stop-color="#E9C98F" stop-opacity="0"/></radialGradient>'
+      + '<linearGradient id="eGlz" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8CAAA6"/><stop offset=".3" stop-color="#AFC7C1"/><stop offset=".6" stop-color="#9DB9B3"/><stop offset="1" stop-color="#77948F"/></linearGradient></defs>'
+      + '<circle cx="110" cy="160" r="120" fill="url(#eGlow)"/>'
+      + '<path d="M92 42 L91 108 Q90 116 78 120 L54 126 Q26 138 24 190 L24 222 Q24 272 46 300 Q58 314 74 318 L86 321 L134 321 L146 318 Q162 314 174 300 Q196 272 196 222 L196 190 Q194 138 166 126 L142 120 Q130 116 129 108 L128 42 Z" fill="url(#eGlz)"/>'
+      + '<rect x="88" y="30" width="44" height="12" rx="3" fill="#B98F4E"/>'
+      + '<ellipse cx="110" cy="35" rx="17" ry="4" fill="#2E4240"/>'
+      + '<rect x="82" y="321" width="56" height="12" fill="#8A6B4A"/>'
+      + '<ellipse cx="96" cy="200" rx="9" ry="46" fill="#F4F8F4" opacity=".35" transform="rotate(-8 96 200)"/>'
+      + '</svg>';
+    wrap.appendChild(svgBox);
+    E.lines.forEach(function (t) { wrap.appendChild(el('div', 'memory-line', t)); });
+    var nMem = 0, k;
+    for (k in save.memories) { if (save.memories[k]) { nMem += 1; } }
+    var nDeco = 0;
+    for (k in save.deco) { if (save.deco[k]) { nDeco += 1; } }
+    var ans = save.choices && save.choices.yin_chongyi ? save.choices.yin_chongyi : '—';
+    wrap.appendChild(el('div', 'memo-sub',
+      '瓷片 ' + countShards() + '/16 · 回忆 ' + nMem + '/5 · 装饰 ' + nDeco + '/4 · 那日的答辞：「' + ans + '」'));
+    wrap.appendChild(el('div', 'memo-sub', E.quote));
+    wrap.appendChild(btn('翻阅手札', '', function () { showMemo(false); }));
+    wrap.appendChild(btn('从头再来', 'ghost', function () {
+      S.clearSave(function () { save = null; hasSave = false; showTitle(); });
+    }));
+    main.appendChild(wrap);
+    main.scrollTop = main.scrollHeight;
   }
 
   function awardDeco(id, name, main) {
@@ -325,6 +426,7 @@
     save.actIndex = Math.min(idx + 1, D.acts.length - 1);
     save.step = 0;
     persist();
+    if (idx === D.acts.length - 1) { showEnding(main); return; } // 终幕 → 合瓮结算
     var note = el('div', 'memo-sub', act.name + '礼毕，手札已记下进度。');
     main.appendChild(note);
     main.appendChild(btn('翻阅手札', '', function () { showMemo(false); }));
