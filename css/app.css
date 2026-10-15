@@ -110,3 +110,73 @@ body { margin: 0; background: var(--tq-yuebai); color: var(--tq-ink);
 .ending-vessel svg { width: 100%; display: block; filter: drop-shadow(0 8px 14px rgba(0,0,0,.25)); }
 .ending .memory-line { color: var(--tq-ink); }
 .ending .memo-sub { text-align: center; }
+
+/* ==================== 响应式（v2：桌面 + 移动双端） ====================
+ * 策略：移动竖屏为基准布局（原样保留），≥700px 起「居中栏式」桌面布局；
+ * 交互全走 click/pointer，双端天然通用，无需 JS 改动。
+ * 兼容口径：Chrome 61——不用 clamp()/max()/gap 等新属性。
+ */
+
+/* ---------- 断点一：≥700px 平板/桌面（居中栏式） ---------- */
+@media (min-width: 700px) {
+  html, body { overflow: hidden; }
+  body { background: #D9E3DF; } /* 栏外底色略深，衬托应用栏 */
+
+  .app { max-width: 780px; margin: 0 auto; min-height: 100%;
+    box-shadow: 0 0 48px rgba(31, 59, 58, .16); }
+
+  /* 内容列居中收窄：正文行长可控，按钮不横跨整栏 */
+  .main { padding: 24px 32px; }
+  .main > * { width: 100%; max-width: 620px; align-self: center; }
+
+  /* 字号与留白放大一档 */
+  .topbar { padding: 14px 32px 10px; }
+  .topbar .act-name { font-size: 17px; }
+  .topbar .memo-btn { font-size: 14px; padding: 5px 16px; }
+  .title-main { font-size: 42px; letter-spacing: 8px; }
+  .title-sub { font-size: 15px; }
+  .title-note { font-size: 13px; }
+  .narr { font-size: 15px; line-height: 2; }
+  .card { padding: 16px 20px; }
+  .card .text { font-size: 15px; }
+  .shiliao { padding: 16px 20px; }
+  .beat-label { font-size: 24px; }
+  .memory-line { font-size: 16px; line-height: 2; }
+  .ending-title { font-size: 30px; }
+  .memo-grid { max-width: 480px; }
+  .memo-cell { height: 60px; font-size: 13px; }
+
+  /* 桌面悬停反馈（移动端无 hover 不受影响） */
+  .btn:hover { filter: brightness(1.06); }
+  .btn.ghost:hover { background: var(--tq-fenqing); }
+  .btn:active { transform: translateY(1px); }
+  .memo-cell.got:hover { filter: brightness(1.12); cursor: pointer; }
+  .choice-box .opt:hover { border-color: var(--tq-qing-deep); }
+  .meter { cursor: pointer; }
+}
+
+/* ---------- 断点二：≥1100px 宽屏微调 ---------- */
+@media (min-width: 1100px) {
+  .app { max-width: 860px; }
+  .main { padding: 32px 40px; }
+  .main > * { max-width: 680px; }
+  .narr, .card .text { font-size: 16px; }
+  .memo-grid { max-width: 520px; }
+}
+
+/* ---------- 断点三：矮屏（横屏手机）压缩纵向 ---------- */
+@media (max-height: 480px) and (orientation: landscape) {
+  .topbar { padding: 8px 16px 6px; }
+  .bg-art { top: 40px; }
+  .main { padding: 10px 16px; }
+  .title-main { font-size: 24px; letter-spacing: 4px; }
+  .title-sub { margin-top: 4px; }
+  .title-note { margin-top: 8px; }
+  .title-actions { margin-top: 14px; }
+  .btn { padding: 9px 16px; margin: 6px 0; font-size: 14px; }
+  .narr { margin: 6px 2px; font-size: 13px; line-height: 1.7; }
+  .memory-line { margin: 6px 2px; }
+  .memo-cell { height: 40px; font-size: 11px; }
+  .beat-label { font-size: 18px; margin: 2px 0 8px; }
+  .panel { padding: 10px 14px; margin: 8px 0; }
+}
