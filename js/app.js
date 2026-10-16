@@ -32,7 +32,7 @@
     bar.appendChild(memo);
     return bar;
   }
-  function clear(node) { while (node.firstChild) { node.removeChild(node.firstChild); } }
+  function clear(node) { while (node.firstChild) { node.removeChild(node.firstChild); } node.classList.remove('ending-scene'); }
   function persist() {
     if (save) { save.updated = Date.now(); S.saveGame(save, function () {}); }
   }
@@ -271,6 +271,8 @@
         b.setAttribute('aria-checked', 'true');
         save.choices[st.key] = op.label;
         persist();
+        // 一经选择立即锁定：不可改选（选中高亮保留，未选降透明禁点）
+        box.setAttribute('data-locked', '1');
         replyEl = el('div', 'card');
         replyEl.appendChild(el('div', 'text', op.reply));
         // 回复固定插在本选项盒之后：改选换卡时不会被步骤尾按钮（继续）隔断
@@ -415,6 +417,7 @@
 
   /* ---------- 终幕结算（合瓮长卷·简版） ---------- */
   function showEnding(main) {
+    app.classList.add('ending-scene'); /* 暗场：突出青瓷纸槌瓶（clear(app) 时移除） */
     var E = D.ending;
     var wrap = el('div', 'ending');
     wrap.appendChild(el('div', 'ending-title', E.title));

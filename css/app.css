@@ -111,6 +111,17 @@ body { margin: 0; background: var(--tq-yuebai); color: var(--tq-ink);
 .ending .memory-line { color: var(--tq-ink); }
 .ending .memo-sub { text-align: center; }
 
+/* 终幕·合瓮暗场（用户 10-17 定：较暗背景突出纸槌瓶；深色三 HEX 取自 S9 加载页同源渐变，非新色） */
+.ending-scene { background: radial-gradient(circle at 50% 40%, #5E7F7C 0%, #3E5B5E 48%, #22383C 100%); }
+.ending-scene .ending-title { color: var(--tq-yuebai); }
+.ending-scene .memory-line { color: rgba(239, 245, 243, .85); }
+.ending-scene .memo-sub { color: rgba(239, 245, 243, .62); }
+.ending-scene .ending-vessel { position: relative; z-index: 0; }
+.ending-scene .ending-vessel svg { filter: drop-shadow(0 10px 22px rgba(0, 0, 0, .45)); }
+.ending-scene .ending-vessel::before { content: ""; position: absolute; left: 50%; top: 50%;
+  transform: translate(-50%, -50%); width: 300px; height: 300px; border-radius: 50%;
+  background: radial-gradient(circle, rgba(239, 245, 243, .16), rgba(239, 245, 243, 0) 68%); z-index: -1; }
+
 /* ==================== 响应式（v2：桌面 + 移动双端） ====================
  * 策略：移动竖屏为基准布局（原样保留），≥700px 起「居中栏式」桌面布局；
  * 交互全走 click/pointer，双端天然通用，无需 JS 改动。
