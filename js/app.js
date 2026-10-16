@@ -392,8 +392,11 @@
       main.appendChild(c);
       main.scrollTop = main.scrollHeight;
     }
-    // 群臣轮番（各自两矢，一卡带过）
-    cfg.ministers.forEach(function (mst) { card(mst.speaker, mst.text); });
+    // 群臣轮番（各自两矢，命中数运行时随机，一卡带过）
+    cfg.ministers.forEach(function (mst) {
+      var mh = (Math.random() < 0.75 ? 1 : 0) + (Math.random() < 0.55 ? 1 : 0); // 加权 0–2 矢
+      card(mst.speaker, mst.line + cfg.minResult[mh]);
+    });
     card('司正', '礼官请矢——两矢，中者为胜。');
     // 玩家两矢：落空也推进，计命中数
     runRhythm(main, {
@@ -403,10 +406,14 @@
       retry: cfg.retry,
       done: '两矢已毕。'
     }, { advanceOnMiss: true }, function (hits) {
-      // 压轴：官家对投（首矢中、次矢偏——与玩家 hits 比较）
+      // 压轴：官家对投（两矢各五成命中，运行时随机——与玩家 hits 比较）
       card('官家', cfg.rongIntro);
-      cfg.rong.forEach(function (t) { card('', t); });
-      var rongHits = 1;
+      var rongHits = 0;
+      for (var r = 0; r < 2; r++) {
+        var rh = Math.random() < 0.5;
+        if (rh) { rongHits += 1; }
+        card('', cfg.rongThrow[rh ? 'hit' : 'miss'][r]);
+      }
       var verdict = hits > rongHits ? cfg.verdictWin : (hits === rongHits ? cfg.verdictDraw : cfg.verdictLose);
       card('园中', verdict);
       awardDeco('jinzhi', '金矢', main); // 胜负零惩罚，参与即纪念
