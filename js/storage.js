@@ -110,6 +110,7 @@
       shards: {},                    // { shardId: true }
       deco: {},                      // 长卷装饰件 { decoId: true }
       memories: {},                  // 已看回忆 { memoryId: true }
+      taskDone: {},                  // 差事帖勾销 { actId: true }
       choices: {},                   // 关键选择（殷崇义辞令等）
       updated: 0
     };

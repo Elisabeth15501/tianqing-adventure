@@ -158,7 +158,7 @@
         runMemory(main, st.id, function () { busy = false; after(); });
       } else if (st.type === 'tasks') {
         busy = true;
-        renderTasks(main, function () { busy = false; after(); });
+        renderTasks(main, idx, function () { busy = false; after(); });
       } else if (st.type === 'touhu') {
         busy = true;
         runTouhu(main, function () { busy = false; after(); });
@@ -219,20 +219,36 @@
     next();
   }
 
-  /* ---------- 开局差事帖（引导者发布当日任务，按角色分线） ---------- */
+  /* ---------- 差事帖（开局发布 + 每幕开始前重示；完成=朱笔勾销，依勾检/朱销文簿古制） ---------- */
   var CHN_NUM = ['一', '二', '三', '四', '五', '六'];
-  function renderTasks(main, done) {
+  function renderTasks(main, actIdx, done) {
     var t = D.tasks && D.tasks[save.role];
-    if (!t) { done(); return; }
-    var c = el('div', 'card');
-    c.appendChild(el('div', 'speaker', t.guide));
-    c.appendChild(el('div', 'text', t.intro));
-    main.appendChild(c);
+    var act = D.acts[actIdx];
+    if (!t || !act) { done(); return; }
+    // 幕前递话（首幕用完整自述，后续各幕用短递话）
+    if (actIdx === 0) {
+      var c0 = el('div', 'card');
+      c0.appendChild(el('div', 'speaker', t.guide));
+      c0.appendChild(el('div', 'text', t.intro));
+      main.appendChild(c0);
+    } else if (t.nudges && t.nudges[act.id]) {
+      var cn = el('div', 'card');
+      cn.appendChild(el('div', 'speaker', t.guide));
+      cn.appendChild(el('div', 'text', t.nudges[act.id]));
+      main.appendChild(cn);
+    }
     var panel = el('div', 'panel tasks-panel');
     panel.appendChild(el('div', 'memo-head', '差事帖 · 显德五年九月廿四'));
-    t.list.forEach(function (item, idx) {
+    t.list.forEach(function (item, i) {
       var row = el('div', 'task-row');
-      row.appendChild(el('span', 'task-mark', CHN_NUM[idx] || String(idx + 1)));
+      var doneNow = !!(save.taskDone && save.taskDone[D.acts[i] ? D.acts[i].id : i]);
+      if (doneNow) {
+        row.classList.add('done'); // 朱笔勾销
+        row.appendChild(el('span', 'task-mark mark-gou', '勾'));
+      } else {
+        row.appendChild(el('span', 'task-mark', CHN_NUM[i] || String(i + 1)));
+      }
+      if (i === actIdx) { row.classList.add('current'); }
       row.appendChild(el('span', 'task-text', item));
       panel.appendChild(row);
     });
@@ -505,6 +521,9 @@
     }
     save.actIndex = Math.min(idx + 1, D.acts.length - 1);
     save.step = 0;
+    // 差事帖勾销：时辰礼毕=该单差事办完，朱笔勾之（依勾检/朱销文簿古制）
+    if (!save.taskDone) { save.taskDone = {}; }
+    save.taskDone[act.id] = true;
     persist();
     if (idx === D.acts.length - 1) { showEnding(main); return; } // 终幕 → 合瓮结算
     var note = el('div', 'memo-sub', act.name + '礼毕，手札已记下进度。');
@@ -589,6 +608,7 @@
       if (!save.choices) { save.choices = {}; }
       if (!save.deco) { save.deco = {}; }
       if (!save.memories) { save.memories = {}; }
+      if (!save.taskDone) { save.taskDone = {}; }
     }
     showTitle();
   });

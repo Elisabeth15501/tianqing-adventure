@@ -205,3 +205,10 @@ body { margin: 0; background: var(--tq-yuebai); color: var(--tq-ink);
   .task-row { margin: 12px 0; }
   .task-text { font-size: 15px; }
 }
+
+/* ---------- 差事帖：勾销与当前任务（朱笔勾销，依勾检/朱销文簿古制） ---------- */
+.task-row.done .task-text { color: var(--tq-muted); text-decoration: line-through; text-decoration-color: rgba(185,106,98,.55); text-decoration-thickness: 1px; }
+.task-mark.mark-gou { background: var(--tq-bianzhi, #B96A62); font-weight: 700; transform: rotate(-6deg); }
+.task-row.current { background: rgba(143,181,176,.14); border-radius: 8px; padding: 8px 8px; margin: 8px -8px; }
+.task-row.current .task-mark { box-shadow: 0 0 0 2px var(--tq-fenqing); }
+.task-row.current .task-text { font-weight: 600; }
