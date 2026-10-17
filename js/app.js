@@ -156,6 +156,9 @@
       } else if (st.type === 'memory') {
         busy = true;
         runMemory(main, st.id, function () { busy = false; after(); });
+      } else if (st.type === 'tasks') {
+        busy = true;
+        renderTasks(main, function () { busy = false; after(); });
       } else if (st.type === 'touhu') {
         busy = true;
         runTouhu(main, function () { busy = false; after(); });
@@ -214,6 +217,29 @@
       }
     }
     next();
+  }
+
+  /* ---------- 开局差事帖（引导者发布当日任务，按角色分线） ---------- */
+  var CHN_NUM = ['一', '二', '三', '四', '五', '六'];
+  function renderTasks(main, done) {
+    var t = D.tasks && D.tasks[save.role];
+    if (!t) { done(); return; }
+    var c = el('div', 'card');
+    c.appendChild(el('div', 'speaker', t.guide));
+    c.appendChild(el('div', 'text', t.intro));
+    main.appendChild(c);
+    var panel = el('div', 'panel tasks-panel');
+    panel.appendChild(el('div', 'memo-head', '差事帖 · 显德五年九月廿四'));
+    t.list.forEach(function (item, idx) {
+      var row = el('div', 'task-row');
+      row.appendChild(el('span', 'task-mark', CHN_NUM[idx] || String(idx + 1)));
+      row.appendChild(el('span', 'task-text', item));
+      panel.appendChild(row);
+    });
+    panel.appendChild(el('div', 'memo-sub', t.tail));
+    main.appendChild(panel);
+    main.scrollTop = main.scrollHeight;
+    done();
   }
 
   /* ---------- 碎片（内联：toast + 史料卡） ---------- */
