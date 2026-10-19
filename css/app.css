@@ -212,3 +212,42 @@ body { margin: 0; background: var(--tq-yuebai); color: var(--tq-ink);
 .task-row.current { background: rgba(143,181,176,.14); border-radius: 8px; padding: 8px 8px; margin: 8px -8px; }
 .task-row.current .task-mark { box-shadow: 0 0 0 2px var(--tq-fenqing); }
 .task-row.current .task-text { font-weight: 600; }
+
+/* ---------- 史实出处（鸣谢页式：首屏左下角入口 + 全屏出处卷轴） ---------- */
+.credits-btn { position: absolute; left: 14px; bottom: calc(var(--safe-bottom) + 14px);
+  z-index: 6; font-size: 12px; letter-spacing: 2px; color: var(--tq-muted);
+  background: var(--tq-yuebai); border: 1px solid var(--tq-qing); border-radius: 12px;
+  padding: 5px 12px; opacity: .88; }
+.credits-btn:active { transform: translateY(1px); }
+.credits-overlay { position: fixed; left: 0; right: 0; top: 0; bottom: 0; z-index: 40;
+  background: rgba(31, 59, 58, .55); overflow-y: auto;
+  padding: calc(var(--safe-top) + 24px) 14px calc(var(--safe-bottom) + 24px);
+  box-sizing: border-box; display: flex; align-items: flex-start; justify-content: center;
+  -webkit-overflow-scrolling: touch; }
+.credits-panel { background: #F3EFE2; border: 1px solid #B08A5C; border-radius: 14px;
+  width: 100%; max-width: 560px; box-sizing: border-box; padding: 22px 18px; margin: 0 auto;
+  box-shadow: 0 10px 32px rgba(31, 59, 58, .28); }
+.credits-title { font-size: 18px; font-weight: 600; letter-spacing: 4px; color: #8A6A32; text-align: center; }
+.credits-sub { margin-top: 6px; font-size: 12px; color: var(--tq-muted); text-align: center; }
+.credits-statement { margin: 14px 0 2px; font-size: 13px; line-height: 1.9; color: var(--tq-ink); }
+.credits-sec { margin: 18px 0 8px; font-size: 13px; font-weight: 600; color: #8A6A32;
+  letter-spacing: 2px; border-bottom: 1px solid rgba(176, 138, 92, .4); padding-bottom: 5px; }
+.credits-row { margin: 8px 0; }
+.cr-name { display: block; font-size: 13px; color: var(--tq-ink); }
+.cr-src { display: block; font-size: 11.5px; line-height: 1.7; color: var(--tq-muted); margin-top: 1px; }
+.credits-note { margin: 10px 0 0; font-size: 11.5px; line-height: 1.8; color: var(--tq-muted); }
+.credits-close { margin-top: 18px; }
+@media (min-width: 700px) {
+  .credits-panel { padding: 28px 26px; }
+  .credits-title { font-size: 20px; }
+  .credits-statement { font-size: 13.5px; }
+  .cr-name { font-size: 13.5px; }
+  .cr-src { font-size: 12px; }
+  .credits-btn:hover { filter: brightness(1.05); color: var(--tq-qing-deep); }
+}
+@media (max-height: 480px) and (orientation: landscape) {
+  .credits-overlay { padding: 10px 14px; }
+  .credits-panel { padding: 14px 16px; }
+  .credits-sec { margin: 10px 0 6px; }
+  .credits-row { margin: 5px 0; }
+}

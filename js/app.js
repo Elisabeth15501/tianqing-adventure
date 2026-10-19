@@ -63,6 +63,47 @@
     wrap.appendChild(actions);
     main.appendChild(wrap);
     app.appendChild(main);
+    // 首屏左下角：史实出处入口（鸣谢页式，审核与考据玩家可见）
+    var cr = el('button', 'credits-btn', '史实出处');
+    cr.setAttribute('aria-label', '查看本作史实出处与鸣谢');
+    cr.addEventListener('click', showCredits);
+    app.appendChild(cr);
+  }
+
+  /* ---------- 史实出处（鸣谢页式：瓷片/瓷心出处由数据派生，不另维护清单） ---------- */
+  function showCredits() {
+    var C = D.credits;
+    if (!C) { return; }
+    var ov = el('div', 'credits-overlay');
+    var panel = el('div', 'credits-panel');
+    panel.appendChild(el('div', 'credits-title', C.title));
+    panel.appendChild(el('div', 'credits-sub', C.sub));
+    panel.appendChild(el('div', 'credits-statement', C.statement));
+    function sec(name) { panel.appendChild(el('div', 'credits-sec', name)); }
+    function row(name, src) {
+      var r = el('div', 'credits-row');
+      r.appendChild(el('span', 'cr-name', name));
+      r.appendChild(el('span', 'cr-src', src));
+      panel.appendChild(r);
+    }
+    sec('主要史籍');
+    C.books.forEach(function (b) { row(b.name, b.use); });
+    sec('十六瓷片 · 游戏内史料卡');
+    Object.keys(D.shards).forEach(function (k) {
+      var s = D.shards[k];
+      row(s.name + '（' + s.prov + '）', s.source);
+    });
+    sec('瓷心五段');
+    Object.keys(D.memories).forEach(function (k) {
+      var m = D.memories[k];
+      row(m.title, m.prov + ' · ' + m.era);
+    });
+    C.notes.forEach(function (n) { panel.appendChild(el('div', 'credits-note', n)); });
+    panel.appendChild(btn('合上出处', 'ghost credits-close', function () {
+      if (ov.parentNode) { ov.parentNode.removeChild(ov); }
+    }));
+    ov.appendChild(panel);
+    app.appendChild(ov);
   }
 
   /* ---------- 选身份 ---------- */
