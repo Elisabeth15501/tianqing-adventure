@@ -65,7 +65,7 @@
     app.appendChild(main);
     // 首屏左下角：史实出处入口（鸣谢页式，审核与考据玩家可见）
     var cr = el('button', 'credits-btn', '史实出处');
-    cr.setAttribute('aria-label', '查看本作史实出处与鸣谢');
+    cr.setAttribute('aria-label', '查看本作史实出处');
     cr.addEventListener('click', showCredits);
     app.appendChild(cr);
   }
