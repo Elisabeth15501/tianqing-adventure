@@ -79,7 +79,7 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .load .vessel-wm svg{height:100%;width:auto;display:block}
 .yupi{display:flex;position:relative;z-index:1}
 .yupi .col{display:flex;flex-direction:column;align-items:center}
-.yupi .col + .col{margin-left:36px}
+.yupi .col + .col,.yupi .comma + .col{margin-left:36px}
 .yupi span{font-family:"KaiTi","STKaiti","SimSun",serif;font-size:31px;color:var(--yue);opacity:.92;line-height:1.18}
 /* 竖版：两列即一联，不设分隔号 */
 .load .yupi .comma{display:none}
@@ -252,7 +252,7 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 @media (min-aspect-ratio:6/5) and (min-width:900px){
   .load{background:linear-gradient(100deg,#22383C 0%,#3E5B5E 30%,#5E7F7C 58%,#7FA29D 78%,#9DB6B0 100%)}
   .load .vessel-wm{display:none}
-  .load .yupi .col{display:inline;margin:0}
+  .app.load .yupi .col{display:inline;margin:0}
   .load .yupi .col + .col{margin-left:0}
   .load .yupi span{display:inline;font-size:30px;letter-spacing:3px}
   .load .yupi .comma{display:inline;margin:0 12px;align-self:center;font-family:"KaiTi","STKaiti","SimSun",serif;font-size:30px;color:var(--yue);opacity:.92}
@@ -418,7 +418,7 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   .footbar{padding:7px 12px calc(8px + var(--tq-bottom-inset))}
   .btn{padding:10px 12px;min-height:44px;font-size:13.5px}
   .ending-vessel{width:150px} .ending{padding:8px 0}
-  .load .vessel-wm{height:296px} .yupi span{font-size:28px;line-height:1.16} .yupi .col + .col{margin-left:30px}
+  .load .vessel-wm{height:296px} .yupi span{font-size:28px;line-height:1.16} .yupi .col + .col,.yupi .comma + .col{margin-left:30px}
   .yline{margin-top:40px;width:56px} .load .seal{width:42px;margin-top:12px} .load .snote{margin-top:8px;font-size:11.5px}
   .load .lt{margin-top:18px} .load .lt .m{font-size:29px;letter-spacing:5px} .load .lt .s{font-size:12.5px;margin-top:7px}
   .load .lt .btn{margin-top:18px;width:170px}
