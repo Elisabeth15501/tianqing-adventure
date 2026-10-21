@@ -6,7 +6,24 @@
 (function (global) {
   'use strict';
 
+  /* ---------- 宿主安全顶距探测（小工具 WebView / 全屏浏览器双态） ----------
+   * 优先序：宿主桥 __TQ_HOST__.insetTop → URL ?insetTop=48 → postMessage → 默认 0。
+   * Chrome 61 禁 env()，宿主 chrome 高度以 JS 测定值写入 CSS 变量消费。 */
+  (function () {
+    function setInset(px) {
+      document.documentElement.style.setProperty('--tq-top-inset', px + 'px');
+    }
+    var p = /[?&]insetTop=(\d+(?:\.\d+)?)/.exec(location.search || '');
+    if (p) { setInset(Math.round(parseFloat(p[1]))); return; }
+    if (window.__TQ_HOST__ && window.__TQ_HOST__.insetTop) { setInset(window.__TQ_HOST__.insetTop); return; }
+    window.addEventListener('message', function (e) {
+      var d = e.data || {};
+      if (d && d.type === 'tq-host-inset' && typeof d.top === 'number') { setInset(Math.round(d.top)); }
+    });
+  })();
+
   var D = global.TQ_DATA;
+  var F = global.TQF;
   var S = global.TQStorage;
   var app = document.getElementById('app');
   var save = null;
@@ -24,15 +41,35 @@
     b.addEventListener('click', onClick);
     return b;
   }
+  /* ---------- 时辰节点（竖版横卡 / 横版顶栏嵌入） ---------- */
+  var ACT_NODES = [
+    { t: '寅', n: '万寿门' }, { t: '辰', n: '广德殿' }, { t: '午', n: '汴桥' },
+    { t: '酉', n: '滋德殿' }, { t: '终', n: '合瓮' }
+  ];
+  var CUR_ACT = 0;
+
   function topbar(actName) {
     var bar = el('div', 'topbar');
     bar.appendChild(el('div', 'act-name', actName || '天清往事'));
+    bar.appendChild(F.timebarInline(ACT_NODES, CUR_ACT));
+    var btns = el('div', 'tb-btns');
+    var cs = el('button', 'cs-btn', '差事帖');
+    var doneN = 0, totalN = 5, k;
+    if (save && save.role && D.tasks && D.tasks[save.role]) {
+      totalN = D.tasks[save.role].list.length;
+      for (k in save.taskDone) { if (save.taskDone[k]) { doneN += 1; } }
+      if (doneN > totalN) { doneN = totalN; }
+    }
+    cs.appendChild(el('span', 'cs-dot', doneN + '/' + totalN));
+    cs.addEventListener('click', openChaishi);
+    btns.appendChild(cs);
     var memo = el('button', 'memo-btn', '手札');
     memo.addEventListener('click', function () { showMemo(true); });
-    bar.appendChild(memo);
+    btns.appendChild(memo);
+    bar.appendChild(btns);
     return bar;
   }
-  function clear(node) { while (node.firstChild) { node.removeChild(node.firstChild); } node.classList.remove('ending-scene'); }
+  function clear(node) { while (node.firstChild) { node.removeChild(node.firstChild); } node.classList.remove('ending-scene'); node.classList.remove('with-foot'); }
   function persist() {
     if (save) { save.updated = Date.now(); S.saveGame(save, function () {}); }
   }
@@ -42,27 +79,36 @@
     return n;
   }
 
-  /* ---------- 首屏 ---------- */
+  /* ---------- S9 加载页（游戏首屏 · 全构图同心于中轴） ---------- */
+  function showLoad() {
+    clear(app);
+    app.appendChild(F.buildLoad(function () { showTitle(); }, showCredits));
+  }
+
+  /* ---------- 首屏（按钮组钉底 footbar；横版归位右侧 .tr） ---------- */
   function showTitle() {
     clear(app);
+    app.classList.add('with-foot');
     app.appendChild(topbar(D.title.sub));
     var main = el('div', 'main');
     var wrap = el('div', 'title-wrap');
-    wrap.appendChild(el('div', 'title-main', D.title.main));
-    wrap.appendChild(el('div', 'title-sub', D.title.sub));
-    wrap.appendChild(el('div', 'title-note', D.title.note));
-    var actions = el('div', 'title-actions');
+    var tl = el('div', 'tl');
+    tl.appendChild(el('div', 'title-main', D.title.main));
+    tl.appendChild(el('div', 'title-sub', D.title.sub));
+    tl.appendChild(el('div', 'title-note', D.title.note));
+    wrap.appendChild(tl);
+    main.appendChild(wrap);
+    app.appendChild(main);
+    var foot = el('footer', 'footbar fb-title');
     if (hasSave && save && save.role) {
-      actions.appendChild(btn('继续值守', '', function () { enterAct(save.actIndex); }));
-      actions.appendChild(btn('从头再来', 'ghost', function () {
+      foot.appendChild(btn('继续值守', '', function () { enterAct(save.actIndex); }));
+      foot.appendChild(btn('从头再来', 'ghost', function () {
         S.clearSave(function () { save = null; hasSave = false; showRole(); });
       }));
     } else {
-      actions.appendChild(btn('入宫当值', '', function () { showRole(); }));
+      foot.appendChild(btn('入宫当值', '', function () { showRole(); }));
     }
-    wrap.appendChild(actions);
-    main.appendChild(wrap);
-    app.appendChild(main);
+    app.appendChild(foot);
     // 首屏左下角：史实出处入口（鸣谢页式，审核与考据玩家可见）
     var cr = el('button', 'credits-btn', '史实出处');
     cr.setAttribute('aria-label', '查看本作史实出处');
@@ -99,24 +145,34 @@
       row(m.title, m.prov + ' · ' + m.era);
     });
     C.notes.forEach(function (n) { panel.appendChild(el('div', 'credits-note', n)); });
-    panel.appendChild(btn('合上出处', 'ghost credits-close', function () {
+    function close() {
       if (ov.parentNode) { ov.parentNode.removeChild(ov); }
-    }));
+      document.removeEventListener('keydown', escHandler);
+    }
+    function escHandler(e) {
+      var k = e.key || e.keyCode;
+      if (k === 'Escape' || k === 'Esc' || k === 27) { close(); }
+    }
+    panel.appendChild(btn('合上出处', 'ghost credits-close', close));
     ov.appendChild(panel);
+    ov.addEventListener('click', function (e) { if (e.target === ov) { close(); } });
+    document.addEventListener('keydown', escHandler);
     app.appendChild(ov);
   }
 
-  /* ---------- 选身份 ---------- */
+  /* ---------- 选身份（横版两卡并排） ---------- */
   function showRole() {
     clear(app);
     app.appendChild(topbar('天清往事 · 应差'));
     var main = el('div', 'main');
     main.appendChild(el('div', 'narr', '天清节前夜，礼部来人问话：这一日，你以何职当值？'));
+    var col = el('div', 'role-2col');
     D.roles.forEach(function (role) {
       var b = btn(role.name, 'ghost role-item', function () { startNew(role.id); });
       b.appendChild(el('span', 'desc', role.desc));
-      main.appendChild(b);
+      col.appendChild(b);
     });
+    main.appendChild(col);
     app.appendChild(main);
   }
 
@@ -151,15 +207,29 @@
 
   function buildActShell(act, idx, fromStep) {
     clear(app);
+    CUR_ACT = idx;
     app.appendChild(topbar(act.name));
+    app.appendChild(F.timebar(ACT_NODES, idx));
     if (act.bg && D.bg[act.bg]) {
-      var bg = el('div', 'bg-art');
+      var bg = el('div', 'bg-art wash');
       bg.innerHTML = D.bg[act.bg];
       app.appendChild(bg);
     }
-    var main = el('div', 'main');
+    /* VN 结构：立绘区（轨①未到 · 剪影占位）+ 文档流；操作小节切 act-op 全宽 */
+    var main = el('div', 'main act-vn');
+    var sp = el('div', 'sp-zone');
+    var slot = el('div', 'slot');
+    slot.innerHTML = F.SIL;
+    slot.appendChild(el('div', 'tag', 'AI 立绘槽 · 轨①'));
+    slot.appendChild(el('div', 'sub', 'A 级全身 1024×1536 · 6.5 头身 · 未到（not_run）'));
+    sp.appendChild(slot);
+    var roleName = save && save.role ? (save.role === 'shi' ? '随驾史官 · 玩家' : '宫中女官 · 玩家') : '玩家';
+    sp.appendChild(el('div', 'pname', roleName));
+    main.appendChild(sp);
+    var doc = el('div', 'vn-doc');
+    main.appendChild(doc);
     app.appendChild(main);
-    runSteps(act, idx, main, fromStep || 0, expandSteps(act.steps, save.role));
+    runSteps(act, idx, doc, fromStep || 0, expandSteps(act.steps, save.role));
   }
 
   function runSteps(act, idx, main, fromStep, steps) {
@@ -172,15 +242,40 @@
       if (i >= steps.length) { finishAct(idx, main); return; }
       var st = steps[i];
       i += 1;
+      /* 先摘旧「继续」尾钮：防打字机未完跳步 */
+      var olds0 = main.querySelectorAll('.step-tail');
+      for (var q0 = 0; q0 < olds0.length; q0++) { if (olds0[q0].parentNode) { olds0[q0].parentNode.removeChild(olds0[q0]); } }
+      var vnMain = main.parentNode;
+      if (vnMain && vnMain.classList) {
+        vnMain.classList.toggle('act-op', st.type === 'iv' || st.type === 'rhythm' || st.type === 'touhu' || st.type === 'shard');
+      }
       if (st.type === 'narr') {
-        main.appendChild(el('div', 'narr', st.text));
-        after();
+        busy = true;
+        main.appendChild(F.narrCard(st.text, function () {
+          busy = false;
+          after();
+        }));
       } else if (st.type === 'card') {
-        var c = el('div', 'card');
-        c.appendChild(el('div', 'speaker', st.speaker || ''));
-        c.appendChild(el('div', 'text', st.text));
-        main.appendChild(c);
-        after();
+        busy = true;
+        main.appendChild(F.dlgCard(st.speaker || '', st.text, function () {
+          busy = false;
+          after();
+        }));
+      } else if (st.type === 'iv') {
+        busy = true;
+        var ivCfg = D.iv[st.cfg] || D.iv.tang;
+        var ivWrap = F.iv(main, ivCfg, function (hits) {
+          if (st.deco && st.decoName) { awardDeco(st.deco, st.decoName, main); }
+          busy = false;
+          after();
+        }, function () {
+          if (ivWrap && ivWrap.parentNode) { ivWrap.parentNode.removeChild(ivWrap); }
+          runJie(main, ivCfg, function () {
+            if (st.deco && st.decoName) { awardDeco(st.deco, st.decoName, main); }
+            busy = false;
+            after();
+          });
+        });
       } else if (st.type === 'shard') {
         busy = true;
         showShard(main, st.id, function () { busy = false; after(); });
@@ -211,13 +306,26 @@
         (function nextSub() {
           if (j >= sub.length) { busy = false; after(); return; }
           var s2 = sub[j]; j += 1;
+          var vnMain2 = main.parentNode;
+          if (vnMain2 && vnMain2.classList) {
+            vnMain2.classList.toggle('act-op', s2.type === 'iv' || s2.type === 'rhythm' || s2.type === 'shard');
+          }
           if (s2.type === 'card') {
-            var cc = el('div', 'card');
-            cc.appendChild(el('div', 'speaker', s2.speaker || ''));
-            cc.appendChild(el('div', 'text', s2.text));
-            main.appendChild(cc);
-            main.scrollTop = main.scrollHeight;
-            nextSub();
+            main.appendChild(F.dlgCard(s2.speaker || '', s2.text, nextSub));
+          } else if (s2.type === 'narr') {
+            main.appendChild(F.narrCard(s2.text || '', nextSub));
+          } else if (s2.type === 'iv') {
+            var ivCfg2 = D.iv[s2.cfg] || D.iv.tang;
+            var ivWrap2 = F.iv(main, ivCfg2, function (hits2) {
+              if (s2.deco && s2.decoName) { awardDeco(s2.deco, s2.decoName, main); }
+              nextSub();
+            }, function () {
+              if (ivWrap2 && ivWrap2.parentNode) { ivWrap2.parentNode.removeChild(ivWrap2); }
+              runJie(main, ivCfg2, function () {
+                if (s2.deco && s2.decoName) { awardDeco(s2.deco, s2.decoName, main); }
+                nextSub();
+              });
+            });
           } else if (s2.type === 'rhythm') {
             runRhythm(main, D[s2.cfg] || D.shangshu, { deco: s2.deco, decoName: s2.decoName }, nextSub);
           } else if (s2.type === 'shard') {
@@ -225,9 +333,7 @@
           } else if (s2.type === 'choice') {
             showChoice(main, s2, nextSub);
           } else {
-            main.appendChild(el('div', 'narr', s2.text || ''));
-            main.scrollTop = main.scrollHeight;
-            nextSub();
+            main.appendChild(F.narrCard(s2.text || '', nextSub));
           }
         })();
       } else {
@@ -260,13 +366,60 @@
     next();
   }
 
-  /* ---------- 差事帖（开局发布 + 每幕开始前重示；完成=朱笔勾销，依勾检/朱销文簿古制） ---------- */
+  /* ---------- 差事帖（常驻 dock：顶栏入口 + 卷轴浮层；完成=朱笔勾销，依勾检/朱销文簿古制） ---------- */
   var CHN_NUM = ['一', '二', '三', '四', '五', '六'];
+  function openChaishi() {
+    var t = D.tasks && D.tasks[save.role];
+    if (!t) { return; }
+    var old = app.querySelector('.cs-ov');
+    if (old) { if (old.parentNode) { old.parentNode.removeChild(old); } return; }
+    var ov = el('div', 'cs-ov');
+    var sheet = el('div', 'cs-sheet');
+    sheet.appendChild(el('div', 'cs-qian', '礼部差遣 · 天清节备礼'));
+    sheet.appendChild(el('div', 'cs-title', '差事帖'));
+    sheet.appendChild(el('div', 'cs-sub', '显德五年九月廿四'));
+    sheet.appendChild(el('div', 'cs-gold'));
+    t.list.forEach(function (item, i) {
+      var row = el('div', 'cs-row');
+      var act = D.acts[i];
+      var doneNow = !!(act && save.taskDone && save.taskDone[act.id]);
+      if (doneNow) { row.classList.add('done'); }
+      if (i === CUR_ACT) { row.classList.add('current'); }
+      row.appendChild(el('div', 'cs-num', doneNow ? '勾' : (CHN_NUM[i] || String(i + 1))));
+      var vt = el('div', 'cs-vt');
+      var head = item.split('：')[0];
+      var shichen = head.split('｜')[0] || head;
+      shichen.split('').forEach(function (ch) { vt.appendChild(el('span', '', ch)); });
+      row.appendChild(vt);
+      var meta = el('div', 'cs-meta');
+      meta.appendChild(el('b', head));
+      meta.appendChild(el('span', item));
+      row.appendChild(meta);
+      row.appendChild(el('div', 'cs-st ' + (doneNow ? 'done' : (i === CUR_ACT ? 'cur' : 'todo')),
+        doneNow ? '已勾销' : (i === CUR_ACT ? '进行中' : '未到')));
+      sheet.appendChild(row);
+    });
+    var curActId = D.acts[CUR_ACT] ? D.acts[CUR_ACT].id : '';
+    sheet.appendChild(el('div', 'cs-cur',
+      (t.nudges && t.nudges[curActId]) || t.list[CUR_ACT] || ''));
+    var tail = el('div', 'cs-tail');
+    tail.appendChild(el('span', 'who', '差事做完才许歇'));
+    tail.appendChild(el('div', 'cs-seal', '差事'));
+    sheet.appendChild(tail);
+    var fold = el('button', 'cs-fold', '合上差事帖');
+    fold.addEventListener('click', close);
+    sheet.appendChild(fold);
+    sheet.appendChild(el('div', 'cs-fine', '收起不误值守 · 点顶栏「差事帖」随时再取出'));
+    ov.appendChild(sheet);
+    ov.addEventListener('click', function (e) { if (e.target === ov) { close(); } });
+    app.appendChild(ov);
+    function close() { if (ov.parentNode) { ov.parentNode.removeChild(ov); } }
+  }
   function renderTasks(main, actIdx, done) {
     var t = D.tasks && D.tasks[save.role];
     var act = D.acts[actIdx];
     if (!t || !act) { done(); return; }
-    // 幕前递话（首幕用完整自述，后续各幕用短递话）
+    // 幕前递话（首幕完整自述，后续各幕短递话）
     if (actIdx === 0) {
       var c0 = el('div', 'card');
       c0.appendChild(el('div', 'speaker', t.guide));
@@ -278,23 +431,7 @@
       cn.appendChild(el('div', 'text', t.nudges[act.id]));
       main.appendChild(cn);
     }
-    var panel = el('div', 'panel tasks-panel');
-    panel.appendChild(el('div', 'memo-head', '差事帖 · 显德五年九月廿四'));
-    t.list.forEach(function (item, i) {
-      var row = el('div', 'task-row');
-      var doneNow = !!(save.taskDone && save.taskDone[D.acts[i] ? D.acts[i].id : i]);
-      if (doneNow) {
-        row.classList.add('done'); // 朱笔勾销
-        row.appendChild(el('span', 'task-mark mark-gou', '勾'));
-      } else {
-        row.appendChild(el('span', 'task-mark', CHN_NUM[i] || String(i + 1)));
-      }
-      if (i === actIdx) { row.classList.add('current'); }
-      row.appendChild(el('span', 'task-text', item));
-      panel.appendChild(row);
-    });
-    panel.appendChild(el('div', 'memo-sub', t.tail));
-    main.appendChild(panel);
+    openChaishi();
     main.scrollTop = main.scrollHeight;
     done();
   }
@@ -446,6 +583,78 @@
     raf = requestAnimationFrame(loop);
   }
 
+  /* ---------- 应节轨（回退兜底 · 更漏/礼乐节拍器皮，10-20 增订） ----------
+   * 与 runRhythm 同引擎同判定，仅换皮：十二刻线（应时辰十二刻）+ 漏箭游标 + 受箭区；
+   * 由 direct2d 的「应节而动」入口切入，或设置项手动选择。 */
+  function runJie(main, cfg, cb) {
+    var panel = el('div', 'panel mode-jie');
+    panel.appendChild(el('div', 'memo-head', cfg.title || '习礼'));
+    panel.appendChild(el('div', 'memo-sub', cfg.hint || '漏箭入受箭区时下手——礼乐有节，错亦不罚。'));
+    var beats = cfg.beats || cfg.beatNames || ['一', '二', '三'];
+    var label = el('div', 'beat-label', beats[0]);
+    label.appendChild(el('span', 'jie-chip', '以节赞礼'));
+    panel.appendChild(label);
+    var track = el('div', 'meter');
+    var ticks = el('div', 'meter-ticks');
+    for (var t = 1; t < 11; t++) {
+      var ti = el('i');
+      ti.style.left = (t * 100 / 12) + '%';
+      ticks.appendChild(ti);
+    }
+    var zone = el('div', 'meter-zone');
+    var cursor = el('div', 'meter-cursor');
+    track.appendChild(ticks); track.appendChild(zone); track.appendChild(cursor);
+    panel.appendChild(track);
+    var tip = el('div', 'hit-tip', '');
+    panel.appendChild(tip);
+    var row = el('div', 'jie-row');
+    var op1 = el('span', 'op', '躬行');
+    var op2 = el('span', 'op on', '应节');
+    row.appendChild(op1); row.appendChild(op2);
+    panel.appendChild(row);
+    panel.appendChild(el('div', 'jie-note', '此节择简——应节而动。判定与奖励同躬行轨，失败零惩罚。'));
+    main.appendChild(panel);
+
+    var beat = 0, hits = 0, pos = 0, dir = 1, zoneL = 30, zoneR = 55, raf = 0, over = false;
+    function placeZone() {
+      zoneL = 20 + Math.random() * 56;
+      zoneR = zoneL + 24;
+      zone.style.left = zoneL + '%';
+      zone.style.width = (zoneR - zoneL) + '%';
+    }
+    function loop() {
+      if (over || !panel.isConnected) { over = true; return; }
+      pos += dir * 0.55;
+      if (pos > 100) { pos = 100; dir = -1; }
+      if (pos < 0) { pos = 0; dir = 1; }
+      cursor.style.left = pos + '%';
+      raf = requestAnimationFrame(loop);
+    }
+    function tap() {
+      if (over) { return; }
+      var hit = pos >= zoneL && pos <= zoneR;
+      if (hit) { hits += 1; }
+      if (!hit) { tip.textContent = '落了。拾起来，再来。'; return; }
+      beat += 1;
+      if (beat >= beats.length) {
+        over = true;
+        cancelAnimationFrame(raf);
+        label.textContent = cfg.done || '毕。';
+        tip.textContent = '';
+        cb(hits);
+        return;
+      }
+      label.textContent = beats[beat];
+      var chip = el('span', 'jie-chip', '以节赞礼');
+      label.appendChild(chip);
+      placeZone();
+      tip.textContent = '好。下一拍。';
+    }
+    panel.addEventListener('click', tap);
+    placeZone();
+    raf = requestAnimationFrame(loop);
+  }
+
   /* ---------- 瓷心回忆（五段） ---------- */
   function runMemory(main, id, done) {
     var m = D.memories[id];
@@ -481,14 +690,8 @@
       card(mst.speaker, mst.line + cfg.minResult[mh]);
     });
     card('司正', '礼官请矢——两矢，中者为胜。');
-    // 玩家两矢：落空也推进，计命中数
-    runRhythm(main, {
-      title: cfg.title,
-      beats: cfg.beatNames,
-      hint: cfg.hint,
-      retry: cfg.retry,
-      done: '两矢已毕。'
-    }, { advanceOnMiss: true }, function (hits) {
+    // 玩家两矢（回退版 · 拉弓式拖拽投壶，10-21 接 iv toss）：落空也推进，计命中数
+    F.iv(main, D.iv.touhu, function (hits) {
       // 压轴：官家对投（两矢各五成命中，运行时随机——与玩家 hits 比较）
       card('官家', cfg.rongIntro);
       var rongHits = 0;
@@ -502,15 +705,16 @@
       awardDeco('jinzhi', '金矢', main); // 胜负零惩罚，参与即纪念
       main.appendChild(btn('献瓮', 'step-tail', done));
       main.scrollTop = main.scrollHeight;
-    });
+    }, null);
   }
 
-  /* ---------- 终幕结算（合瓮长卷·简版） ---------- */
+  /* ---------- 终幕结算（合瓮长卷 · 简版） ---------- */
   function showEnding(main) {
-    app.classList.add('ending-scene'); /* 暗场：突出青瓷纸槌瓶（clear(app) 时移除） */
+    app.classList.add('ending-scene');
     var E = D.ending;
     var wrap = el('div', 'ending');
-    wrap.appendChild(el('div', 'ending-title', E.title));
+    var inner = el('div', 'ending-wrap');
+    inner.appendChild(el('div', 'ending-title', E.title));
     var svgBox = el('div', 'ending-vessel');
     svgBox.innerHTML = '<svg viewBox="0 0 220 320">'
       + '<defs><radialGradient id="eGlow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#E9C98F" stop-opacity=".4"/><stop offset="1" stop-color="#E9C98F" stop-opacity="0"/></radialGradient>'
@@ -523,23 +727,26 @@
       + '<ellipse cx="96" cy="200" rx="9" ry="46" fill="#F4F8F4" opacity=".35" transform="rotate(-8 96 200)"/>'
       + '</svg>';
     wrap.appendChild(svgBox);
-    E.lines.forEach(function (t) { wrap.appendChild(el('div', 'memory-line', t)); });
+    E.lines.forEach(function (t) { inner.appendChild(el('div', 'memory-line', t)); });
     if (E.roleLine && save.role && E.roleLine[save.role]) {
-      wrap.appendChild(el('div', 'memory-line', E.roleLine[save.role]));
+      inner.appendChild(el('div', 'memory-line', E.roleLine[save.role]));
     }
     var nMem = 0, k;
     for (k in save.memories) { if (save.memories[k]) { nMem += 1; } }
     var nDeco = 0;
     for (k in save.deco) { if (save.deco[k]) { nDeco += 1; } }
     var ans = save.choices && save.choices.yin_chongyi ? save.choices.yin_chongyi : '—';
-    wrap.appendChild(el('div', 'memo-sub',
+    inner.appendChild(el('div', 'memo-sub',
       '瓷片 ' + countShards() + '/16 · 回忆 ' + nMem + '/5 · 装饰 ' + nDeco + '/4 · 那日的答辞：「' + ans + '」'));
-    wrap.appendChild(el('div', 'memo-sub', E.quote));
-    wrap.appendChild(btn('翻阅手札', '', function () { showMemo(false); }));
-    wrap.appendChild(btn('从头再来', 'ghost', function () {
+    inner.appendChild(el('div', 'memo-sub', E.quote));
+    wrap.appendChild(inner);
+    main.appendChild(wrap);
+    var foot = el('footer', 'footbar fb-ending');
+    foot.appendChild(btn('翻阅手札', '', function () { showMemo(false); }));
+    foot.appendChild(btn('从头再来', 'ghost', function () {
       S.clearSave(function () { save = null; hasSave = false; showTitle(); });
     }));
-    main.appendChild(wrap);
+    app.appendChild(foot);
     main.scrollTop = main.scrollHeight;
   }
 
@@ -569,13 +776,18 @@
     if (idx === D.acts.length - 1) { showEnding(main); return; } // 终幕 → 合瓮结算
     var note = el('div', 'memo-sub', act.name + '礼毕，手札已记下进度。');
     main.appendChild(note);
-    main.appendChild(btn('翻阅手札', '', function () { showMemo(false); }));
+    app.classList.add('with-foot');
+    var foot = el('footer', 'footbar fb-act');
+    foot.appendChild(btn('翻阅手札', '', function () { showMemo(false); }));
+    foot.appendChild(btn('继续值守', 'ghost', function () { enterAct(save.actIndex); }));
+    app.appendChild(foot);
     main.scrollTop = main.scrollHeight;
   }
 
-  /* ---------- 手札（存档中心 + 瓷片图鉴） ---------- */
+  /* ---------- 手札（存档中心 + 瓷片图鉴；按钮组钉底） ---------- */
   function showMemo(fromTopbar, notice) {
     clear(app);
+    app.classList.add('with-foot');
     app.appendChild(topbar(D.memoCopy.title));
     var main = el('div', 'main');
     main.appendChild(el('div', 'memo-head', D.memoCopy.title));
@@ -609,40 +821,48 @@
       }
       grid.appendChild(cell);
     }
-    main.appendChild(grid);
     detail.appendChild(el('div', 'head', '瓷片图鉴'));
     detail.appendChild(el('div', 'quote', '点上方已拾得的瓷片，可随时重读记下的内容。'));
-    main.appendChild(detail);
 
     var count = save ? countShards() : 0;
     var cur = save ? D.acts[save.actIndex] : null;
     // 继续值守仅在当前幕真正可玩（已解锁且有内容）时提供，避免死端
     var canContinue = !!(cur && cur.unlocked && cur.steps.length > 0);
-    main.appendChild(el('div', 'memo-sub', '瓷片 ' + count + '/16 · ' +
+    var col = el('div', 'memo-2col');
+    var mg = el('div', 'mg');
+    mg.appendChild(grid);
+    var md = el('div', 'md');
+    md.appendChild(detail);
+    md.appendChild(el('div', 'memo-sub', '瓷片 ' + count + '/16 · ' +
       (cur ? '当前：' + cur.name + (canContinue ? '' : '（尚未开启）') : '尚未入宫')));
+    col.appendChild(mg);
+    col.appendChild(md);
+    main.appendChild(col);
+    app.appendChild(main);
 
+    var foot = el('footer', 'footbar fb-memo');
     if (save && save.role) {
       if (canContinue) {
-        main.appendChild(btn('继续值守', '', function () { enterAct(save.actIndex); }));
+        foot.appendChild(btn('继续值守', '', function () { enterAct(save.actIndex); }));
       } else {
         main.appendChild(el('div', 'memo-sub', '下一时辰尚未开启——今日当值至此，先歇歇。已有的瓷片随时可翻看。'));
       }
-      main.appendChild(btn(D.memoCopy.saveNow, 'ghost', function () {
+      foot.appendChild(btn(D.memoCopy.saveNow, 'ghost', function () {
         persist();
         showMemo(false, D.memoCopy.saved);
       }));
-      main.appendChild(btn(D.memoCopy.restart, 'ghost', function () {
+      foot.appendChild(btn(D.memoCopy.restart, 'ghost', function () {
         S.clearSave(function () { save = null; hasSave = false; showTitle(); });
       }));
     } else {
-      main.appendChild(btn('入宫当值', '', function () { showRole(); }));
+      foot.appendChild(btn('入宫当值', '', function () { showRole(); }));
     }
+    app.appendChild(foot);
     main.appendChild(el('div', 'memo-sub',
       '存档说明：进度自动记录于本机（每逢时辰礼毕与关键处）；手札「现在就记」可随时手动补记。'));
-    app.appendChild(main);
   }
 
-  /* ---------- 启动：先读档再决定首屏 ---------- */
+  /* ---------- 启动：先读档，再走 S9 加载页 ---------- */
   S.loadGame(function (obj) {
     if (obj && obj.v === 1 && obj.role) {
       save = obj; hasSave = true;
@@ -651,6 +871,6 @@
       if (!save.memories) { save.memories = {}; }
       if (!save.taskDone) { save.taskDone = {}; }
     }
-    showTitle();
+    showLoad();
   });
 })(window);

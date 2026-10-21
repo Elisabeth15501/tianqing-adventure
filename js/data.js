@@ -89,11 +89,11 @@ window.TQ_DATA = {
           nv: [
             { type: 'narr', text: '在尚食局——官家生辰的汤饼，今年由你掌勺。' },
             { type: 'narr', text: '尚食局的灶已经热了。九月近冬，汤饼正当时。' },
-            { type: 'rhythm', cfg: 'tangbing', deco: 'tangwan', decoName: '汤饼碗' }
+            { type: 'iv', cfg: 'tang', deco: 'tangwan', decoName: '汤饼碗' }
           ],
           shi: [
             { type: 'narr', text: '在廊下——执笔随记。起居册今日的第一条，是尚食局进汤饼的礼数。' },
-            { type: 'rhythm', cfg: 'tangbing_shi', deco: 'tangwan', decoName: '汤饼碗' }
+            { type: 'iv', cfg: 'shi_food', deco: 'tangwan', decoName: '汤饼碗' }
           ]
         } },
         { type: 'shard', id: '3' },
@@ -132,7 +132,7 @@ window.TQ_DATA = {
         { type: 'tasks' },
         { type: 'narr', text: '晨光落进广德殿的檐角，鸱尾的影子压在金砖上。教坊乐起，群臣鱼贯而入。' },
         { type: 'narr', text: '今日仪注第一条：执觞上寿。礼不可错，你先替众臣习一遍。' },
-        { type: 'shangshu' },
+        { type: 'iv', cfg: 'shang', deco: 'jinzang', decoName: '金觞' },
         { type: 'narr', text: '习礼毕。钟磬一响，上寿开始——你退到廊下，看着满殿朱紫。' },
         { type: 'card', speaker: '范质', text: '陛下临御五年，《大周刑统》二十一卷颁行天下，狱讼有章——臣谨奉千觞，为陛下寿。' },
         { type: 'shard', id: '6' },
@@ -187,11 +187,11 @@ window.TQ_DATA = {
         { type: 'role', branches: {
           nv: [
             { type: 'narr', text: '摊主招呼你：官家身边的礼官，不做一个？' },
-            { type: 'rhythm', cfg: 'chenglu', deco: 'nang', decoName: '承露囊' }
+            { type: 'iv', cfg: 'folk', deco: 'nang', decoName: '承露囊' }
           ],
           shi: [
             { type: 'narr', text: '摊主认出你腰间的笔囊，招呼你：史官记了我们三年市声，今日不记一个囊？' },
-            { type: 'rhythm', cfg: 'chenglu_shi', deco: 'nang', decoName: '承露囊' }
+            { type: 'iv', cfg: 'shi_folk', deco: 'nang', decoName: '承露囊' }
           ]
         } },
         { type: 'shard', id: '10' },
@@ -239,7 +239,7 @@ window.TQ_DATA = {
           shi: [
             { type: 'narr', text: '残页在你手里。史官的职业病又犯了：这一页，要不要入起居注？' },
             { type: 'narr', text: '帝后之私，史册向来不载。可「谏征」二字之后跟着的，是一场大战和她的死——不载，它就只剩话本。' },
-            { type: 'rhythm', cfg: 'you_jiao' },
+            { type: 'iv', cfg: 'shi_proof' },
             { type: 'choice', key: 'shi_qijuzhu', speaker: '残页在灯下', prompt: '载，还是不载？',
               options: [
                 { label: '载', text: '只载事，不载情：「三年，后谏征淮南，不听。从行，还而疾。」', reply: '你一笔一笔抄进随身的小册。字越少，越重。' },
@@ -248,7 +248,7 @@ window.TQ_DATA = {
           ],
           nv: [
             { type: 'narr', text: '你把那盏旧灯的罩子擦净了。灯油早干了——你从怀里的油囊倒了一点点。' },
-            { type: 'rhythm', cfg: 'you_deng' },
+            { type: 'iv', cfg: 'lamp' },
             { type: 'narr', text: '香尽，你熄了灯，把灯座放回原位。放稳的那一下，手比来时轻。' }
           ]
         } },
@@ -434,9 +434,111 @@ window.TQ_DATA = {
     }
   },
 
+  /* ---------- direct2d 动手小节配置（回退版默认操作 · 2026-10-21 实装） ----------
+   * gest: drag=位移累计 | sweep=往复计数 | tap=点按累计 | hold=按住时长
+   * 等价按钮双轨（±一点）随屏提供；「应节而动」随时切应节轨（更漏皮），判定与奖励不变。 */
+  iv: {
+    tang: {
+      zone: '第一视角 · 案前', title: '尚食局 · 一碗汤饼',
+      hint: '手势或下方等价按钮皆可——寿面不可断，也不必慌。',
+      beats: ['和面', '擀面', '切面'],
+      retry: '断了半根。尚食令：再来一碗，不急。',
+      done: '面成。一刀到底，未见断处。',
+      steps: [
+        { label: '揉面', gest: 'drag', goal: 100, prop: 'dough', tip: '单指在面团上绕圈拖——拖够了，面就吃上劲', done: '面团吃上劲了。' },
+        { label: '擀面', gest: 'sweep', goal: 5, prop: 'roller', tip: '竖向往复——擀面杖来回，不必急', done: '面片厚薄匀了。' },
+        { label: '切面', gest: 'tap', goal: 3, prop: 'bowl', tip: '过中轴画一刀，一刀记一', done: '三刀毕，粗细匀停。' }
+      ]
+    },
+    shang: {
+      zone: '第一视角 · 御前', title: '习礼 · 执觞上寿',
+      hint: '按住酒觞缓缓倾定七分，托觞上前——礼不可错，也不必慌。',
+      beats: ['举觞', '献上'],
+      retry: '礼官轻咳：不必慌，再来。',
+      done: '四礼习毕。',
+      steps: [
+        { label: '举觞', gest: 'hold', goal: 12, prop: 'cup', tip: '按住酒觞，缓缓倾注——满七分即停', done: '满七分，不多不少。' },
+        { label: '献上', gest: 'drag', goal: 100, prop: 'cup', tip: '托觞上前，递到礼官手中', done: '觞已献。' }
+      ]
+    },
+    folk: {
+      zone: '第一视角 · 桥市', title: '汴桥 · 丝结承露囊',
+      hint: '择丝、绕线、结囊——囊成，赠与桥头有缘人。',
+      beats: ['择丝', '绕线', '结囊'],
+      retry: '针脚松了，绕紧些。',
+      done: '囊成。桥头的孩子得了它，一路笑着跑远了。',
+      steps: [
+        { label: '择丝', gest: 'tap', goal: 3, prop: 'pouch', tip: '三色丝线，拣三束', done: '丝择好了。' },
+        { label: '绕线', gest: 'drag', goal: 120, prop: 'pouch', tip: '绕囊口——顺着圈走，不必急', done: '绕紧了。' },
+        { label: '结囊', gest: 'tap', goal: 2, prop: 'pouch', tip: '打双结，系牢', done: '双结系牢。' }
+      ]
+    },
+    lamp: {
+      zone: '第一视角 · 夜', title: '滋德殿 · 旧灯',
+      hint: '擦罩、注油、拨火——灯亮起来，殿里就有人气了。',
+      beats: ['擦罩', '注油', '拨火'],
+      retry: '不急，一步步来。',
+      done: '灯亮了。',
+      steps: [
+        { label: '擦罩', gest: 'drag', goal: 100, prop: 'lamp', tip: '往复擦净灯罩', done: '罩亮了。' },
+        { label: '注油', gest: 'hold', goal: 10, prop: 'lamp', tip: '按住油壶，稳稳注入', done: '油够了。' },
+        { label: '拨火', gest: 'tap', goal: 3, prop: 'lamp', tip: '灯芯拨三下', done: '火苗稳了。' }
+      ]
+    },
+    /* 史官线三节（10-21 接回退版）：濡墨吃轨③帧 → SVG 文房占位（prop ink）；
+     * 「临帖」为照描红拓写（非自由书写）——落笔 WRITE 永久豁免边界不变。 */
+    shi_food: {
+      zone: '第一视角 · 廊下', title: '廊下 · 食单记注',
+      hint: '研墨、蘸笔、临帖——记注务实，一字不苟。',
+      beats: ['研墨', '蘸笔', '临帖'],
+      retry: '墨洇了。镇纸压住，重来。',
+      done: '记毕。汤饼之典，入起居之册。',
+      steps: [
+        { label: '研墨', gest: 'drag', goal: 100, prop: 'ink', tip: '单指绕圈研墨——墨浓了，笔才稳', done: '墨浓了。' },
+        { label: '蘸笔', gest: 'tap', goal: 2, prop: 'ink', tip: '蘸笔，一下是一下', done: '笔蘸足了。' },
+        { label: '临帖', gest: 'tap', goal: 3, prop: 'ink', tip: '照描红写「汤饼」——一笔一画，不省', done: '三字写毕，墨迹未干。' }
+      ]
+    },
+    shi_folk: {
+      zone: '第一视角 · 桥市', title: '汴桥 · 民俗记注',
+      hint: '观俗、问俗、落笔——丝囊系着的，是百姓的寿愿。',
+      beats: ['观俗', '问俗', '落笔'],
+      retry: '这一笔虚了。再问一句，落笔。',
+      done: '记毕。摊主把成囊塞给你：「换你这几行字。」',
+      steps: [
+        { label: '观俗', gest: 'drag', goal: 120, prop: 'minjie', tip: '捏住桥市左右拖——漕船、丝线摊、人群，尽收眼底', done: '看仔细了。' },
+        { label: '问俗', gest: 'tap', goal: 3, prop: 'minjie', tip: '问摊主三句：丝囊系愿，何人所系', done: '问明白了。' },
+        { label: '落笔', gest: 'tap', goal: 3, prop: 'minjie', tip: '记下所见——俗记短句，落在便条上', done: '记毕。' }
+      ]
+    },
+    shi_proof: {
+      zone: '第一视角 · 案前', title: '滋德殿 · 校字',
+      hint: '展卷、核字、补阙——残页上的字，到「不听」为止。',
+      beats: ['展卷', '核字', '补阙'],
+      retry: '认错了字。朱笔圈出，重校。',
+      done: '校毕。字句归位，轻重也归位。',
+      steps: [
+        { label: '展卷', gest: 'drag', goal: 100, prop: 'canji', tip: '捏住卷轴右拖——案上残页，缓缓展开', done: '卷展好了。' },
+        { label: '核字', gest: 'tap', goal: 3, prop: 'canji', tip: '朱笔绕错字画圈，三处', done: '三处圈毕。' },
+        { label: '补阙', gest: 'drag', goal: 80, prop: 'canji', tip: '拖补纸块，对缝吸附——缺口补上', done: '阙补上了，卷子全了。' }
+      ]
+    },
+    /* 终幕投壶回退版：拉弓式拖拽（向量→角度/力度），落空也推进（advanceOnMiss），零惩罚 */
+    touhu: {
+      zone: '第一视角 · 玉津园', title: '玉津园 · 投壶',
+      hint: '拖矢拉弓：右下角起手向后拖——松手投出。手稳，则中。',
+      beats: ['第一矢', '第二矢'],
+      retry: '矢落壶外。拾矢，再投。',
+      done: '两矢已毕。',
+      steps: [
+        { label: '第一矢', gest: 'toss', goal: 1, prop: 'pot', advanceOnMiss: true, tip: '按住矢，向右下拖拉——松手投出', done: '好矢！' },
+        { label: '第二矢', gest: 'toss', goal: 1, prop: 'pot', advanceOnMiss: true, tip: '还有一矢——稳住', done: '又中了！' }
+      ]
+    }
+  },
+
   /* ---------- 节奏小节配置（通用引擎） ---------- */
-  shangshu: {
-    title: '习礼 · 执觞上寿',
+  shangshu: {    title: '习礼 · 执觞上寿',
     beats: ['拜', '兴', '举觞', '称寿'],
     hint: '金线滑到青区时，点击——礼不可错，也不必慌。',
     retry: '礼官轻咳：再拜一次。',
