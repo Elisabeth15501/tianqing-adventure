@@ -81,6 +81,8 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .yupi .col{display:flex;flex-direction:column;align-items:center}
 .yupi .col + .col{margin-left:36px}
 .yupi span{font-family:"KaiTi","STKaiti","SimSun",serif;font-size:31px;color:var(--yue);opacity:.92;line-height:1.18}
+/* 竖版：两列即一联，不设分隔号 */
+.load .yupi .comma{display:none}
 .yline{width:64px;height:1.6px;background:var(--gold);opacity:.5;margin-top:63px}
 .load .seal{width:46px;margin-top:16px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.3))}
 .load .seal img{width:100%;display:block}
@@ -253,7 +255,7 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   .load .yupi .col{display:inline;margin:0}
   .load .yupi .col + .col{margin-left:0}
   .load .yupi span{display:inline;font-size:30px;letter-spacing:3px}
-  .load .yupi .comma{color:var(--yue);opacity:.92}
+  .load .yupi .comma{display:inline;margin:0 12px;align-self:center;font-family:"KaiTi","STKaiti","SimSun",serif;font-size:30px;color:var(--yue);opacity:.92}
   .load .yline{margin-top:22px}
   .load .seal{width:50px;margin-top:18px}
   .load .snote{margin-top:12px;font-size:14px}

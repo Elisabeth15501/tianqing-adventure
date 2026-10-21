@@ -221,6 +221,7 @@
       return c;
     }
     yp.appendChild(col('雨过天青云破处'));
+    yp.appendChild(h('div', 'comma', '·'));
     yp.appendChild(col('这般颜色做将来'));
     qw.appendChild(yp);
     app.appendChild(qw);
