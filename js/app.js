@@ -72,7 +72,7 @@
       if (doneN > totalN) { doneN = totalN; }
     }
     cs.appendChild(el('span', 'cs-dot', doneN + '/' + totalN));
-    cs.addEventListener('click', openChaishi);
+    cs.addEventListener('click', function () { openChaishi(); });
     btns.appendChild(cs);
     var memo = el('button', 'memo-btn', '手札');
     memo.addEventListener('click', function () { showMemoOverlay(); });
@@ -517,8 +517,8 @@
       row.appendChild(vt);
       var meta = el('div', 'cs-meta');
       var head = item.split('：')[0].replace('｜', ' · ');
-      meta.appendChild(el('b', head));
-      meta.appendChild(el('span', item.split('：').slice(1).join('：') || item));
+      meta.appendChild(el('b', '', head));
+      meta.appendChild(el('span', '', item.split('：').slice(1).join('：') || item));
       row.appendChild(meta);
       row.appendChild(el('div', 'cs-st ' + (doneNow ? 'done' : (i === CUR_ACT ? 'cur' : 'todo')),
         doneNow ? '已竣' : (i === CUR_ACT ? '进行中' : '未行')));
@@ -881,10 +881,14 @@
     if (!save.deco[id]) {
       save.deco[id] = true;
       persist();
-      var t = el('div', 'shard-toast');
+      /* 顶部瞬态 toast：不进文档流（修「装饰件框常驻到幕末且压键条」），1.9s 自散 */
+      var t = el('div', 'shard-toast tq-toast');
       t.appendChild(el('div', 'got', '长卷装饰件入手'));
       t.appendChild(el('div', 'name', name));
-      main.appendChild(t);
+      app.appendChild(t);
+      setTimeout(function () {
+        if (t.parentNode) { t.parentNode.removeChild(t); }
+      }, 1900); /* [PLACEHOLDER] 与 CSS 动画时长一致，真机手感再调 */
     }
   }
 
@@ -1013,7 +1017,7 @@
     }
     backlogRef().forEach(function (it, ix) {
       var d = el('div', 'log-item' + (ix === backlogRef().length - 1 ? ' last' : ''));
-      d.appendChild(el('b', it.sp || '旁白'));
+      d.appendChild(el('b', '', it.sp || '旁白'));
       d.appendChild(document.createTextNode(it.t));
       list.appendChild(d);
     });
