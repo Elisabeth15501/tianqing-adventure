@@ -28,6 +28,7 @@
   var app = document.getElementById('app');
   var save = null;
   var hasSave = false;
+  var VNC = {}; /* VN 对话层通道（dockBox/occupy/retract/lock/stop），runSteps 内接线，小节函数经此占台 */
 
   /* ---------- 工具 ---------- */
   function el(tag, cls, text) {
@@ -49,6 +50,16 @@
   var CUR_ACT = 0;
 
   function topbar(actName) {
+    /* 简版：首屏/选角/手札（复刻设计稿 topbar(name)：幕名 + 手札，无时辰条/差事帖） */
+    var bar = el('div', 'topbar');
+    bar.appendChild(el('div', 'act-name', actName || '天清往事'));
+    var memo = el('button', 'memo-btn', '手札');
+    memo.addEventListener('click', function () { showMemo(true); });
+    bar.appendChild(memo);
+    return bar;
+  }
+  function topbarAct(actName) {
+    /* 幕内完整版（复刻设计稿 topbarPost：幕名 + 时辰内嵌 + 差事帖/手札） */
     var bar = el('div', 'topbar');
     bar.appendChild(el('div', 'act-name', actName || '天清往事'));
     bar.appendChild(F.timebarInline(ACT_NODES, CUR_ACT));
@@ -64,7 +75,7 @@
     cs.addEventListener('click', openChaishi);
     btns.appendChild(cs);
     var memo = el('button', 'memo-btn', '手札');
-    memo.addEventListener('click', function () { showMemo(true); });
+    memo.addEventListener('click', function () { showMemoOverlay(); });
     btns.appendChild(memo);
     bar.appendChild(btns);
     return bar;
@@ -90,7 +101,7 @@
     clear(app);
     app.classList.add('with-foot');
     app.appendChild(topbar(D.title.sub));
-    var main = el('div', 'main');
+    var main = el('div', 'main title-bottom');
     var wrap = el('div', 'title-wrap');
     var tl = el('div', 'tl');
     tl.appendChild(el('div', 'title-main', D.title.main));
@@ -120,14 +131,14 @@
   function showCredits() {
     var C = D.credits;
     if (!C) { return; }
-    var ov = el('div', 'credits-overlay');
-    var panel = el('div', 'credits-panel');
-    panel.appendChild(el('div', 'credits-title', C.title));
-    panel.appendChild(el('div', 'credits-sub', C.sub));
-    panel.appendChild(el('div', 'credits-statement', C.statement));
-    function sec(name) { panel.appendChild(el('div', 'credits-sec', name)); }
+    var ov = el('div', 'cr-overlay');
+    var panel = el('div', 'cr-panel');
+    panel.appendChild(el('div', 'cr-title', C.title));
+    panel.appendChild(el('div', 'cr-sub', C.sub));
+    panel.appendChild(el('div', 'cr-statement', C.statement));
+    function sec(name) { panel.appendChild(el('div', 'cr-sec', name)); }
     function row(name, src) {
-      var r = el('div', 'credits-row');
+      var r = el('div', 'cr-row');
       r.appendChild(el('span', 'cr-name', name));
       r.appendChild(el('span', 'cr-src', src));
       panel.appendChild(r);
@@ -144,7 +155,7 @@
       var m = D.memories[k];
       row(m.title, m.prov + ' · ' + m.era);
     });
-    C.notes.forEach(function (n) { panel.appendChild(el('div', 'credits-note', n)); });
+    C.notes.forEach(function (n) { panel.appendChild(el('div', 'cr-note', n)); });
     function close() {
       if (ov.parentNode) { ov.parentNode.removeChild(ov); }
       document.removeEventListener('keydown', escHandler);
@@ -153,7 +164,7 @@
       var k = e.key || e.keyCode;
       if (k === 'Escape' || k === 'Esc' || k === 27) { close(); }
     }
-    panel.appendChild(btn('合上出处', 'ghost credits-close', close));
+    panel.appendChild(btn('合上出处', 'cr-close', close));
     ov.appendChild(panel);
     ov.addEventListener('click', function (e) { if (e.target === ov) { close(); } });
     document.addEventListener('keydown', escHandler);
@@ -208,15 +219,16 @@
   function buildActShell(act, idx, fromStep) {
     clear(app);
     CUR_ACT = idx;
-    app.appendChild(topbar(act.name));
+    app.appendChild(topbarAct(act.name));
     app.appendChild(F.timebar(ACT_NODES, idx));
     if (act.bg && D.bg[act.bg]) {
       var bg = el('div', 'bg-art wash');
       bg.innerHTML = D.bg[act.bg];
       app.appendChild(bg);
     }
-    /* VN 结构：立绘区（轨①未到 · 剪影占位）+ 文档流；操作小节切 act-op 全宽 */
+    /* VN 结构：vn-main（横版双栏容器）> 立绘区 + 文档流；操作小节切 act-op 全宽 */
     var main = el('div', 'main act-vn');
+    var vnMain = el('div', 'vn-main');
     var sp = el('div', 'sp-zone');
     var slot = el('div', 'slot');
     slot.innerHTML = F.SIL;
@@ -225,9 +237,10 @@
     sp.appendChild(slot);
     var roleName = save && save.role ? (save.role === 'shi' ? '随驾史官 · 玩家' : '宫中女官 · 玩家') : '玩家';
     sp.appendChild(el('div', 'pname', roleName));
-    main.appendChild(sp);
+    vnMain.appendChild(sp);
     var doc = el('div', 'vn-doc');
-    main.appendChild(doc);
+    vnMain.appendChild(doc);
+    main.appendChild(vnMain);
     app.appendChild(main);
     runSteps(act, idx, doc, fromStep || 0, expandSteps(act.steps, save.role));
   }
@@ -237,147 +250,258 @@
     var busy = false;
     steps = steps || act.steps;
 
+    /* ---------- VN 对话 dock（单框 + 四键：自动/跳过/回看/手札 · 2026-10-23 实装） ----------
+     * 推进：点框=补完/下一框（二击合一，无「继续」钮）。
+     * 自动：显完停 AUTO_DELAY 自动下一框；手动点框即接管熄灭；遇选择/占台停。
+     * 跳过：SKIP_STEP 连推，遇介入点（选择/史料卡/动手小节）即停。
+     * 占台：交互小节 occupy 舞台并隐 dock，完成经 after/next 之 retract 退场——文档流不再堆积。
+     * 回看：backlog 浮层，最新在底，默认定位到上一条；选择态置灰。
+     * AUTO_DELAY / SKIP_STEP 为 [PLACEHOLDER]，真机手感再调。 */
+    var backlog = [];
+    var injected = []; /* 插队步骤（选择回复等），next() 优先消费 */
+    var occupied = null;
+    var curBox = null;
+    var autoOn = false, skipOn = false;
+    var autoTimer = 0, skipTimer = 0;
+    var keyAuto = null, keySkip = null, keyLog = null, keyMemo = null;
+    var AUTO_DELAY = 1600, SKIP_STEP = 160;
+
+    function stopAuto() {
+      if (autoTimer) { clearTimeout(autoTimer); autoTimer = 0; }
+      autoOn = false;
+      if (keyAuto) { keyAuto.classList.remove('on'); }
+    }
+    function stopSkip() {
+      if (skipTimer) { clearInterval(skipTimer); skipTimer = 0; }
+      skipOn = false;
+      if (keySkip) { keySkip.classList.remove('on'); }
+    }
+    function keysLocked(lk) {
+      [keyAuto, keySkip, keyLog].forEach(function (k) {
+        if (k) { k.classList[lk ? 'add' : 'remove']('dis'); }
+      });
+    }
+    function armAuto() {
+      if (autoTimer) { clearTimeout(autoTimer); }
+      autoTimer = setTimeout(function () {
+        autoTimer = 0;
+        if (curBox && busy) { boxGo(); }
+      }, AUTO_DELAY);
+    }
+    function boxGo() {
+      if (!curBox) { return; }
+      if (!curBox._tqIsFull()) { curBox._tqFinish(); if (autoOn) { armAuto(); } return; }
+      curBox._tqAdvance();
+    }
+
+    function dockClear() {
+      var d = main.querySelector('.dlg-dock');
+      if (d && d.parentNode) { d.parentNode.removeChild(d); }
+    }
+    function ensureDock() {
+      var dock = main.querySelector('.dlg-dock');
+      if (!dock) {
+        dock = el('div', 'dlg-dock');
+        var strip = el('div', 'log-strip');
+        keyAuto = el('span', 'log-key', '自动');
+        keySkip = el('span', 'log-key', '跳过');
+        keyLog = el('span', 'log-key', '回看');
+        keyMemo = el('span', 'log-key', '手札');
+        keyAuto.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (autoOn) { stopAuto(); return; }
+          stopSkip();
+          autoOn = true; keyAuto.classList.add('on');
+          if (curBox && busy && curBox._tqIsFull()) { armAuto(); }
+        });
+        keySkip.addEventListener('click', function (e) {
+          e.stopPropagation();
+          if (skipOn) { stopSkip(); return; }
+          stopAuto();
+          skipOn = true; keySkip.classList.add('on');
+          skipTimer = setInterval(function () {
+            if (!skipOn) { return; }
+            if (!curBox || !busy) { return; }
+            if (!curBox._tqIsFull()) { curBox._tqFinish(); return; }
+            boxGo();
+          }, SKIP_STEP);
+        });
+        keyLog.addEventListener('click', function (e) { e.stopPropagation(); openLog(); });
+        keyMemo.addEventListener('click', function (e) { e.stopPropagation(); showMemoOverlay(); });
+        strip.appendChild(keyAuto); strip.appendChild(keySkip);
+        strip.appendChild(keyLog); strip.appendChild(keyMemo);
+        dock.appendChild(strip);
+        main.appendChild(dock);
+      }
+      return dock;
+    }
+    function dockBox(speaker, text, cb) {
+      retract(); /* 幂等清场：sub 分支链不经过 next()，对话框回归时统一退占台/解键锁 */
+      var dock = ensureDock();
+      var old = dock.querySelector('.dlg-box');
+      if (old && old.parentNode) { old.parentNode.removeChild(old); }
+      var item = { sp: speaker || '', t: text };
+      function onAdv() {
+        if (autoTimer) { clearTimeout(autoTimer); autoTimer = 0; }
+        backlog.push(item);
+        curBox = null;
+        busy = false;
+        if (cb) { cb(); } else { after(); }
+      }
+      var card;
+      if (speaker) {
+        card = F.dlgCard(speaker, text, onAdv, { onFull: function () { if (autoOn) { armAuto(); } } });
+      } else {
+        card = F.narrCard(text, onAdv);
+      }
+      curBox = card;
+      dock.insertBefore(card, dock.firstChild);
+      if (autoOn && card._tqIsFull()) { armAuto(); }
+      main.scrollTop = main.scrollHeight;
+      return dock;
+    }
+
+    /* ---------- 占台与退场（修「整个剧情 scroll」：交互小节独占舞台，完成即清场） ---------- */
+    function retract() {
+      if (occupied && occupied.parentNode) { occupied.parentNode.removeChild(occupied); }
+      occupied = null;
+      keysLocked(false);
+      var dock = main.querySelector('.dlg-dock');
+      if (dock) { dock.style.display = ''; }
+      var vnMain = main.parentNode;
+      if (vnMain && vnMain.classList) { vnMain.classList.remove('act-op'); }
+    }
+    function occupyNode(node, keepDock) {
+      retract();
+      stopAuto(); stopSkip();
+      occupied = node;
+      main.appendChild(node);
+      var dock = main.querySelector('.dlg-dock');
+      if (dock && !keepDock) { dock.style.display = 'none'; } /* 选择态 keepDock：dock 可见、三键置灰 */
+      var vnMain = main.parentNode;
+      if (vnMain && vnMain.classList) { vnMain.classList.add('act-op'); }
+      main.scrollTop = main.scrollHeight;
+    }
+    VNC.dockBox = dockBox;
+    VNC.occupy = occupyNode;
+    VNC.retract = retract;
+    VNC.lock = keysLocked;
+    VNC.backlog = function () { return backlog; };
+    VNC.stop = function () { stopAuto(); stopSkip(); };
+    VNC.stopModes = function () { stopAuto(); stopSkip(); retract(); dockClear(); };
+
     function next() {
       if (busy) { return; }
+      retract(); /* 上一交互小节退场（若占台）；恢复 dock 与立绘区 */
+      if (injected.length) { handleStep(injected.shift()); return; }
       if (i >= steps.length) { finishAct(idx, main); return; }
       var st = steps[i];
       i += 1;
-      /* 先摘旧「继续」尾钮：防打字机未完跳步 */
-      var olds0 = main.querySelectorAll('.step-tail');
-      for (var q0 = 0; q0 < olds0.length; q0++) { if (olds0[q0].parentNode) { olds0[q0].parentNode.removeChild(olds0[q0]); } }
-      var vnMain = main.parentNode;
-      if (vnMain && vnMain.classList) {
-        vnMain.classList.toggle('act-op', st.type === 'iv' || st.type === 'rhythm' || st.type === 'touhu' || st.type === 'shard');
-      }
+      handleStep(st);
+    }
+
+    function handleStep(st) {
+      busy = true;
       if (st.type === 'narr') {
-        busy = true;
-        main.appendChild(F.narrCard(st.text, function () {
-          busy = false;
-          after();
-        }));
+        dockBox('', st.text, null);
       } else if (st.type === 'card') {
-        busy = true;
-        main.appendChild(F.dlgCard(st.speaker || '', st.text, function () {
-          busy = false;
-          after();
-        }));
+        dockBox(st.speaker || '', st.text, null);
       } else if (st.type === 'iv') {
-        busy = true;
         var ivCfg = D.iv[st.cfg] || D.iv.tang;
         var ivWrap = F.iv(main, ivCfg, function (hits) {
           if (st.deco && st.decoName) { awardDeco(st.deco, st.decoName, main); }
           busy = false;
           after();
         }, function () {
-          if (ivWrap && ivWrap.parentNode) { ivWrap.parentNode.removeChild(ivWrap); }
+          retract();
           runJie(main, ivCfg, function () {
             if (st.deco && st.decoName) { awardDeco(st.deco, st.decoName, main); }
             busy = false;
             after();
           });
         });
+        occupyNode(ivWrap);
       } else if (st.type === 'shard') {
-        busy = true;
         showShard(main, st.id, function () { busy = false; after(); });
       } else if (st.type === 'choice') {
-        busy = true;
-        showChoice(main, st, function () { busy = false; after(); });
+        showChoice(main, st, function () { busy = false; after(); }, function (stp) { injected.push(stp); });
       } else if (st.type === 'shangshu') {
-        busy = true;
         runRhythm(main, D.shangshu, { deco: 'jinzang', decoName: '金觞' }, function () { busy = false; after(); });
       } else if (st.type === 'rhythm') {
-        busy = true;
         var rcfg = D[st.cfg] || D.shangshu;
         runRhythm(main, rcfg, { deco: st.deco, decoName: st.decoName }, function () { busy = false; after(); });
       } else if (st.type === 'memory') {
-        busy = true;
         runMemory(main, st.id, function () { busy = false; after(); });
       } else if (st.type === 'tasks') {
-        busy = true;
         renderTasks(main, idx, function () { busy = false; after(); });
       } else if (st.type === 'touhu') {
-        busy = true;
         runTouhu(main, function () { busy = false; after(); });
       } else if (st.type === 'role') {
         // 角色专属支线：主线共享（碎片数一致），视角与私事因身份而异
-        busy = true;
         var sub = (st.branches && st.branches[save.role]) || [];
         var j = 0;
         (function nextSub() {
           if (j >= sub.length) { busy = false; after(); return; }
           var s2 = sub[j]; j += 1;
-          var vnMain2 = main.parentNode;
-          if (vnMain2 && vnMain2.classList) {
-            vnMain2.classList.toggle('act-op', s2.type === 'iv' || s2.type === 'rhythm' || s2.type === 'shard');
-          }
-          if (s2.type === 'card') {
-            main.appendChild(F.dlgCard(s2.speaker || '', s2.text, nextSub));
-          } else if (s2.type === 'narr') {
-            main.appendChild(F.narrCard(s2.text || '', nextSub));
+          if (s2.type === 'narr') {
+            dockBox('', s2.text || '', nextSub);
+          } else if (s2.type === 'card') {
+            dockBox(s2.speaker || '', s2.text, nextSub);
           } else if (s2.type === 'iv') {
             var ivCfg2 = D.iv[s2.cfg] || D.iv.tang;
             var ivWrap2 = F.iv(main, ivCfg2, function (hits2) {
               if (s2.deco && s2.decoName) { awardDeco(s2.deco, s2.decoName, main); }
               nextSub();
             }, function () {
-              if (ivWrap2 && ivWrap2.parentNode) { ivWrap2.parentNode.removeChild(ivWrap2); }
+              retract();
               runJie(main, ivCfg2, function () {
                 if (s2.deco && s2.decoName) { awardDeco(s2.deco, s2.decoName, main); }
                 nextSub();
               });
             });
+            occupyNode(ivWrap2);
           } else if (s2.type === 'rhythm') {
             runRhythm(main, D[s2.cfg] || D.shangshu, { deco: s2.deco, decoName: s2.decoName }, nextSub);
           } else if (s2.type === 'shard') {
             showShard(main, s2.id, nextSub);
           } else if (s2.type === 'choice') {
-            showChoice(main, s2, nextSub);
+            showChoice(main, s2, nextSub, function (stp) { sub.splice(j, 0, stp); });
           } else {
-            main.appendChild(F.narrCard(s2.text || '', nextSub));
+            dockBox('', s2.text || '', nextSub);
           }
         })();
       } else {
+        busy = false;
         after();
       }
-      main.scrollTop = main.scrollHeight;
     }
+
     function after() {
       save.step = i;
-      // 先清掉上一个「继续」/「上宴」，保证任何时刻只有一个步骤尾按钮
-      var olds = main.querySelectorAll('.step-tail');
-      for (var q = 0; q < olds.length; q++) { olds[q].parentNode.removeChild(olds[q]); }
-      main.scrollTop = main.scrollHeight;
-      if (i < steps.length) {
-        main.appendChild(btn('继续', 'ghost step-tail', function () {
-          // 先摘掉按钮自身（连同一切 step-tail）：防双击/悬空期间二次触发
-          var olds = main.querySelectorAll('.step-tail');
-          for (var q = 0; q < olds.length; q++) {
-            if (olds[q].parentNode) { olds[q].parentNode.removeChild(olds[q]); }
-          }
-          // 此刻尚存的选项盒必然已作答（作答才会走到 after/继续），锁定安全
-          lockChoiceBoxes(main);
-          next();
-        }));
-        main.scrollTop = main.scrollHeight;
-      } else {
-        finishAct(idx, main);
-      }
+      if (injected.length) { next(); return; }
+      if (i < steps.length) { next(); return; }
+      finishAct(idx, main);
     }
     next();
   }
 
   /* ---------- 差事帖（常驻 dock：顶栏入口 + 卷轴浮层；完成=朱笔勾销，依勾检/朱销文簿古制） ---------- */
   var CHN_NUM = ['一', '二', '三', '四', '五', '六'];
-  function openChaishi() {
+  var csClose = null; /* 当前差事帖浮层的关闭柄（顶栏 toggle 复用，保证 onClose 不丢） */
+  function openChaishi(onClose) {
     var t = D.tasks && D.tasks[save.role];
-    if (!t) { return; }
+    if (!t) { if (onClose) { onClose(); } return; }
     var old = app.querySelector('.cs-ov');
-    if (old) { if (old.parentNode) { old.parentNode.removeChild(old); } return; }
+    if (old) {
+      if (csClose) { csClose(); } else if (old.parentNode) { old.parentNode.removeChild(old); }
+      if (onClose) { onClose(); }
+      return;
+    }
     var ov = el('div', 'cs-ov');
     var sheet = el('div', 'cs-sheet');
     sheet.appendChild(el('div', 'cs-qian', '礼部差遣 · 天清节备礼'));
     sheet.appendChild(el('div', 'cs-title', '差事帖'));
-    sheet.appendChild(el('div', 'cs-sub', '显德五年九月廿四'));
+    sheet.appendChild(el('div', 'cs-sub', '显德五年九月廿三 · 应差录'));
     sheet.appendChild(el('div', 'cs-gold'));
     t.list.forEach(function (item, i) {
       var row = el('div', 'cs-row');
@@ -386,57 +510,75 @@
       if (doneNow) { row.classList.add('done'); }
       if (i === CUR_ACT) { row.classList.add('current'); }
       row.appendChild(el('div', 'cs-num', doneNow ? '勾' : (CHN_NUM[i] || String(i + 1))));
+      /* 竖列题名（验稿页 §21：逐字 span 堆叠，不用 writing-mode） */
       var vt = el('div', 'cs-vt');
-      var head = item.split('：')[0];
-      var shichen = head.split('｜')[0] || head;
-      shichen.split('').forEach(function (ch) { vt.appendChild(el('span', '', ch)); });
+      var title = (t.titles && t.titles[i]) || item.split('：')[0];
+      title.split('').forEach(function (ch) { vt.appendChild(el('span', '', ch)); });
       row.appendChild(vt);
       var meta = el('div', 'cs-meta');
+      var head = item.split('：')[0].replace('｜', ' · ');
       meta.appendChild(el('b', head));
-      meta.appendChild(el('span', item));
+      meta.appendChild(el('span', item.split('：').slice(1).join('：') || item));
       row.appendChild(meta);
       row.appendChild(el('div', 'cs-st ' + (doneNow ? 'done' : (i === CUR_ACT ? 'cur' : 'todo')),
-        doneNow ? '已勾销' : (i === CUR_ACT ? '进行中' : '未到')));
+        doneNow ? '已竣' : (i === CUR_ACT ? '进行中' : '未行')));
       sheet.appendChild(row);
     });
     var curActId = D.acts[CUR_ACT] ? D.acts[CUR_ACT].id : '';
+    /* 当前差事金虚线框：验稿页 §21 格式「当前差事（N）：<内容>」；兜底去「时辰｜地点：」前缀 */
+    var curTxt = (t.nudges && t.nudges[curActId]) ||
+      (t.list[CUR_ACT] || '').replace(/^[^｜]+｜[^：]+：/, '');
     sheet.appendChild(el('div', 'cs-cur',
-      (t.nudges && t.nudges[curActId]) || t.list[CUR_ACT] || ''));
+      '当前差事（' + (CHN_NUM[CUR_ACT] || String(CUR_ACT + 1)) + '）：' + curTxt));
     var tail = el('div', 'cs-tail');
-    tail.appendChild(el('span', 'who', '差事做完才许歇'));
-    tail.appendChild(el('div', 'cs-seal', '差事'));
+    tail.appendChild(document.createTextNode('显德五年九月廿三 记'));
+    tail.appendChild(el('span', 'who', save.role === 'shi' ? '随驾史官' : '宫中女官'));
+    var seal = el('div', 'cs-seal');
+    seal.appendChild(el('span', '', '差'));
+    seal.appendChild(el('span', '', '帖'));
+    tail.appendChild(seal);
     sheet.appendChild(tail);
-    var fold = el('button', 'cs-fold', '合上差事帖');
+    var fold = el('button', 'cs-fold', '收起差事帖');
     fold.addEventListener('click', close);
     sheet.appendChild(fold);
     sheet.appendChild(el('div', 'cs-fine', '收起不误值守 · 点顶栏「差事帖」随时再取出'));
     ov.appendChild(sheet);
     ov.addEventListener('click', function (e) { if (e.target === ov) { close(); } });
+    document.addEventListener('keydown', escHandler);
     app.appendChild(ov);
-    function close() { if (ov.parentNode) { ov.parentNode.removeChild(ov); } }
+    csClose = close;
+    var closed = false;
+    function escHandler(e) {
+      var k = e.key || e.keyCode;
+      if (k === 'Escape' || k === 'Esc' || k === 27) { close(); }
+    }
+    function close() {
+      if (closed) { return; }
+      closed = true;
+      csClose = null;
+      if (ov.parentNode) { ov.parentNode.removeChild(ov); }
+      document.removeEventListener('keydown', escHandler);
+      if (onClose) { var f = onClose; onClose = null; f(); }
+    }
   }
+  /* ---------- 差事帖步骤：引路人递话走对话框，随后开卷轴浮层，收起后继续 ---------- */
   function renderTasks(main, actIdx, done) {
     var t = D.tasks && D.tasks[save.role];
     var act = D.acts[actIdx];
     if (!t || !act) { done(); return; }
-    // 幕前递话（首幕完整自述，后续各幕短递话）
-    if (actIdx === 0) {
-      var c0 = el('div', 'card');
-      c0.appendChild(el('div', 'speaker', t.guide));
-      c0.appendChild(el('div', 'text', t.intro));
-      main.appendChild(c0);
-    } else if (t.nudges && t.nudges[act.id]) {
-      var cn = el('div', 'card');
-      cn.appendChild(el('div', 'speaker', t.guide));
-      cn.appendChild(el('div', 'text', t.nudges[act.id]));
-      main.appendChild(cn);
+    var line = actIdx === 0 ? t.intro : ((t.nudges && t.nudges[act.id]) || '');
+    function openSheet() {
+      VNC.stop(); /* 浮层期间暂停自动/跳过 */
+      openChaishi(function () { done(); });
     }
-    openChaishi();
-    main.scrollTop = main.scrollHeight;
-    done();
+    if (line) {
+      VNC.dockBox(t.guide, line, function () { openSheet(); });
+    } else {
+      openSheet();
+    }
   }
 
-  /* ---------- 碎片（内联：toast + 史料卡） ---------- */
+  /* ---------- 碎片（占台：toast + 史料卡独占舞台，「收下瓷片」退场） ---------- */
   function showShard(main, id, done) {
     var sh = D.shards[id];
     if (!sh) { done(); return; }
@@ -445,29 +587,29 @@
       save.shards[id] = true;
       persist();
     }
+    var wrap = el('div', 'shard-occ');
     var toast = el('div', 'shard-toast');
     toast.appendChild(el('div', 'got', (first ? '拾得瓷片' : '瓷片在手') + ' · 共 ' + countShards() + '/16'));
     toast.appendChild(el('div', 'name', sh.name));
-    main.appendChild(toast);
+    wrap.appendChild(toast);
     var card = el('div', 'shiliao');
     var head = el('div', 'head', '史料卡');
     head.appendChild(el('span', 'prov', sh.prov));
     card.appendChild(head);
     card.appendChild(el('div', 'quote', sh.text));
     card.appendChild(el('div', 'source', '——' + sh.source));
-    main.appendChild(card);
-    done();
+    wrap.appendChild(card);
+    wrap.appendChild(btn('收下瓷片', '', function () { done(); }));
+    VNC.occupy(wrap);
   }
 
-  /* ---------- 选择（单选互斥：可改选，推进后锁定） ---------- */
-  function showChoice(main, st, done) {
+  /* ---------- 选择（占台：选项独占舞台；选即锁定；回看/自动/跳过置灰；回复经 injected 走对话框） ---------- */
+  function showChoice(main, st, done, pushStep) {
     var box = el('div', 'choice-box');
     box.setAttribute('role', 'radiogroup');
     box.appendChild(el('div', 'speaker', st.speaker || ''));
     box.appendChild(el('div', 'prompt', st.prompt || ''));
-    var chosenBtn = null;
-    var replyEl = null;
-    var advanced = false;
+    var picked = false;
 
     st.options.forEach(function (op) {
       var b = el('button', 'btn ghost opt', op.label);
@@ -475,46 +617,20 @@
       b.setAttribute('aria-checked', 'false');
       b.appendChild(el('span', 'desc', op.text));
       b.addEventListener('click', function () {
-        // 锁定后（流程已推进）不再接受改选
-        if (box.getAttribute('data-locked')) { return; }
-        // 互斥：同一项重复点击不重复处理
-        if (chosenBtn === b) { return; }
-        // 撤销上一项：取消高亮、移除旧回复
-        if (chosenBtn) {
-          chosenBtn.classList.remove('selected');
-          chosenBtn.setAttribute('aria-checked', 'false');
-        }
-        if (replyEl && replyEl.parentNode) { replyEl.parentNode.removeChild(replyEl); }
-        // 选中新项
-        chosenBtn = b;
+        if (picked || box.getAttribute('data-locked')) { return; }
+        picked = true;
+        box.setAttribute('data-locked', '1');
         b.classList.add('selected');
         b.setAttribute('aria-checked', 'true');
         save.choices[st.key] = op.label;
         persist();
-        // 一经选择立即锁定：不可改选（选中高亮保留，未选降透明禁点）
-        box.setAttribute('data-locked', '1');
-        replyEl = el('div', 'card');
-        replyEl.appendChild(el('div', 'text', op.reply));
-        // 回复固定插在本选项盒之后：改选换卡时不会被步骤尾按钮（继续）隔断
-        if (box.parentNode) { box.parentNode.insertBefore(replyEl, box.nextSibling); }
-        else { main.appendChild(replyEl); }
-        main.scrollTop = main.scrollHeight;
-        if (!advanced) {
-          advanced = true;
-          done(); // 仅首次选择推进流程；改选只换回复不重复推进
-        }
+        if (pushStep) { pushStep({ type: 'narr', text: op.reply }); }
+        done(); // 选择即锁定推进：回复作为下一对话框演出
       });
       box.appendChild(b);
     });
-    main.appendChild(box);
-    main.scrollTop = main.scrollHeight;
-  }
-
-  function lockChoiceBoxes(main) {
-    var boxes = main.querySelectorAll('.choice-box');
-    for (var i = 0; i < boxes.length; i++) {
-      boxes[i].setAttribute('data-locked', '1');
-    }
+    VNC.occupy(box, true); /* 选择态：选项占台但 dock 可见——三键置灰给玩家看 */
+    VNC.lock(true);
   }
 
   /* ---------- 通用节奏小节（执觞/汤饼/承露囊/投壶掷矢） ----------
@@ -537,7 +653,7 @@
     panel.appendChild(track);
     var tip = el('div', 'memo-sub', '');
     panel.appendChild(tip);
-    main.appendChild(panel);
+    VNC.occupy(panel); /* 占台：节奏面板独占舞台，dock 暂隐 */
 
     var advanceOnMiss = !!(opts && opts.advanceOnMiss);
     var beat = 0, hits = 0, pos = 0, dir = 1, zoneL = 30, zoneR = 55, raf = 0, over = false;
@@ -570,8 +686,7 @@
         label.textContent = cfg.done || '毕。';
         tip.textContent = '';
         if (opts && opts.deco) { awardDeco(opts.deco, opts.decoName, main); }
-        main.scrollTop = main.scrollHeight;
-        cb(hits);
+        setTimeout(function () { cb(hits); }, 600); /* [PLACEHOLDER] 完成停留，随后占台退场 */
         return;
       }
       label.textContent = beats[beat];
@@ -613,7 +728,7 @@
     row.appendChild(op1); row.appendChild(op2);
     panel.appendChild(row);
     panel.appendChild(el('div', 'jie-note', '此节择简——应节而动。判定与奖励同躬行轨，失败零惩罚。'));
-    main.appendChild(panel);
+    VNC.occupy(panel); /* 占台 */
 
     var beat = 0, hits = 0, pos = 0, dir = 1, zoneL = 30, zoneR = 55, raf = 0, over = false;
     function placeZone() {
@@ -641,7 +756,7 @@
         cancelAnimationFrame(raf);
         label.textContent = cfg.done || '毕。';
         tip.textContent = '';
-        cb(hits);
+        setTimeout(function () { cb(hits); }, 600); /* [PLACEHOLDER] 完成停留 */
         return;
       }
       label.textContent = beats[beat];
@@ -669,43 +784,55 @@
     m.lines.forEach(function (t) {
       panel.appendChild(el('div', 'memory-line', t));
     });
-    main.appendChild(panel);
-    main.appendChild(btn('从回忆里回来', 'ghost step-tail', done));
-    main.scrollTop = main.scrollHeight;
+    var wrap = el('div', 'mem-occ');
+    wrap.appendChild(panel);
+    wrap.appendChild(btn('从回忆里回来', 'ghost', function () { done(); }));
+    VNC.occupy(wrap); /* 占台：回忆面板独占舞台 */
   }
 
-  /* ---------- 玉津园 · 投壶（终幕） ---------- */
+  /* ---------- 玉津园 · 投壶（终幕）：对白走对话框链，投壶占台，结果回对话框 ---------- */
   function runTouhu(main, done) {
     var cfg = D.touhu;
-    function card(speaker, text) {
-      var c = el('div', 'card');
-      c.appendChild(el('div', 'speaker', speaker || ''));
-      c.appendChild(el('div', 'text', text));
-      main.appendChild(c);
-      main.scrollTop = main.scrollHeight;
-    }
+    var q = [];
     // 群臣轮番（各自两矢，命中数运行时随机，一卡带过）
     cfg.ministers.forEach(function (mst) {
       var mh = (Math.random() < 0.75 ? 1 : 0) + (Math.random() < 0.55 ? 1 : 0); // 加权 0–2 矢
-      card(mst.speaker, mst.line + cfg.minResult[mh]);
+      q.push({ sp: mst.speaker, t: mst.line + cfg.minResult[mh] });
     });
-    card('司正', '礼官请矢——两矢，中者为胜。');
-    // 玩家两矢（回退版 · 拉弓式拖拽投壶，10-21 接 iv toss）：落空也推进，计命中数
-    F.iv(main, D.iv.touhu, function (hits) {
+    q.push({ sp: '司正', t: '礼官请矢——两矢，中者为胜。' });
+    (function playQ() {
+      if (q.length) {
+        var it = q.shift();
+        VNC.dockBox(it.sp, it.t, playQ);
+        return;
+      }
+      // 玩家两矢（回退版 · 拉弓式拖拽投壶）：落空也推进，计命中数；占台演出
+      var ivWrap = F.iv(main, D.iv.touhu, function (hits) {
+        playRong(hits);
+      }, null);
+      VNC.occupy(ivWrap);
+    })();
+    function playRong(hits) {
       // 压轴：官家对投（两矢各五成命中，运行时随机——与玩家 hits 比较）
-      card('官家', cfg.rongIntro);
+      var q2 = [{ sp: '官家', t: cfg.rongIntro }];
       var rongHits = 0;
       for (var r = 0; r < 2; r++) {
         var rh = Math.random() < 0.5;
         if (rh) { rongHits += 1; }
-        card('', cfg.rongThrow[rh ? 'hit' : 'miss'][r]);
+        q2.push({ sp: '', t: cfg.rongThrow[rh ? 'hit' : 'miss'][r] });
       }
       var verdict = hits > rongHits ? cfg.verdictWin : (hits === rongHits ? cfg.verdictDraw : cfg.verdictLose);
-      card('园中', verdict);
-      awardDeco('jinzhi', '金矢', main); // 胜负零惩罚，参与即纪念
-      main.appendChild(btn('献瓮', 'step-tail', done));
-      main.scrollTop = main.scrollHeight;
-    }, null);
+      q2.push({ sp: '园中', t: verdict });
+      (function play2() {
+        if (q2.length) {
+          var it2 = q2.shift();
+          VNC.dockBox(it2.sp, it2.t, play2);
+          return;
+        }
+        awardDeco('jinzhi', '金矢', main); // 胜负零惩罚，参与即纪念
+        done();
+      })();
+    }
   }
 
   /* ---------- 终幕结算（合瓮长卷 · 简版） ---------- */
@@ -763,6 +890,7 @@
 
   /* ---------- 幕毕 ---------- */
   function finishAct(idx, main) {
+    if (VNC.stopModes) { VNC.stopModes(); } /* 清占台/dock/自动跳过，干净进结算 */
     var act = D.acts[idx];
     if (act.shardAfter && D.shards[act.shardAfter] && !save.shards[act.shardAfter]) {
       showShard(main, act.shardAfter, function () {});
@@ -811,8 +939,12 @@
     for (var id = 1; id <= 16; id++) {
       var key = String(id);
       var got = save && save.shards && save.shards[key];
-      var label = got && D.shards[key] ? D.shards[key].name : String(id);
-      var cell = el('div', 'memo-cell' + (got ? ' got' : ''), label);
+      var cell = el('div', 'memo-cell' + (got ? ' got' : ''));
+      if (got) {
+        cell.innerHTML = F.FRACTURE; /* 已拾得：瓷片剪影（复刻验稿页 §6） */
+      } else {
+        cell.textContent = String(id);
+      }
       if (got && D.shards[key]) {
         cell.setAttribute('role', 'button');
         (function (k) {
@@ -860,6 +992,104 @@
     app.appendChild(foot);
     main.appendChild(el('div', 'memo-sub',
       '存档说明：进度自动记录于本机（每逢时辰礼毕与关键处）；手札「现在就记」可随时手动补记。'));
+  }
+
+  /* ---------- 回看浮层（backlog：最新在底，默认定位到上一条） ---------- */
+  function openLog() {
+    if (VNC.stop) { VNC.stop(); }
+    var old = app.querySelector('.log-ov');
+    if (old) { old.parentNode.removeChild(old); return; }
+    var ov = el('div', 'log-ov');
+    var panel = el('div', 'log-panel');
+    var ph = el('div', 'log-ph');
+    ph.appendChild(el('div', 'log-pt', '回看 · 今日对白'));
+    var pc = el('button', 'log-pc', '合上');
+    pc.addEventListener('click', close);
+    ph.appendChild(pc);
+    panel.appendChild(ph);
+    var list = el('div', 'log-list');
+    if (!backlogRef().length) {
+      list.appendChild(el('div', 'log-item', '本场还没有对白。'));
+    }
+    backlogRef().forEach(function (it, ix) {
+      var d = el('div', 'log-item' + (ix === backlogRef().length - 1 ? ' last' : ''));
+      d.appendChild(el('b', it.sp || '旁白'));
+      d.appendChild(document.createTextNode(it.t));
+      list.appendChild(d);
+    });
+    panel.appendChild(list);
+    ov.appendChild(panel);
+    ov.addEventListener('click', function (e) { if (e.target === ov) { close(); } });
+    document.addEventListener('keydown', escH);
+    app.appendChild(ov);
+    list.scrollTop = list.scrollHeight; /* 默认定位到上一条 */
+    function escH(e) { var k = e.key || e.keyCode; if (k === 'Escape' || k === 'Esc' || k === 27) { close(); } }
+    function close() { if (ov.parentNode) { ov.parentNode.removeChild(ov); } document.removeEventListener('keydown', escH); }
+  }
+  function backlogRef() { return (VNC.backlog && VNC.backlog()) || []; }
+
+  /* ---------- 手札浮层（VN 状态不破坏：图鉴 + 进度 + 补记，合上回到原对话框） ---------- */
+  function showMemoOverlay() {
+    if (VNC.stop) { VNC.stop(); }
+    var old = app.querySelector('.memo-ov');
+    if (old) { old.parentNode.removeChild(old); return; }
+    var ov = el('div', 'log-ov memo-ov');
+    var panel = el('div', 'log-panel');
+    var ph = el('div', 'log-ph');
+    ph.appendChild(el('div', 'log-pt', D.memoCopy.title));
+    var pc = el('button', 'log-pc', '合上手札');
+    pc.addEventListener('click', close);
+    ph.appendChild(pc);
+    panel.appendChild(ph);
+    var list = el('div', 'log-list memo-body');
+    var grid = el('div', 'memo-grid');
+    var detail = el('div', 'shiliao shard-detail');
+    function showDetail(key) {
+      var sh = D.shards[key];
+      if (!sh) { return; }
+      while (detail.firstChild) { detail.removeChild(detail.firstChild); }
+      var head = el('div', 'head', '瓷片 · ' + sh.name);
+      head.appendChild(el('span', 'prov', sh.prov));
+      detail.appendChild(head);
+      detail.appendChild(el('div', 'quote', sh.text));
+      detail.appendChild(el('div', 'source', '——' + sh.source));
+      detail.setAttribute('data-on', '1');
+      list.scrollTop = list.scrollHeight;
+    }
+    for (var id = 1; id <= 16; id++) {
+      var key = String(id);
+      var got = save && save.shards && save.shards[key];
+      var cell = el('div', 'memo-cell' + (got ? ' got' : ''));
+      if (got) { cell.innerHTML = F.FRACTURE; } else { cell.textContent = String(id); }
+      if (got && D.shards[key]) {
+        cell.setAttribute('role', 'button');
+        (function (k) {
+          cell.addEventListener('click', function () { showDetail(k); });
+        })(key);
+      }
+      grid.appendChild(cell);
+    }
+    list.appendChild(grid);
+    detail.appendChild(el('div', 'head', '瓷片图鉴'));
+    detail.appendChild(el('div', 'quote', '点上方已拾得的瓷片，可随时重读记下的内容。'));
+    list.appendChild(detail);
+    var count = save ? countShards() : 0;
+    var cur = save ? D.acts[save.actIndex] : null;
+    list.appendChild(el('div', 'memo-sub',
+      '瓷片 ' + count + '/16 · ' + (cur ? '当前：' + cur.name : '尚未入宫') + ' · 进度自动记录于本机'));
+    var rec = btn(D.memoCopy.saveNow, 'ghost', function () {
+      persist();
+      rec.textContent = D.memoCopy.saved;
+    });
+    rec.style.margin = '10px 0 0';
+    list.appendChild(rec);
+    panel.appendChild(list);
+    ov.appendChild(panel);
+    ov.addEventListener('click', function (e) { if (e.target === ov) { close(); } });
+    document.addEventListener('keydown', escH);
+    app.appendChild(ov);
+    function escH(e) { var k = e.key || e.keyCode; if (k === 'Escape' || k === 'Esc' || k === 27) { close(); } }
+    function close() { if (ov.parentNode) { ov.parentNode.removeChild(ov); } document.removeEventListener('keydown', escH); }
   }
 
   /* ---------- 启动：先读档，再走 S9 加载页 ---------- */

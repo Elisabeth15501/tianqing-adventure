@@ -284,8 +284,11 @@
     function finish() {
       if (timer) { clearInterval(timer); timer = 0; }
       dt.textContent = text;
-      full = true;
-      ind.style.display = 'block';
+      if (!full) {
+        full = true;
+        ind.style.display = 'block';
+        if (opts.onFull) { opts.onFull(); } /* 自动挡：显完即挂自动推进定时 */
+      }
     }
     function advance() {
       if (advanced) { return; }
@@ -305,9 +308,13 @@
       }, 40); /* 40ms/字（规范 30-50ms） */
     }
     box.addEventListener('click', advance);
+    /* 外部控制 API（自动/跳过键驱动）：查询显完状态 / 立即显完 / 外部推进 */
+    box._tqIsFull = function () { return full; };
+    box._tqFinish = function () { if (!full) { finish(); } };
+    box._tqAdvance = function () { advance(); };
     return box;
   }
-  TQ.dlgCard = function (speaker, text, onAdvance) { return typeCard(speaker, text, onAdvance, null); };
+  TQ.dlgCard = function (speaker, text, onAdvance, opts) { return typeCard(speaker, text, onAdvance, opts || null); };
   TQ.narrCard = function (text, onAdvance) { return typeCard('', text, onAdvance, { noType: true }); };
 
   /* ========== direct2d 小节引擎（回退版默认操作 · 零惩罚） ==========
@@ -341,7 +348,7 @@
     ctrl.appendChild(minus); ctrl.appendChild(plus); ctrl.appendChild(sp); ctrl.appendChild(jie);
     var hint = h('div', 'iv-hint', '');
     wrap.appendChild(stepsRow); wrap.appendChild(bar); wrap.appendChild(val); wrap.appendChild(ctrl); wrap.appendChild(hint);
-    main.appendChild(wrap);
+    /* 挂载与退场由调用方占台管理（VN 占台机制）；节点不再自行 append 进文档流 */
 
     var steps = cfg.steps || [];
     var si = 0, pct = 0, over = false, hits = 0;
@@ -464,8 +471,7 @@
           var t = h('div', 'shard-toast');
           t.appendChild(h('div', 'got', '长卷装饰件入手'));
           t.appendChild(h('div', 'name', cfg.decoName));
-          main.appendChild(t);
-          main.scrollTop = main.scrollHeight;
+          wrap.appendChild(t);
         }
         if (cb) { cb(hits); }
         return;

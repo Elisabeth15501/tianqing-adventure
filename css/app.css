@@ -12,6 +12,9 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .bg-art svg{width:100%;height:100%}
 .bg-art.wash{opacity:.16}
 .title-wrap{margin:auto;text-align:center;padding:24px 8px}
+/* 首屏标题屏：标题组贴底（直接位于按钮组/footbar 上方 · 用户 10-22 设计改动） */
+.title-bottom{display:flex;flex-direction:column;justify-content:flex-end}
+.title-bottom .title-wrap{margin-left:auto;margin-right:auto}
 .title-main{font-size:34px;font-weight:500;letter-spacing:6px}
 .title-sub{margin-top:10px;font-size:14px;color:var(--muted);letter-spacing:2px}
 .title-note{margin-top:26px;font-size:12px;color:var(--tu)}
@@ -270,7 +273,6 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   .cr-statement{font-size:13.5px}
   .cr-name{font-size:13.5px}
   .cr-src{font-size:12px}
-}
   .topbar{padding:12px 28px}
   .topbar .act-name{font-size:17px}
   .timebar{display:none}
@@ -352,16 +354,14 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   .act-vn .sp-zone{position:relative;top:auto;left:auto;right:auto;width:38%;max-width:460px;min-width:300px;flex-shrink:0;border-right:1px solid rgba(94,140,138,.35);justify-content:flex-end;padding:20px 18px}
   .act-vn .sp-zone .slot{width:100%;max-width:300px;height:58%;min-height:240px;background:rgba(239,245,243,.72)}
   .act-vn .sp-zone .pname{font-size:13px;background:var(--deep);color:var(--yue)}
-  .act-vn .dlg-dock{position:relative;left:auto;right:auto;bottom:auto;flex:1;min-width:0;padding:18px 26px 14px;display:flex;flex-direction:column}
+  .act-vn .dlg-dock{position:relative;left:auto;right:auto;bottom:auto;flex:1;min-width:0;margin:-18px -26px -14px;padding:18px 26px 14px;display:flex;flex-direction:column}
   .act-vn .dlg-box{margin-top:auto;width:86%}
   .act-vn .dlg-box .dtext{font-size:17px}
   .act-vn .vn-doc{flex:1;min-width:0;max-height:none;display:flex;flex-direction:column;padding:18px 26px 14px}
-  .act-vn .dlg-box{width:86%;margin-left:auto;margin-right:0}
   .act-vn.act-op .vn-doc{flex:1}
   .act-vn .log-strip{margin-top:10px}
   .act-vn .log-key{font-size:11px;padding:4px 13px}
 }
-\n
 /* ==================== 实仓增量（2026-10-21 合入：短屏可见性三层 + 网格补缝） ==================== */
 .footbar{ flex-shrink:0; padding:10px 16px calc(12px + var(--tq-bottom-inset));
   background:var(--yue); border-top:1px solid var(--qing) }
@@ -431,14 +431,40 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .memory-panel .memory-line{color:#DCE8E2}
 .timebar-inline{display:none}
 
-/* ===== VN 结构接线（10-21：立绘区 + 文档流 · act-op 操作态全宽） ===== */
-.main.act-vn{flex-direction:column;padding:0;overflow:hidden}
-.act-vn .sp-zone{position:relative;top:auto;left:auto;right:auto;bottom:auto;flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding:8px 16px 4px}
-.act-vn .sp-zone .slot{width:132px;height:176px}
-.act-vn .sp-zone .pname{margin-top:8px}
-.act-vn .vn-doc{position:relative;flex-shrink:0;max-height:46%;min-height:120px;overflow-y:auto;padding:0 14px 10px}
-.act-vn .dlg-box{width:100%}
-.act-vn .dlg-box .dtext{min-height:58px}
-.act-vn.act-op .sp-zone{display:none}
-.act-vn.act-op .vn-doc{flex:1;min-height:0;max-height:none}
-.act-vn .dlg-dock{position:relative;left:auto;right:auto;bottom:auto;padding:0}
+/* ===== VN 结构接线（竖版：立绘区 top:5% + dock 贴底 · 纸卡对话框=基规则 .sp-zone/.dlg-dock/.dlg-box（验稿页 act_vn 原样） · act-op 操作态全宽） ===== */
+.main.act-vn{display:flex;flex-direction:column;padding:0;overflow:hidden}
+/* 操作态（iv/rhythm/touhu/shard）：隐立绘、文档流全宽——act-op 类由 runSteps 经 main.parentNode 落在 .vn-main 上 */
+.vn-main.act-op .sp-zone{display:none}
+.vn-main.act-op .vn-doc{flex:1;min-height:0;max-height:none}
+@media not all and (min-aspect-ratio:6/5) and (min-width:900px){
+  .act-vn .vn-main{flex:1;display:flex;flex-direction:column;min-height:0}
+  .act-vn .vn-doc{margin-top:auto;flex-shrink:0;max-height:46%;min-height:120px;overflow-y:auto;padding:0 16px}
+  .vn-main.act-op .vn-doc{padding:0 16px 12px}
+  .act-vn .dlg-dock{position:relative;left:auto;right:auto;bottom:auto;margin:0 -16px;padding:0 14px 12px}
+  .act-vn .dlg-dock .step-tail{display:block;width:150px;margin:10px auto 0;padding:8px 0;font-size:12px;border-radius:15px;background:rgba(243,238,227,.9);color:#2B3A3A;border:none;font-family:inherit}
+}
+
+/* ==================== VN 四键与浮层（2026-10-23 实装：自动/跳过/回看/手札 + 占台退场） ==================== */
+.log-key{cursor:pointer;user-select:none}
+.log-key:active{transform:translateY(1px)}
+.log-key.on{background:var(--deep);color:var(--yue);border-color:var(--deep)}
+.log-key.dis{opacity:.35;pointer-events:none}
+/* 回看/手札：底部卷层（选择态下回看/自动/跳过由 .dis 置灰） */
+.log-ov{position:absolute;left:0;right:0;top:0;bottom:0;z-index:30;background:rgba(34,56,60,.55);display:flex;align-items:flex-end}
+.log-panel{background:var(--paper);width:100%;max-height:76%;border-radius:16px 16px 0 0;padding:14px 16px 12px;display:flex;flex-direction:column;box-shadow:0 -10px 32px rgba(31,59,58,.3)}
+.log-ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-shrink:0}
+.log-pt{font-size:14px;font-weight:600;color:var(--tu);letter-spacing:2px}
+.log-pc{font-size:12px;color:var(--deep);border:1px solid var(--qing);border-radius:12px;padding:3px 12px;background:transparent;font-family:inherit}
+.log-list{overflow-y:auto;flex:1;min-height:0;-webkit-overflow-scrolling:touch}
+.log-item{border-left:3px solid var(--qing);background:var(--yue);border-radius:0 8px 8px 0;padding:9px 12px;margin:7px 0;font-size:13.5px;line-height:1.75}
+.log-item b{display:block;font-size:12px;color:var(--deep);margin-bottom:2px}
+.log-item.last{border-left-color:var(--gold)}
+.memo-ov .memo-grid{margin-bottom:4px}
+.memo-ov .shard-detail{margin-top:10px}
+/* 占台小节容器（史料卡/回忆等独占舞台） */
+.shard-occ .shard-toast{margin-top:0}
+.mem-occ .panel{margin-top:0}
+@media (min-aspect-ratio:6/5) and (min-width:900px){
+  .log-panel{max-width:560px;margin:0 auto 18px;border-radius:16px}
+  .log-item{font-size:14px}
+}
