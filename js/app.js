@@ -108,17 +108,23 @@
     tl.appendChild(el('div', 'title-sub', D.title.sub));
     tl.appendChild(el('div', 'title-note', D.title.note));
     wrap.appendChild(tl);
+    var tr = el('div', 'tr'); /* 横版：按钮居标题右侧；竖版隐藏走 footbar */
+    wrap.appendChild(tr);
     main.appendChild(wrap);
     app.appendChild(main);
     var foot = el('footer', 'footbar fb-title');
-    if (hasSave && save && save.role) {
-      foot.appendChild(btn('继续值守', '', function () { enterAct(save.actIndex); }));
-      foot.appendChild(btn('从头再来', 'ghost', function () {
-        S.clearSave(function () { save = null; hasSave = false; showRole(); });
-      }));
-    } else {
-      foot.appendChild(btn('入宫当值', '', function () { showRole(); }));
+    function addActions(host) {
+      if (hasSave && save && save.role) {
+        host.appendChild(btn('继续值守', '', function () { enterAct(save.actIndex); }));
+        host.appendChild(btn('从头再来', 'ghost', function () {
+          S.clearSave(function () { save = null; hasSave = false; showRole(); });
+        }));
+      } else {
+        host.appendChild(btn('入宫当值', '', function () { showRole(); }));
+      }
     }
+    addActions(tr);
+    addActions(foot);
     app.appendChild(foot);
     // 首屏左下角：史实出处入口（鸣谢页式，审核与考据玩家可见）
     var cr = el('button', 'credits-btn', '史实出处');
