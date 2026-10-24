@@ -207,6 +207,107 @@
   };
   TQ.PROPS = PROPS;
 
+  /* ========== 轨③ sprite 适配器（碎片转台 · 10-24 回退机制实装） ==========
+   * shardStage：拾得视图用，12 帧慢速转台（canvas 2D 切 atlas，6fps，离场即停）；
+   * shardStill：图鉴格用，静态首帧。素材缺失/侦测失败 → FRACTURE 剪影 + 「预设图样」角标。
+   * 帧时看门狗：30 帧均值 >33ms 喂给 TQA.watchFeed（同类两连退 → 会话内降 vector）。 */
+  function drawAtlasFrame(ctx, ent, img, f, w, hgt) {
+    var fx = (f % ent.cols) * ent.fw, fy = Math.floor(f / ent.cols) * ent.fh;
+    ctx.clearRect(0, 0, w, hgt);
+    ctx.drawImage(img, fx, fy, ent.fw, ent.fh, 0, 0, w, hgt);
+  }
+  function vecShard(mount, label) {
+    mount.innerHTML = '';
+    var box = h('div', 'shard-vec');
+    box.innerHTML = TQ.FRACTURE;
+    if (label !== false) { box.appendChild(h('div', 'prop-badge', '预设图样')); }
+    mount.appendChild(box);
+  }
+  TQ.shardStage = function (mount, id) {
+    var key = 'shard-' + id;
+    var tqa = global.TQA;
+    if (!tqa || tqa.kindOut('shard')) { vecShard(mount, !!tqa && !!tqa.reg[key]); return; }
+    tqa.resolve(key, function (stt) {
+      if (!mount.isConnected) { return; }
+      if (stt !== 'ok') { vecShard(mount, stt === 'fail'); return; }
+      var ent = tqa.reg[key], img = tqa.image(key);
+      if (!img) { vecShard(mount, false); return; }
+      mount.innerHTML = '';
+      var cv = h('canvas', 'shard-sprite');
+      cv.width = ent.fw; cv.height = ent.fh;
+      cv.setAttribute('role', 'img');
+      cv.setAttribute('aria-label', '瓷片转台');
+      mount.appendChild(cv);
+      var ctx = cv.getContext('2d');
+      var f = 0, last = 0, prev = 0, n = 0, sum = 0;
+      function loop(now) {
+        if (!cv.isConnected) { return; } /* 离场即停 */
+        if (prev) {
+          sum += (now - prev); n += 1;
+          if (n === 30) { tqa.watchFeed('shard', sum / n); }
+        }
+        prev = now;
+        if (!last || now - last >= 166) { f = (f + 1) % ent.frames; last = now; drawAtlasFrame(ctx, ent, img, f, cv.width, cv.height); }
+        requestAnimationFrame(loop);
+      }
+      drawAtlasFrame(ctx, ent, img, f, cv.width, cv.height);
+      requestAnimationFrame(loop);
+    });
+  };
+  TQ.shardStill = function (mount, id) {
+    var key = 'shard-' + id;
+    var tqa = global.TQA;
+    if (!tqa) { mount.innerHTML = TQ.FRACTURE; return; }
+    tqa.resolve(key, function (stt) {
+      if (!mount.isConnected) { return; }
+      if (stt !== 'ok') { mount.innerHTML = TQ.FRACTURE; return; }
+      var ent = tqa.reg[key], img = tqa.image(key);
+      mount.innerHTML = '';
+      var cv = h('canvas', 'shard-still');
+      cv.width = ent.fw; cv.height = ent.fh;
+      mount.appendChild(cv);
+      drawAtlasFrame(cv.getContext('2d'), ent, img, 0, cv.width, cv.height);
+    });
+  };
+  /* 近看模式（S8 手札）：瓷片放大居中 + 拖动旋转观赏（atlas 12 帧转台擦洗）。
+   * 默认 6fps 自转；拖动即暂停、松手停留当前帧；重新调用本函数即恢复自转。
+   * chrome 红线：切帧一律 canvas drawImage（禁 background-position 动画）；pointer 系手势 + touch-action:none 防滚动。 */
+  TQ.shardViewer = function (mount, id) {
+    var key = 'shard-' + id;
+    var tqa = global.TQA;
+    if (!tqa || tqa.kindOut('shard')) { vecShard(mount, !tqa || !!tqa.reg[key]); return; }
+    tqa.resolve(key, function (stt) {
+      if (!mount.isConnected) { return; }
+      if (stt !== 'ok') { vecShard(mount, stt === 'fail'); return; }
+      var ent = tqa.reg[key], img = tqa.image(key);
+      if (!img) { vecShard(mount, false); return; }
+      mount.innerHTML = '';
+      var cv = h('canvas', 'shard-sprite');
+      cv.width = ent.fw; cv.height = ent.fh;
+      cv.style.touchAction = 'none';
+      mount.appendChild(cv);
+      var ctx = cv.getContext('2d');
+      var f = 0, last = 0, prev = 0, n = 0, sum = 0, auto = true, drag = false, lx = 0;
+      function draw() { drawAtlasFrame(ctx, ent, img, f, cv.width, cv.height); }
+      function loop(now) {
+        if (!cv.isConnected) { return; }
+        if (prev) { sum += (now - prev); n += 1; if (n === 30) { tqa.watchFeed('shard', sum / n); } }
+        prev = now;
+        if (auto && (!last || now - last >= 166)) { f = (f + 1) % ent.frames; last = now; draw(); }
+        requestAnimationFrame(loop);
+      }
+      draw(); requestAnimationFrame(loop);
+      cv.addEventListener('pointerdown', function (e) { drag = true; auto = false; lx = e.clientX; e.preventDefault(); });
+      window.addEventListener('pointerup', function () { drag = false; });
+      cv.addEventListener('pointermove', function (e) {
+        if (!drag) { return; }
+        var dx = e.clientX - lx, step = 20; /* 12 帧 / ~240px 拖动 = 半帧手感 */
+        var df = Math.round(dx / step);
+        if (df !== 0) { f = (f + df) % ent.frames; if (f < 0) { f += ent.frames; } lx = e.clientX; draw(); }
+      });
+    });
+  };
+
   /* ========== S9 加载页（游戏首屏 · 全构图同心于中轴） ========== */
   TQ.buildLoad = function (onEnter, onCredits) {
     var app = h('div', 'app load');
@@ -353,10 +454,47 @@
     var steps = cfg.steps || [];
     var si = 0, pct = 0, over = false, hits = 0;
     function pctClamp() { return Math.max(0, Math.min(100, pct)); }
+    /* ---- 道具双态适配器（§10.5 绑定核心：sprite 实装态 / vector 占位态共用同一容器与进度源） ----
+     * spriteUse={si,img,ent,cv}；素材侦测失败或未注册 → PROPS 代码绘画（先占位后升级，永不白屏）。 */
+    var spriteUse = null;
+    function drawSpriteFrame() {
+      var ent = spriteUse.ent, img = spriteUse.img, cv = spriteUse.cv;
+      var f = Math.min(ent.frames - 1, Math.floor(pctClamp() / 100 * ent.frames));
+      var fx = (f % ent.cols) * ent.fw, fy = Math.floor(f / ent.cols) * ent.fh;
+      var ctx = cv.getContext('2d');
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      ctx.drawImage(img, fx, fy, ent.fw, ent.fh, 0, 0, cv.width, cv.height);
+      if (cv.parentNode !== propBox) { propBox.innerHTML = ''; propBox.appendChild(cv); }
+    }
     function renderProp() {
       var st = steps[si];
+      if (spriteUse && spriteUse.si === si && spriteUse.img && spriteUse.img.complete) {
+        drawSpriteFrame();
+        return;
+      }
       var fn = PROPS[st && st.prop] || PROPS.dough;
       propBox.innerHTML = fn(pctClamp() / 100);
+      /* 回退角标：仅当该道具「注册过素材但不可用」（真回退态）才诚实标注；未接入不标 */
+      var akey = (global.TQA && global.TQA.propAsset[st && st.prop]) || null;
+      if (akey && global.TQA.state(akey) === 'fail' && !propBox.querySelector('.prop-badge')) {
+        propBox.appendChild(h('div', 'prop-badge', '预设图样'));
+      }
+    }
+    function probeSprite() {
+      spriteUse = null;
+      if (!global.TQA) { return; }
+      var st = steps[si];
+      var akey = global.TQA.propAsset[st && st.prop];
+      if (!akey || global.TQA.kindOut('prop')) { return; }
+      var reqSi = si;
+      global.TQA.resolve(akey, function (stt) {
+        if (stt !== 'ok' || reqSi !== si || over) { return; }
+        spriteUse = { si: si, img: global.TQA.image(akey), ent: global.TQA.reg[akey],
+          cv: h('canvas', 'prop-sprite') };
+        spriteUse.cv.width = spriteUse.ent.fw;
+        spriteUse.cv.height = spriteUse.ent.fh;
+        renderProp();
+      });
     }
     function renderSteps() {
       stepsRow.innerHTML = '';
@@ -445,6 +583,7 @@
       stepTag.textContent = (si + 1) + ' / ' + steps.length + ' · ' + st.label;
       pct = 0;
       renderSteps(); renderBar(); renderProp();
+      probeSprite();
       hint.innerHTML = '<b>' + st.label + '</b>：' + (st.tip || cfg.hint || '');
       gest.style.cssText = 'position:absolute;right:12%;top:16%;width:34%;height:44%;opacity:.9';
       if (st.gest === 'toss') {

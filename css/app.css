@@ -481,3 +481,58 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   .log-panel{max-width:560px;margin:0 auto 18px;border-radius:16px}
   .log-item{font-size:14px}
 }
+/* ---------- 轨③素材接线（10-24 回退机制实装）：碎片转台 canvas + 预设图样角标 + 手札设置行 ---------- */
+.shard-stage{display:flex;justify-content:center;margin:4px 0 0}
+.shard-sprite{width:168px;height:168px}
+.shard-vec{position:relative;width:168px;height:150px;display:flex;align-items:center;justify-content:center}
+.shard-vec svg{width:104px;height:96px}
+.prop-badge{position:absolute;right:0;bottom:2px;font-size:9px;color:var(--muted);background:rgba(243,238,227,.88);border:1px solid var(--qing);border-radius:8px;padding:1px 7px;letter-spacing:1px}
+.prop-sprite{width:70%;max-width:200px}
+.memo-set{display:flex;align-items:center;flex-wrap:wrap;margin-top:10px;border-top:1px dashed rgba(94,140,138,.4);padding-top:10px}
+.memo-set-h{font-size:11px;color:var(--muted);letter-spacing:1px;margin-right:8px}
+.memo-set-chip{font-family:inherit;font-size:11.5px;color:var(--deep);background:var(--fen);border:1px solid var(--qing);border-radius:13px;padding:4px 12px;margin-right:8px}
+.memo-set-chip.on{background:var(--deep);color:var(--yue)}
+.memo-set-tip{font-size:10px;color:var(--muted)}
+.memo-cell canvas{width:36px;height:36px}
+@media (max-height:740px){
+  .shard-sprite{width:144px;height:144px}
+  .shard-vec{width:144px;height:128px}
+}
+@media (max-height:668px){
+  .shard-sprite{width:120px;height:120px}
+  .shard-vec{width:120px;height:106px}
+  .memo-cell canvas{width:30px;height:30px}
+}
+
+/* ===== S8 手札长卷版（s8_scroll 就位后激活；默认回退现行网格版，零变化） ===== */
+.memo-s8{position:relative;display:flex;flex-direction:column}
+.memo-s8 .s8-scroll{position:relative;flex:1;min-height:220px;margin:6px 0;background:linear-gradient(#F7F3E6,#F2EDDC);border:1px solid var(--qing);border-radius:8px;overflow:hidden}
+.memo-s8 .s8-bg{position:absolute;inset:0;background-size:contain;background-repeat:no-repeat;background-position:center;opacity:.92}
+.memo-s8 .s8-rod{position:absolute;left:6px;right:6px;height:12px;background:linear-gradient(#3E4E4B,#232D2B);border-radius:6px;z-index:3;pointer-events:none}
+.memo-s8 .s8-rod-top{top:5px}.memo-s8 .s8-rod-bot{bottom:5px}
+.memo-s8 .s8-jian{position:absolute;top:8px;right:8px;width:22px;height:84px;background:var(--paper);border:1px solid var(--qing);font-family:"KaiTi","STKaiti",serif;font-size:13px;letter-spacing:4px;color:var(--deep);display:flex;align-items:center;justify-content:center;z-index:4;pointer-events:none;writing-mode:vertical-rl}
+.memo-s8 .s8-jian::before{content:"";position:absolute;top:0;left:0;right:0;height:6px;background:#9A3B2E}
+.memo-s8 .s8-body{position:absolute;top:22px;bottom:22px;left:8px;right:8px}
+.memo-s8 .s8-slot{position:absolute;width:28px;height:28px;border:1.5px dashed #C4BCA4;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:9px;color:#B0A88C;z-index:2;pointer-events:none}
+.memo-s8 .s8-slot.got{border-style:solid;border-color:#B08D46;color:#B08D46;font-weight:bold}
+.memo-s8 .s8-slot.tl{left:6px;top:6px}.memo-s8 .s8-slot.tr{right:6px;top:6px}.memo-s8 .s8-slot.bl{left:6px;bottom:6px}.memo-s8 .s8-slot.br{right:6px;bottom:6px}
+.memo-s8 .s8-stage{position:absolute;inset:0}
+.memo-s8 .s8-title{position:absolute;left:0;right:0;top:4px;text-align:center;font-family:"KaiTi","STKaiti",serif;font-size:16px;letter-spacing:6px;color:var(--deep);z-index:5;pointer-events:none}
+.memo-s8 .s8-count{position:absolute;left:0;right:0;bottom:4px;text-align:center;font-size:12px;color:#7A756A;z-index:5;pointer-events:none}
+.memo-s8 .s8-node{position:absolute;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;color:#B8B09A;cursor:default;z-index:6}
+.memo-s8 .s8-node.ungot{border:1.5px dashed #B8B09A;background:rgba(251,249,242,.6)}
+.memo-s8 .s8-node.got{border:2px solid var(--deep);background:var(--paper);overflow:hidden;box-shadow:0 2px 6px rgba(46,59,56,.25);cursor:pointer}
+.memo-s8 .s8-node.got canvas{width:100%;height:100%;display:block}
+.memo-s8 .s8-node .s8-dot{position:absolute;top:-5px;right:-5px;width:13px;height:13px;border-radius:50%;background:#8FB5B0;color:#fff;font-size:8.5px;line-height:13px;text-align:center;pointer-events:none}
+/* 近看浮层：瓷片放大居中 + 拖动旋转观赏 */
+.memo-s8 .s8-viewer{position:absolute;inset:0;background:rgba(46,59,56,.55);z-index:30;display:none;align-items:flex-end}
+.memo-s8 .s8-viewer[data-on]{display:flex}
+.memo-s8 .s8-viewer-sheet{background:var(--paper);width:100%;border-radius:14px 14px 0 0;padding:14px 16px 18px;position:relative}
+.memo-s8 .s8-viewer-close{position:absolute;top:8px;right:10px;width:26px;height:26px;border:none;background:#E4DECC;border-radius:50%;font-size:13px;color:var(--ink)}
+.memo-s8 .s8-viewer-stage{height:260px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 42%,#FDFCF6,#F1ECDC 78%);border:1px solid var(--qing);border-radius:10px;overflow:hidden;margin-bottom:10px;position:relative}
+.memo-s8 .s8-viewer-stage .shard-sprite{width:200px;height:200px;border-radius:50%;box-shadow:0 6px 18px rgba(46,59,56,.28)}
+.memo-s8 .s8-viewer-name{font-size:15px;color:var(--deep);margin-bottom:3px}
+.memo-s8 .s8-viewer-tag{display:inline-block;font-size:10px;background:#E3EDE9;color:var(--deep);border-radius:4px;padding:1px 7px}
+.memo-s8 .s8-viewer-quote{font-size:12.5px;margin-top:6px}
+.memo-s8 .s8-viewer-source{font-size:10.5px;color:#8B8574;margin-top:4px}
+.memo-s8 .s8-viewer-chip{position:absolute;top:8px;right:44px;font-size:10.5px;background:#E3EDE9;color:var(--deep);border:1px solid var(--qing);border-radius:10px;padding:2px 10px}

@@ -93,6 +93,7 @@
   /* ---------- S9 加载页（游戏首屏 · 全构图同心于中轴） ---------- */
   function showLoad() {
     clear(app);
+    if (window.TQA) { TQA.probeEnv(function () {}); } /* §10.5 L0 boot 探针：WebP/2048 纹理，一次性 */
     app.appendChild(F.buildLoad(function () { showTitle(); }, showCredits));
   }
 
@@ -414,6 +415,13 @@
         dockBox(st.speaker || '', st.text, null);
       } else if (st.type === 'iv') {
         var ivCfg = D.iv[st.cfg] || D.iv.tang;
+        if (window.TQA && TQA.tifaJie()) { /* §10.5 L2：设置「应节」——本节直接走节奏条，判定奖励同躬行 */
+          runJie(main, ivCfg, function () {
+            if (st.deco && st.decoName) { awardDeco(st.deco, st.decoName, main); }
+            busy = false;
+            after();
+          });
+        } else {
         var ivWrap = F.iv(main, ivCfg, function (hits) {
           if (st.deco && st.decoName) { awardDeco(st.deco, st.decoName, main); }
           busy = false;
@@ -427,6 +435,7 @@
           });
         });
         occupyNode(ivWrap);
+        }
       } else if (st.type === 'shard') {
         showShard(main, st.id, function () { busy = false; after(); });
       } else if (st.type === 'choice') {
@@ -455,6 +464,12 @@
             dockBox(s2.speaker || '', s2.text, nextSub);
           } else if (s2.type === 'iv') {
             var ivCfg2 = D.iv[s2.cfg] || D.iv.tang;
+            if (window.TQA && TQA.tifaJie()) { /* §10.5 L2：应节直入 */
+              runJie(main, ivCfg2, function () {
+                if (s2.deco && s2.decoName) { awardDeco(s2.deco, s2.decoName, main); }
+                nextSub();
+              });
+            } else {
             var ivWrap2 = F.iv(main, ivCfg2, function (hits2) {
               if (s2.deco && s2.decoName) { awardDeco(s2.deco, s2.decoName, main); }
               nextSub();
@@ -466,6 +481,7 @@
               });
             });
             occupyNode(ivWrap2);
+            }
           } else if (s2.type === 'rhythm') {
             runRhythm(main, D[s2.cfg] || D.shangshu, { deco: s2.deco, decoName: s2.decoName }, nextSub);
           } else if (s2.type === 'shard') {
@@ -594,6 +610,9 @@
       persist();
     }
     var wrap = el('div', 'shard-occ');
+    var stage = el('div', 'shard-stage');
+    wrap.appendChild(stage);
+    F.shardStage(stage, id); /* 轨③转台（侦测失败自动回退 FRACTURE 剪影 + 角标） */
     var toast = el('div', 'shard-toast');
     toast.appendChild(el('div', 'got', (first ? '拾得瓷片' : '瓷片在手') + ' · 共 ' + countShards() + '/16'));
     toast.appendChild(el('div', 'name', sh.name));
@@ -928,10 +947,45 @@
     app.classList.add('with-foot');
     app.appendChild(topbar(D.memoCopy.title));
     var main = el('div', 'main');
+    var count = save ? countShards() : 0;
+    var cur = save ? D.acts[save.actIndex] : null;
+    // 继续值守仅在当前幕真正可玩（已解锁且有内容）时提供，避免死端
+    var canContinue = !!(cur && cur.unlocked && cur.steps.length > 0);
+    /* 双路渲染（§10.5 L0 素材闸）：s8_scroll 就位 → 长卷版；未就位 → 现行网格版（零变化） */
+    var route = function (st) {
+      if (st === 'ok') { renderMemoScroll(main, TQA.image('s8_scroll'), { skipFooter: true }); }
+      else { renderMemoGridMain(main, notice, count, cur, canContinue); }
+    };
+    if (window.TQA) { TQA.resolve('s8_scroll', route); }
+    else { renderMemoGridMain(main, notice, count, cur, canContinue); }
+    app.appendChild(main);
+
+    var foot = el('footer', 'footbar fb-memo');
+    if (save && save.role) {
+      if (canContinue) {
+        foot.appendChild(btn('继续值守', '', function () { enterAct(save.actIndex); }));
+      } else {
+        main.appendChild(el('div', 'memo-sub', '下一时辰尚未开启——今日当值至此，先歇歇。已有的瓷片随时可翻看。'));
+      }
+      foot.appendChild(btn(D.memoCopy.saveNow, 'ghost', function () {
+        persist();
+        showMemo(false, D.memoCopy.saved);
+      }));
+      foot.appendChild(btn(D.memoCopy.restart, 'ghost', function () {
+        S.clearSave(function () { save = null; hasSave = false; showTitle(); });
+      }));
+    } else {
+      foot.appendChild(btn('入宫当值', '', function () { showRole(); }));
+    }
+    app.appendChild(foot);
+    main.appendChild(el('div', 'memo-sub',
+      '存档说明：进度自动记录于本机（每逢时辰礼毕与关键处）；手札「现在就记」可随时手动补记。'));
+  }
+
+  /* 现行网格版（手札主屏保底路径 = 今日版面，s8_scroll 未就位时渲染；视觉零变化） */
+  function renderMemoGridMain(main, notice, count, cur, canContinue) {
     main.appendChild(el('div', 'memo-head', D.memoCopy.title));
     main.appendChild(el('div', 'memo-sub', notice || D.memoCopy.sub));
-
-    // 瓷片图鉴：已拾得的瓷片可点开重读知识点
     var grid = el('div', 'memo-grid');
     var detail = el('div', 'shiliao shard-detail');
     function showDetail(key) {
@@ -965,11 +1019,6 @@
     }
     detail.appendChild(el('div', 'head', '瓷片图鉴'));
     detail.appendChild(el('div', 'quote', '点上方已拾得的瓷片，可随时重读记下的内容。'));
-
-    var count = save ? countShards() : 0;
-    var cur = save ? D.acts[save.actIndex] : null;
-    // 继续值守仅在当前幕真正可玩（已解锁且有内容）时提供，避免死端
-    var canContinue = !!(cur && cur.unlocked && cur.steps.length > 0);
     var col = el('div', 'memo-2col');
     var mg = el('div', 'mg');
     mg.appendChild(grid);
@@ -980,28 +1029,6 @@
     col.appendChild(mg);
     col.appendChild(md);
     main.appendChild(col);
-    app.appendChild(main);
-
-    var foot = el('footer', 'footbar fb-memo');
-    if (save && save.role) {
-      if (canContinue) {
-        foot.appendChild(btn('继续值守', '', function () { enterAct(save.actIndex); }));
-      } else {
-        main.appendChild(el('div', 'memo-sub', '下一时辰尚未开启——今日当值至此，先歇歇。已有的瓷片随时可翻看。'));
-      }
-      foot.appendChild(btn(D.memoCopy.saveNow, 'ghost', function () {
-        persist();
-        showMemo(false, D.memoCopy.saved);
-      }));
-      foot.appendChild(btn(D.memoCopy.restart, 'ghost', function () {
-        S.clearSave(function () { save = null; hasSave = false; showTitle(); });
-      }));
-    } else {
-      foot.appendChild(btn('入宫当值', '', function () { showRole(); }));
-    }
-    app.appendChild(foot);
-    main.appendChild(el('div', 'memo-sub',
-      '存档说明：进度自动记录于本机（每逢时辰礼毕与关键处）；手札「现在就记」可随时手动补记。'));
   }
 
   /* ---------- 回看浮层（backlog：最新在底，默认定位到上一条） ---------- */
@@ -1038,7 +1065,10 @@
   }
   function backlogRef() { return (VNC.backlog && VNC.backlog()) || []; }
 
-  /* ---------- 手札浮层（VN 状态不破坏：图鉴 + 进度 + 补记，合上回到原对话框） ---------- */
+  /* ---------- 手札浮层（VN 状态不破坏：图鉴 + 进度 + 补记，合上回到原对话框） ----------
+   * 双路渲染（§10.5 L0 素材闸）：TQA.resolve('s8_scroll') ok = 长卷版；none/fail = 现行网格版。
+   * 当前 s8_scroll 生图未就位 → 一律走网格版（=今日版面，零变化）。 */
+  var VP = 'M110 40 L109 150 Q107 158 99 162 L73 168 Q41 180 39 235 L39 268 Q39 320 57 352 Q67 368 87 374 L99 377 L161 377 L173 374 Q193 368 203 352 Q221 320 221 268 L221 235 Q219 180 187 168 L161 162 Q153 158 151 150 L150 40 Z';
   function showMemoOverlay() {
     if (VNC.stop) { VNC.stop(); }
     var old = app.querySelector('.memo-ov');
@@ -1051,7 +1081,24 @@
     pc.addEventListener('click', close);
     ph.appendChild(pc);
     panel.appendChild(ph);
-    var list = el('div', 'log-list memo-body');
+    var body = el('div', 'log-list memo-body');
+    var route = function (st) {
+      if (st === 'ok') { renderMemoScroll(body, TQA.image('s8_scroll')); }
+      else { renderMemoGrid(body); }
+    };
+    if (window.TQA) { TQA.resolve('s8_scroll', route); } else { renderMemoGrid(body); }
+    panel.appendChild(body);
+    ov.appendChild(panel);
+    ov.addEventListener('click', function (e) { if (e.target === ov) { close(); } });
+    document.addEventListener('keydown', escH);
+    app.appendChild(ov);
+    function escH(e) { var k = e.key || e.keyCode; if (k === 'Escape' || k === 'Esc' || k === 27) { close(); } }
+    function close() { if (ov.parentNode) { ov.parentNode.removeChild(ov); } document.removeEventListener('keydown', escH); }
+  }
+
+  /* 现行网格版（手札保底路径 = 今日版面，s8_scroll 未就位时渲染；勿改其视觉） */
+  function renderMemoGrid(body) {
+    var list = body;
     var grid = el('div', 'memo-grid');
     var detail = el('div', 'shiliao shard-detail');
     function showDetail(key) {
@@ -1070,7 +1117,7 @@
       var key = String(id);
       var got = save && save.shards && save.shards[key];
       var cell = el('div', 'memo-cell' + (got ? ' got' : ''));
-      if (got) { cell.innerHTML = F.FRACTURE; } else { cell.textContent = String(id); }
+      if (got) { F.shardStill(cell, key); } else { cell.textContent = String(id); }
       if (got && D.shards[key]) {
         cell.setAttribute('role', 'button');
         (function (k) {
@@ -1093,13 +1140,138 @@
     });
     rec.style.margin = '10px 0 0';
     list.appendChild(rec);
-    panel.appendChild(list);
-    ov.appendChild(panel);
-    ov.addEventListener('click', function (e) { if (e.target === ov) { close(); } });
-    document.addEventListener('keydown', escH);
-    app.appendChild(ov);
-    function escH(e) { var k = e.key || e.keyCode; if (k === 'Escape' || k === 'Esc' || k === 27) { close(); } }
-    function close() { if (ov.parentNode) { ov.parentNode.removeChild(ov); } document.removeEventListener('keydown', escH); }
+    if (window.TQA) {
+      var setRow = el('div', 'memo-set');
+      setRow.appendChild(el('span', 'memo-set-h', '体法与图样'));
+      function mkChip(label, getV, setV, onLabel, offLabel) {
+        var b = el('button', 'memo-set-chip' + (getV() ? ' on' : ''));
+        function paint() {
+          b.textContent = label + ' · ' + (getV() ? onLabel : offLabel);
+          b.setAttribute('data-on', getV() ? '1' : '0');
+        }
+        b.addEventListener('click', function () { setV(!getV()); paint(); });
+        paint();
+        return b;
+      }
+      setRow.appendChild(mkChip('应节体法',
+        function () { return TQA.tifaJie(); },
+        function (v) { TQA.setSetting('tq_tifa', v ? 'jie' : 'gongxing'); },
+        '应节', '躬行'));
+      setRow.appendChild(mkChip('恒用预设图样',
+        function () { return TQA.assetsMode() === 'vector'; },
+        function (v) { TQA.setSetting('tq_assets_mode', v ? 'vector' : 'auto'); },
+        '开', '关'));
+      setRow.appendChild(el('span', 'memo-set-tip', '对新开小节生效'));
+      list.appendChild(setRow);
+    }
+  }
+
+  /* 长卷版（s8_scroll 生图就位后激活；瓷居中 · 瓷片环围 · 近看可转）：满足 S8 版面图设计
+   * opts.skipFooter：宿主已自带保存/设置条（如手札主屏 footbar）时，勿重复追加。 */
+  function renderMemoScroll(body, img, opts) {
+    body.classList.add('memo-s8');
+    var scroll = el('div', 's8-scroll');
+    if (img) { var bg = el('div', 's8-bg'); bg.style.backgroundImage = 'url(' + img.src + ')'; scroll.appendChild(bg); }
+    scroll.appendChild(el('div', 's8-rod s8-rod-top'));
+    scroll.appendChild(el('div', 's8-rod s8-rod-bot'));
+    var jian = el('div', 's8-jian'); jian.appendChild(el('span', '', '合瓮圖')); scroll.appendChild(jian);
+    var sb = el('div', 's8-body');
+    ['tl', 'tr', 'bl', 'br'].forEach(function (s) {
+      var id = TQA.DECO_SLOTS[s], got = save.deco && save.deco[id];
+      var slot = el('div', 's8-slot' + (got ? ' got' : ''));
+      slot.textContent = got ? TQA.DECO_NAME[id] : '挂';
+      sb.appendChild(slot);
+    });
+    var stage = el('div', 's8-stage');
+    var title = el('div', 's8-title', '合瓮圖');
+    var count = el('div', 's8-count', '拾得 ' + countShards() + ' / 16');
+    sb.appendChild(stage); sb.appendChild(title); sb.appendChild(count);
+    scroll.appendChild(sb);
+    body.appendChild(scroll);
+    var viewer = el('div', 's8-viewer');
+    body.appendChild(viewer);
+    layoutScroll(stage, viewer);
+    if (!(opts && opts.skipFooter)) {
+      var rec = btn(D.memoCopy.saveNow, 'ghost', function () { persist(); rec.textContent = D.memoCopy.saved; });
+      rec.style.margin = '10px 0 0';
+      body.appendChild(rec);
+      if (window.TQA) {
+        var setRow = el('div', 'memo-set');
+        setRow.appendChild(el('span', 'memo-set-h', '体法与图样'));
+        function mkChip(label, getV, setV, onLabel, offLabel) {
+          var b = el('button', 'memo-set-chip' + (getV() ? ' on' : ''));
+          function paint() { b.textContent = label + ' · ' + (getV() ? onLabel : offLabel); b.setAttribute('data-on', getV() ? '1' : '0'); }
+          b.addEventListener('click', function () { setV(!getV()); paint(); });
+          paint(); return b;
+        }
+        setRow.appendChild(mkChip('应节体法', function () { return TQA.tifaJie(); }, function (v) { TQA.setSetting('tq_tifa', v ? 'jie' : 'gongxing'); }, '应节', '躬行'));
+        setRow.appendChild(mkChip('恒用预设图样', function () { return TQA.assetsMode() === 'vector'; }, function (v) { TQA.setSetting('tq_assets_mode', v ? 'vector' : 'auto'); }, '开', '关'));
+        setRow.appendChild(el('span', 'memo-set-tip', '对新开小节生效'));
+        body.appendChild(setRow);
+      }
+    }
+  }
+  function layoutScroll(stage, viewer) {
+    var W = stage.clientWidth, H = stage.clientHeight;
+    if (!W || !H) { requestAnimationFrame(function () { layoutScroll(stage, viewer); }); return; }
+    stage.innerHTML = '';
+    var vh = Math.min(H * 0.6, W * 0.44), vw = vh * 240 / 375;
+    var cx = W / 2, cy = H * 0.5;
+    var rx = W * 0.46, ry = H * 0.42, nd = Math.max(30, Math.min(46, W * 0.09));
+    var n16 = countShards(), gid = 's8v' + Math.floor(Math.random() * 1e6);
+    var ves = '<svg viewBox="0 0 240 375" width="' + vw + '" height="' + vh + '" style="position:absolute;left:' + (cx - vw / 2) + 'px;top:' + (cy - vh / 2) + 'px;pointer-events:none">';
+    if (n16 === 16) {
+      ves += '<defs><linearGradient id="' + gid + '" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#B9D4CF"/><stop offset=".55" stop-color="#8FB5B0"/><stop offset="1" stop-color="#5E837E"/></linearGradient>'
+        + '<clipPath id="' + gid + 'c"><path d="' + VP + '"/></clipPath></defs>';
+      ves += '<path d="' + VP + '" fill="url(#' + gid + ')"/>';
+      ves += '<g clip-path="url(#' + gid + 'c)" stroke="#6E8E88" stroke-width="1" fill="none" opacity=".5">'
+        + '<path d="M60 200 Q120 230 200 205"/><path d="M70 260 Q130 290 205 265"/><path d="M85 315 Q140 335 195 312"/>'
+        + '<path d="M110 170 Q100 240 118 310"/><path d="M150 175 Q165 245 150 330"/></g>';
+      ves += '<path d="' + VP + '" fill="none" stroke="#B08D46" stroke-width="3"/>';
+    } else {
+      var fo = (n16 / 16) * 0.12 + 0.05, op = 0.35 + 0.65 * n16 / 16;
+      ves += '<path d="' + VP + '" fill="#8FB5B0" fill-opacity="' + fo.toFixed(3) + '" stroke="#4E6A66" stroke-width="1.6" stroke-opacity="' + op.toFixed(3) + '" stroke-dasharray="7 6"/>';
+    }
+    ves += '</svg>';
+    stage.insertAdjacentHTML('beforeend', ves);
+    for (var i = 0; i < 16; i++) {
+      (function (i) {
+        var id = i + 1, key = String(id), got = save.shards && save.shards[key];
+        var a = (-90 + i * 22.5) * Math.PI / 180;
+        var nx = cx + rx * Math.cos(a), ny = cy + ry * Math.sin(a);
+        var node = el('div', 's8-node' + (got ? ' got' : ' ungot'));
+        node.style.left = nx + 'px'; node.style.top = ny + 'px'; node.style.width = nd + 'px'; node.style.height = nd + 'px';
+        node.style.margin = (-nd / 2) + 'px 0 0 ' + (-nd / 2) + 'px';
+        if (got) {
+          node.setAttribute('role', 'button');
+          node.appendChild(el('span', 's8-dot', '✓'));
+          if (window.F) { F.shardStill(node, key); }
+          node.addEventListener('click', function () { openViewer(id); });
+        } else { node.textContent = id; }
+        stage.appendChild(node);
+      })(i);
+    }
+    function openViewer(id) {
+      while (viewer.firstChild) { viewer.removeChild(viewer.firstChild); }
+      viewer.setAttribute('data-on', '1');
+      var sheet = el('div', 's8-viewer-sheet');
+      var x = el('button', 's8-viewer-close', '✕');
+      x.addEventListener('click', function () { viewer.removeAttribute('data-on'); while (viewer.firstChild) { viewer.removeChild(viewer.firstChild); } });
+      sheet.appendChild(x);
+      var mv = el('div', 's8-viewer-stage'); sheet.appendChild(mv);
+      var sh = D.shards[id] || {};
+      var card = el('div', 's8-viewer-card');
+      card.appendChild(el('div', 's8-viewer-name', sh.name || ('瓷片 ' + id)));
+      card.appendChild(el('span', 's8-viewer-tag', '已归位 · 近看 · 拖动旋转'));
+      card.appendChild(el('div', 's8-viewer-quote', sh.text || ''));
+      if (sh.source) { card.appendChild(el('div', 's8-viewer-source', '——' + sh.source)); }
+      sheet.appendChild(card);
+      var chip = el('button', 's8-viewer-chip', '自动旋转');
+      chip.addEventListener('click', function () { if (window.F) { F.shardViewer(mv, id); } });
+      sheet.appendChild(chip);
+      viewer.appendChild(sheet);
+      if (window.F) { F.shardViewer(mv, id); }
+    }
   }
 
   /* ---------- 启动：先读档，再走 S9 加载页 ---------- */
