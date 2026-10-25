@@ -19,63 +19,50 @@
     try { return JSON.parse(raw); } catch (e) { return null; }
   }
 
-  /* ---------- 写档 ---------- */
+  /* ---------- 写档（形态A 带回调确认：success 到手才算 bridge 成功，200ms 未确认降级本地） ---------- */
   function saveGame(saveObj, cb) {
     var json;
     try { json = JSON.stringify(saveObj); } catch (e) { if (cb) { cb(false, 'stringify'); } return; }
+    var done = false;
+    var timer = 0;
+    function finish(ok, via) {
+      if (done) { return; }
+      done = true;
+      if (timer) { clearTimeout(timer); timer = 0; }
+      if (cb) { cb(ok, via); }
+    }
+    function fallbackLocal() {
+      try {
+        global.localStorage.setItem(SAVE_KEY, json);
+        finish(true, 'local');
+        return;
+      } catch (e2) { /* localStorage 禁用/满 */ }
+      memoryStore = json;
+      finish(true, 'memory');
+    }
     var mt = bridge();
     if (mt && typeof mt.setStorage === 'function') {
-      // 形态A：对象参数
       try {
-        mt.setStorage({ key: SAVE_KEY, data: json });
-        if (cb) { cb(true, 'bridge'); }
+        /* 形态A：对象参数 + success/fail 回调；若桥为同步语义不回调，200ms 超时降级本地（双写无害） */
+        mt.setStorage({ key: SAVE_KEY, data: json, success: function () { finish(true, 'bridge'); }, fail: function () { fallbackLocal(); } });
+        timer = setTimeout(function () { fallbackLocal(); }, 200);
         return;
       } catch (eA) { /* 落到形态B */ }
-      // 形态B：位置参数
       try {
         mt.setStorage(SAVE_KEY, json);
-        if (cb) { cb(true, 'bridge'); }
+        finish(true, 'bridge');
         return;
       } catch (eB) { /* bridge 不可用，降级 */ }
     }
-    try {
-      global.localStorage.setItem(SAVE_KEY, json);
-      if (cb) { cb(true, 'local'); }
-      return;
-    } catch (e2) { /* localStorage 禁用/满 */ }
-    memoryStore = json;
-    if (cb) { cb(true, 'memory'); }
+    fallbackLocal();
   }
 
-  /* ---------- 读档 ---------- */
+  /* ---------- 读档（settled 守卫：修 60ms 兜底与桥回调竞态导致的二次 settle） ---------- */
   function loadGame(cb) {
-    var mt = bridge();
-    if (mt && typeof mt.getStorage === 'function') {
-      // 形态A：{key, success, fail}
-      var called = false;
-      try {
-        mt.getStorage({
-          key: SAVE_KEY,
-          success: function (res) { called = true; settle(res, 'bridge'); },
-          fail: function () { called = true; fallback(); }
-        });
-        // 若同步抛错或非回调式实现，会走到 catch / 或直接 settle 不了——用微任务兜底判定
-        setTimeout(function () { if (!called) { fallback(); } }, 60);
-        return;
-      } catch (eA) { /* 落到形态B */ }
-      try {
-        mt.getStorage(SAVE_KEY, function (res) { settle(res, 'bridge'); }, function () { fallback(); });
-        return;
-      } catch (eB) { fallback(); return; }
-    }
-    fallback();
-
-    function fallback() {
-      var raw = null;
-      try { raw = global.localStorage.getItem(SAVE_KEY); } catch (e) { raw = null; }
-      if (raw) { settle(raw, 'local'); } else { settle(null, 'memory'); }
-    }
+    var settled = false;
     function settle(res, via) {
+      if (settled) { return; }
+      settled = true;
       var obj = null;
       if (res && typeof res === 'object' && typeof res.data === 'string') {
         obj = safeParse(res.data);
@@ -85,6 +72,30 @@
       if (!obj && memoryStore) { obj = safeParse(memoryStore); }
       if (cb) { cb(obj, via); }
     }
+    function fallback() {
+      var raw = null;
+      try { raw = global.localStorage.getItem(SAVE_KEY); } catch (e) { raw = null; }
+      if (raw) { settle(raw, 'local'); } else { settle(null, 'memory'); }
+    }
+    var mt = bridge();
+    if (mt && typeof mt.getStorage === 'function') {
+      // 形态A：{key, success, fail}
+      try {
+        mt.getStorage({
+          key: SAVE_KEY,
+          success: function (res) { settle(res, 'bridge'); },
+          fail: function () { fallback(); }
+        });
+        // 若同步抛错或非回调式实现，会走到 catch / 或直接 settle 不了——用微任务兜底判定
+        setTimeout(function () { if (!settled) { fallback(); } }, 60);
+        return;
+      } catch (eA) { /* 落到形态B */ }
+      try {
+        mt.getStorage(SAVE_KEY, function (res) { settle(res, 'bridge'); }, function () { fallback(); });
+        return;
+      } catch (eB) { fallback(); return; }
+    }
+    fallback();
   }
 
   /* ---------- 清档（重新开始） ---------- */

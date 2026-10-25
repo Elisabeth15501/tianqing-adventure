@@ -82,7 +82,11 @@
   }
   function clear(node) { while (node.firstChild) { node.removeChild(node.firstChild); } node.classList.remove('ending-scene'); node.classList.remove('with-foot'); }
   function persist() {
-    if (save) { save.updated = Date.now(); S.saveGame(save, function () {}); }
+    if (save) {
+      save.updated = Date.now();
+      S.saveGame(save, function () {});
+      if (global.TQCloud) { global.TQCloud.markDirty(save); } /* 云镜像：防抖合并 persist 突发 */
+    }
   }
   function countShards() {
     var n = 0, k;
@@ -999,6 +1003,7 @@
     if (!save.taskDone) { save.taskDone = {}; }
     save.taskDone[act.id] = true;
     persist();
+    if (global.TQCloud) { global.TQCloud.checkpoint(save); } /* 云镜像检查点：幕毕立即推 */
     if (idx === D.acts.length - 1) { showEnding(); return; } // 终幕 → 合瓮结算
     var note = el('div', 'memo-sub', act.name + '礼毕，手札已记下进度。');
     main.appendChild(note);
@@ -1038,6 +1043,7 @@
       }
       foot.appendChild(btn(D.memoCopy.saveNow, 'ghost', function () {
         persist();
+        if (global.TQCloud) { global.TQCloud.checkpoint(save); } /* 云镜像检查点：手动存档 */
         showMemo(false, D.memoCopy.saved);
       }));
       foot.appendChild(btn(D.memoCopy.restart, 'ghost', function () {
@@ -1102,6 +1108,9 @@
     if (fbtn) {
       fbtn.style.margin = '10px auto 0';
       main.appendChild(fbtn);
+    }
+    if (global.TQCloud) {
+      main.appendChild(el('div', 'memo-sub', '云存档：' + global.TQCloud.statusText()));
     }
   }
 
@@ -1210,6 +1219,7 @@
       '瓷片 ' + count + '/16 · ' + (cur ? '当前：' + cur.name : '尚未入宫') + ' · 进度自动记录于本机'));
     var rec = btn(D.memoCopy.saveNow, 'ghost', function () {
       persist();
+      if (global.TQCloud) { global.TQCloud.checkpoint(save); } /* 云镜像检查点：手动存档 */
       rec.textContent = D.memoCopy.saved;
     });
     rec.style.margin = '10px 0 0';
@@ -1242,6 +1252,9 @@
     if (fbtn) {
       fbtn.style.margin = '8px 0 0';
       list.appendChild(fbtn);
+    }
+    if (global.TQCloud) {
+      list.appendChild(el('div', 'memo-sub', '云存档：' + global.TQCloud.statusText()));
     }
   }
 
@@ -1292,6 +1305,9 @@
       if (fbtn) {
         fbtn.style.margin = '8px 0 0';
         body.appendChild(fbtn);
+      }
+      if (global.TQCloud) {
+        body.appendChild(el('div', 'memo-sub', '云存档：' + global.TQCloud.statusText()));
       }
     }
   }
@@ -1368,5 +1384,21 @@
       if (!save.taskDone) { save.taskDone = {}; }
     }
     showLoad();
+    /* 云存储恢复（local-first：本地档已即时可用，云端异步对账，updated 新者胜） */
+    if (global.TQCloud && global.TQCloud.init()) {
+      global.TQCloud.restore(save || null, function (cloud) {
+        if (!cloud || typeof cloud.updated !== 'number') { return; }
+        if (!save || cloud.updated > (save.updated || 0)) {
+          save = cloud;
+          if (!save.choices) { save.choices = {}; }
+          if (!save.deco) { save.deco = {}; }
+          if (!save.memories) { save.memories = {}; }
+          if (!save.taskDone) { save.taskDone = {}; }
+          hasSave = true;
+          S.saveGame(save, function () {}); /* 云端新档回填本地三层 */
+          transientToast('已从云端恢复进度');
+        }
+      });
+    }
   });
 })(window);
