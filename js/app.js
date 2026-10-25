@@ -860,9 +860,75 @@
     }
   }
 
+  /* ---------- 关注作者（官方 §3.15：9.51+，无需白名单；API 缺失整组不渲染） ----------
+   * getFollowStatus 渲染初态（-1 查询失败按未关注渲染，可重试）；
+   * followAuthor 点击发起；errCode 20002 取消静默 / 15404 频控 toast / 10003 忽略。 */
+  var followPending = false;
+  function followSupported() {
+    var mt = global.xhs && global.xhs.miniTool;
+    return !!(mt && typeof mt.followAuthor === 'function' && typeof mt.getFollowStatus === 'function');
+  }
+  function transientToast(text) {
+    var t = el('div', 'shard-toast tq-toast tq-text');
+    t.appendChild(el('div', 'name', text));
+    app.appendChild(t);
+    setTimeout(function () {
+      if (t.parentNode) { t.parentNode.removeChild(t); }
+    }, 1900); /* [PLACEHOLDER] 与 CSS 动画时长一致 */
+  }
+  function buildFollowButton() {
+    if (!followSupported()) { return null; }
+    var b = el('button', 'btn ghost follow-btn', '关注作者 · 更新早知道');
+    var status = 0;
+    function render() {
+      if (followPending) { b.disabled = true; b.textContent = '处理中…'; return; }
+      if (status === 1 || status === 2) {
+        b.disabled = true;
+        b.classList.add('follow-done');
+        b.textContent = status === 2 ? '作者本人' : '已关注 · 天清节见';
+      } else {
+        b.disabled = false;
+        b.classList.remove('follow-done');
+        b.textContent = '关注作者 · 更新早知道';
+      }
+    }
+    (function refresh() {
+      var mt = global.xhs && global.xhs.miniTool;
+      if (!mt || typeof mt.getFollowStatus !== 'function') { return; }
+      mt.getFollowStatus().then(function (res) {
+        var s = res && typeof res.follow_status === 'number' ? res.follow_status : -1;
+        if (s >= 0) { status = s; } /* -1 查询失败保持常态，后续可重试 */
+        render();
+      }).catch(function () { /* 查询失败不缓存，保持常态 */ });
+    })();
+    b.addEventListener('click', function () {
+      if (followPending || b.disabled) { return; }
+      var mt = global.xhs && global.xhs.miniTool;
+      if (!mt || typeof mt.followAuthor !== 'function') { return; }
+      followPending = true;
+      render();
+      mt.followAuthor().then(function (res) {
+        var s = res && typeof res.follow_status === 'number' ? res.follow_status : -1;
+        if (s >= 0) { status = s; }
+      }).catch(function (err) {
+        var code = err && err.errCode;
+        if (code === 15404) { transientToast('今日关注引导已达上限'); }
+        /* 20002 用户取消 / 10003 流程进行中：静默 */
+      }).then(function () {
+        followPending = false;
+        render();
+      });
+    });
+    return b;
+  }
+
   /* ---------- 终幕结算（合瓮长卷 · 简版） ---------- */
-  function showEnding(main) {
-    app.classList.add('ending-scene');
+  function showEnding() {
+    /* 自建全屏视图（修：原塞在幕壳 vn-doc 内，立绘槽遮挡标题） */
+    if (VNC.stopModes) { VNC.stopModes(); }
+    clear(app);
+    app.classList.add('ending-scene', 'with-foot');
+    var main = el('div', 'main ending-main');
     var E = D.ending;
     var wrap = el('div', 'ending');
     var inner = el('div', 'ending-wrap');
@@ -893,13 +959,16 @@
     inner.appendChild(el('div', 'memo-sub', E.quote));
     wrap.appendChild(inner);
     main.appendChild(wrap);
+    app.appendChild(main);
     var foot = el('footer', 'footbar fb-ending');
+    /* 关注作者：底栏首位——结算内容在滚动区内，底栏是常驻可见区，CTA 放这里不依赖滚动 */
+    var fbtn = buildFollowButton();
+    if (fbtn) { foot.appendChild(fbtn); }
     foot.appendChild(btn('翻阅手札', '', function () { showMemo(false); }));
     foot.appendChild(btn('从头再来', 'ghost', function () {
       S.clearSave(function () { save = null; hasSave = false; showTitle(); });
     }));
     app.appendChild(foot);
-    main.scrollTop = main.scrollHeight;
   }
 
   function awardDeco(id, name, main) {
@@ -930,7 +999,7 @@
     if (!save.taskDone) { save.taskDone = {}; }
     save.taskDone[act.id] = true;
     persist();
-    if (idx === D.acts.length - 1) { showEnding(main); return; } // 终幕 → 合瓮结算
+    if (idx === D.acts.length - 1) { showEnding(); return; } // 终幕 → 合瓮结算
     var note = el('div', 'memo-sub', act.name + '礼毕，手札已记下进度。');
     main.appendChild(note);
     app.classList.add('with-foot');
@@ -1029,6 +1098,11 @@
     col.appendChild(mg);
     col.appendChild(md);
     main.appendChild(col);
+    var fbtn = buildFollowButton(); /* 手札整页次入口 */
+    if (fbtn) {
+      fbtn.style.margin = '10px auto 0';
+      main.appendChild(fbtn);
+    }
   }
 
   /* ---------- 回看浮层（backlog：最新在底，默认定位到上一条） ---------- */
@@ -1164,6 +1238,11 @@
       setRow.appendChild(el('span', 'memo-set-tip', '对新开小节生效'));
       list.appendChild(setRow);
     }
+    var fbtn = buildFollowButton(); /* 手札次入口：网格版同时服务浮层与整页 */
+    if (fbtn) {
+      fbtn.style.margin = '8px 0 0';
+      list.appendChild(fbtn);
+    }
   }
 
   /* 长卷版（s8_scroll 生图就位后激活；瓷居中 · 瓷片环围 · 近看可转）：满足 S8 版面图设计
@@ -1208,6 +1287,11 @@
         setRow.appendChild(mkChip('恒用预设图样', function () { return TQA.assetsMode() === 'vector'; }, function (v) { TQA.setSetting('tq_assets_mode', v ? 'vector' : 'auto'); }, '开', '关'));
         setRow.appendChild(el('span', 'memo-set-tip', '对新开小节生效'));
         body.appendChild(setRow);
+      }
+      var fbtn = buildFollowButton(); /* 长卷版同样带关注次入口 */
+      if (fbtn) {
+        fbtn.style.margin = '8px 0 0';
+        body.appendChild(fbtn);
       }
     }
   }

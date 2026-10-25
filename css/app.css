@@ -536,3 +536,5 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .memo-s8 .s8-viewer-quote{font-size:12.5px;margin-top:6px}
 .memo-s8 .s8-viewer-source{font-size:10.5px;color:#8B8574;margin-top:4px}
 .memo-s8 .s8-viewer-chip{position:absolute;top:8px;right:44px;font-size:10.5px;background:#E3EDE9;color:var(--deep);border:1px solid var(--qing);border-radius:10px;padding:2px 10px}
+.ending-main{justify-content:center}
+.footbar .follow-btn{width:232px;margin:0 auto 8px}
