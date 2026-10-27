@@ -308,6 +308,121 @@
     });
   };
 
+  /* ========== S8 手札 · lat-long 全方位自由旋转（yaw×pitch 最近格 · 拖拽 + 惯性 + 独立状态） ==========
+   * 面向「近看单枚瓷片 / 纸槌瓶」的多向图集（kind:latlong，12yaw×3pitch，12列×3行）。
+   * id='vessel' → 瓶(vessel-LL)；否则瓷片(shard-LL-<id>)。
+   * 拖拽：水平分量 → yaw、垂直分量 → pitch；松手带惯性缓停；键盘方向键可达。
+   * 每实例独立状态（互不影响）；切帧一律 canvas drawImage（Chrome61 红线，禁 background-position）。
+   * 侦测失败 / 未注册 → 瓷片回退 12 帧转台 shardViewer；瓶无转台则回退矢量瓶剪影（永不白屏）。 */
+  TQ.spin3d = function (mount, id) {
+    var isVessel = (id === 'vessel');
+    var key = isVessel ? 'vessel-LL' : 'shard-LL-' + id;
+    var tqa = global.TQA;
+    function fallback() {
+      if (isVessel) {
+        /* 瓶无 12 帧转台 → 矢量瓶剪影（VESSEL）诚实回退 */
+        mount.innerHTML = '';
+        mount.appendChild(h('div', 'shard-vec'));
+        mount.lastChild.innerHTML = TQ.VESSEL;
+        mount.lastChild.className = 'vessel-vec';
+        if (tqa && tqa.reg[key]) { mount.appendChild(h('div', 'prop-badge', '预设图样')); }
+        return;
+      }
+      if (tqa && tqa.reg['shard-' + id]) { TQ.shardViewer(mount, id); }
+      else { vecShard(mount, !tqa || !!tqa.reg['shard-' + id]); }
+    }
+    /* 未注册多向图集 → 诚实回退 */
+    if (!tqa || !tqa.reg[key] || tqa.kindOut('shard-LL')) { fallback(); return; }
+    tqa.resolve(key, function (stt) {
+      if (!mount.isConnected) { return; }
+      if (stt !== 'ok') { fallback(); return; }
+      var ent = tqa.reg[key], img = tqa.image(key);
+      if (!img) { fallback(); return; }
+      mount.innerHTML = '';
+      var cv = h('canvas', 'shard-ll');
+      cv.width = ent.fw; cv.height = ent.fh;
+      cv.style.touchAction = 'none';
+      cv.setAttribute('role', 'img');
+      cv.setAttribute('aria-label', (isVessel ? '纸槌瓶' : '瓷片') + '全方位旋转');
+      cv.tabIndex = 0;
+      mount.appendChild(cv);
+      var ctx = cv.getContext('2d');
+      var YAW = ent.yaw, PIT = ent.pitch, COLS = ent.cols || YAW, ROWS = ent.rows || PIT;
+      var anchor = ent.anchor || { yaw: 0, pitch: Math.floor(PIT / 2) };
+      /* 连续角度态（度）：yaw∈[0,360)、pitch∈[-pitchMax,+pitchMax] */
+      var pmax = (ent.pitchMax || 60) * (PIT - 1) / 2.0;
+      var yaw = anchor.yaw * (360 / YAW);
+      var pitch = pitchOfIndex(anchor.pitch, PIT, pmax);
+      var vy = 0, vp = 0;            /* 惯性角速度（度/帧） */
+      var auto = true, drag = false, lx = 0, ly = 0;
+      var last = 0, prev = 0, n = 0, sum = 0;
+
+      function pitchOfIndex(q, pit, m) { /* 索引0=+m（俯视）… 末位=-m（仰视） */
+        if (pit <= 1) { return 0; }
+        var step = 2 * m / (pit - 1);
+        return m - q * step;
+      }
+      function idxYaw() {
+        return Math.round(((yaw % 360) + 360) % 360 / (360 / YAW)) % YAW;
+      }
+      function idxPitch() {
+        /* 与 pitchOfIndex 严格互逆：q = (pmax - pitch) / (pmax - pitchOfIndex(1)) */
+        var step = (PIT > 1) ? pmax - pitchOfIndex(1, PIT, pmax) : 1;
+        var q = Math.round((pmax - pitch) / (step || 1));
+        return Math.max(0, Math.min(PIT - 1, q));
+      }
+      function draw() {
+        /* 多向布局（pack_latlong）：列 = yaw、行 = pitch。行内 12 yaw 连续，跨行换 pitch。 */
+        var p = idxYaw(), q = idxPitch();
+        var fx = p * ent.fw, fy = q * ent.fh;
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        ctx.drawImage(img, fx, fy, ent.fw, ent.fh, 0, 0, cv.width, cv.height);
+      }
+      function tick(now) {
+        if (!cv.isConnected) { return; }
+        if (prev) { sum += (now - prev); n += 1; if (n === 30) { tqa.watchFeed('shard-LL', sum / n); } }
+        prev = now;
+        if (!drag) {
+          vy *= 0.90; vp *= 0.90;             /* 惯性衰减 */
+          yaw = (yaw + vy + (auto ? 0.35 : 0) + 360) % 360;
+          pitch = Math.max(-pmax, Math.min(pmax, pitch + vp));
+          if (Math.abs(vy) < 0.05 && Math.abs(vp) < 0.05) { vy = 0; vp = 0; }
+          if (!last || now - last >= 33) { last = now; draw(); } /* ~30fps 切帧（拖拽态逐帧，惯性态限频） */
+        } else {
+          draw();
+        }
+        requestAnimationFrame(tick);
+      }
+      draw(); requestAnimationFrame(tick);
+
+      cv.addEventListener('pointerdown', function (e) {
+        drag = true; auto = false; vy = 0; vp = 0; lx = e.clientX; ly = e.clientY;
+        try { cv.setPointerCapture(e.pointerId); } catch (err) { /* noop */ }
+        e.preventDefault();
+      });
+      cv.addEventListener('pointermove', function (e) {
+        if (!drag) { return; }
+        var dx = e.clientX - lx, dy = e.clientY - ly;
+        var k = 0.6;                              /* 拖动手感系数（度/px） */
+        yaw = (yaw + dx * k) % 360; if (yaw < 0) { yaw += 360; }
+        pitch = Math.max(-pmax, Math.min(pmax, pitch - dy * k));
+        vy = dx * k; vp = -dy * k;                 /* 记末速 → 松手惯性 */
+        if (Math.abs(dx) > 1 || Math.abs(dy) > 1) { lx = e.clientX; ly = e.clientY; }
+        draw();
+      });
+      function endDrag() { if (drag) { drag = false; } }
+      cv.addEventListener('pointerup', endDrag);
+      cv.addEventListener('pointercancel', endDrag);
+      cv.addEventListener('keydown', function (e) { /* 方向键可达：微调 + 即时切格 */
+        var d = 360 / YAW;
+        if (e.key === 'ArrowLeft') { yaw = (yaw - d + 360) % 360; auto = false; vy = 0; vp = 0; draw(); e.preventDefault(); }
+        else if (e.key === 'ArrowRight') { yaw = (yaw + d) % 360; auto = false; vy = 0; vp = 0; draw(); e.preventDefault(); }
+        else if (e.key === 'ArrowUp') { pitch = Math.max(-pmax, pitch - (2 * pmax / (PIT - 1) || 0)); auto = false; vp = 0; draw(); e.preventDefault(); }
+        else if (e.key === 'ArrowDown') { pitch = Math.min(pmax, pitch + (2 * pmax / (PIT - 1) || 0)); auto = false; vp = 0; draw(); e.preventDefault(); }
+      });
+    });
+  };
+
   /* ========== S9 加载页（游戏首屏 · 全构图同心于中轴） ========== */
   TQ.buildLoad = function (onEnter, onCredits) {
     var app = h('div', 'app load');

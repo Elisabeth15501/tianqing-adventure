@@ -29,6 +29,17 @@
   var save = null;
   var hasSave = false;
   var VNC = {}; /* VN 对话层通道（dockBox/occupy/retract/lock/stop），runSteps 内接线，小节函数经此占台 */
+  var SELF_KEY = 'shiguan'; /* 玩家所扮角色的绘像 key（role=shi 史官 / nv 女官） */
+  var VN_PNAME = null;      /* 立绘槽下方名牌节点，由 VN 舞台持有并随说话人更新 */
+
+  /* ---------- 立绘槽：说话人 → 程序化绘像（portraits.js · 未知 speaker 也有像，杜绝空位） ----------
+   * 旁白（speaker 为空）不改立绘：保持上一说话人，避免 narr/card 相邻时的闪烁。 */
+  function setPortrait(speaker) {
+    if (!global.TP || !speaker) { return; }
+    var key = TP.keyOf(speaker, SELF_KEY);
+    TP.show(key);
+    if (VN_PNAME) { VN_PNAME.textContent = TP.labelOf(speaker, SELF_KEY); }
+  }
 
   /* ---------- 工具 ---------- */
   function el(tag, cls, text) {
@@ -242,12 +253,19 @@
     var vnMain = el('div', 'vn-main');
     var sp = el('div', 'sp-zone');
     var slot = el('div', 'slot');
-    slot.innerHTML = F.SIL;
-    slot.appendChild(el('div', 'tag', 'AI 立绘槽 · 轨①'));
-    slot.appendChild(el('div', 'sub', 'A 级全身 1024×1536 · 6.5 头身 · 未到（not_run）'));
+    SELF_KEY = save.role === 'nv' ? 'nvguan' : 'shiguan';
+    var roleName = '玩家';
+    if (global.TP) {
+      TP.bindSlot(slot);
+      TP.show(SELF_KEY);                       /* 程序化绘像占位（素材到则原位升级真图） */
+      roleName = TP.labelOf('', SELF_KEY);
+    } else {
+      slot.innerHTML = F.SIL;
+      slot.appendChild(el('div', 'tag', 'AI 立绘槽 · 轨①'));
+    }
     sp.appendChild(slot);
-    var roleName = save && save.role ? (save.role === 'shi' ? '随驾史官 · 玩家' : '宫中女官 · 玩家') : '玩家';
-    sp.appendChild(el('div', 'pname', roleName));
+    VN_PNAME = el('div', 'pname', roleName);
+    sp.appendChild(VN_PNAME);
     vnMain.appendChild(sp);
     var doc = el('div', 'vn-doc');
     vnMain.appendChild(doc);
@@ -348,6 +366,7 @@
     }
     function dockBox(speaker, text, cb) {
       retract(); /* 幂等清场：sub 分支链不经过 next()，对话框回归时统一退占台/解键锁 */
+      setPortrait(speaker); /* 说话人驱动立绘（立绘槽 = 角色绘像，非静态占位） */
       var dock = ensureDock();
       var old = dock.querySelector('.dlg-box');
       if (old && old.parentNode) { old.parentNode.removeChild(old); }
@@ -450,6 +469,10 @@
         var rcfg = D[st.cfg] || D.shangshu;
         runRhythm(main, rcfg, { deco: st.deco, decoName: st.decoName }, function () { busy = false; after(); });
       } else if (st.type === 'memory') {
+        /* 存档节点：回忆开播前把 step 定在该步骤上——中途退出，重进即从这段回忆重开；
+         * 读完由 after() 把 step 前进到下一步。 */
+        save.step = i - 1;
+        persist();
         runMemory(main, st.id, function () { busy = false; after(); });
       } else if (st.type === 'tasks') {
         renderTasks(main, idx, function () { busy = false; after(); });
@@ -636,6 +659,7 @@
   function showChoice(main, st, done, pushStep) {
     var box = el('div', 'choice-box');
     box.setAttribute('role', 'radiogroup');
+    setPortrait(st.speaker || ''); /* 选择项的视角名（多为玩家自称）也驱动立绘 */
     box.appendChild(el('div', 'speaker', st.speaker || ''));
     box.appendChild(el('div', 'prompt', st.prompt || ''));
     var picked = false;
@@ -799,24 +823,131 @@
     raf = requestAnimationFrame(loop);
   }
 
-  /* ---------- 瓷心回忆（五段） ---------- */
+  /* ---------- 手札 · 瓷片关联回忆（剧情卡 + 重放入口） ----------
+   * 结构：先给「一页文字」剧情（lines，原样保留），最下方才是进沉浸式重放的入口。
+   * 幕归属由 acts 反查（瓷片 → 幕），回忆按 act 挂靠，避免另维护一张映射表。 */
+  var SHARD_ACT = null;
+  function buildShardAct() {
+    if (SHARD_ACT) { return; }
+    SHARD_ACT = {};
+    function walk(steps, actId) {
+      (steps || []).forEach(function (st) {
+        if (!st) { return; }
+        if (st.type === 'shard' && st.id) { SHARD_ACT[st.id] = actId; }
+        if (st.type === 'role' && st.branches) {
+          Object.keys(st.branches).forEach(function (r) { walk(st.branches[r], actId); });
+        }
+        if (st.type === 'split') {
+          Object.keys(st).forEach(function (k) {
+            if (k !== 'type' && Object.prototype.toString.call(st[k]) === '[object Array]') { walk(st[k], actId); }
+          });
+        }
+      });
+    }
+    D.acts.forEach(function (a) { walk(a.steps, a.id); });
+  }
+  function memOfShard(sid) {
+    buildShardAct();
+    var actId = SHARD_ACT[sid];
+    if (!actId) { return []; }
+    return Object.keys(D.memories).filter(function (k) { return D.memories[k].act === actId; });
+  }
+  function appendMemCards(host, sid) {
+    var keys = memOfShard(sid);
+    if (!keys.length) { return; }
+    keys.forEach(function (k) {
+      var m = D.memories[k];
+      var got = !!(save && save.memories && save.memories[k]);
+      if (!got) {
+        /* 未想起：只透出「此幕另有回忆」，不剧透内容 */
+        host.appendChild(el('div', 'mem-teaser', '此幕另有一段回忆，尚未想起。'));
+        return;
+      }
+      var card = el('div', 'mem-card');
+      var h = el('div', 'mem-card-h', m.title);
+      h.appendChild(el('span', 'prov', m.prov));
+      card.appendChild(h);
+      card.appendChild(el('div', 'mem-card-era', m.era));
+      m.lines.forEach(function (t) { card.appendChild(el('div', 'mem-card-line', t)); });
+      card.appendChild(el('div', 'mem-card-foot', '以上为手札记下的回忆。想再看一遍，可入回忆重放。'));
+      var b = el('button', 'btn ghost mem-replay-entry', '重放这段回忆');
+      b.addEventListener('click', function (e) { e.stopPropagation(); replayMemory(k); });
+      card.appendChild(b);
+      host.appendChild(card);
+    });
+  }
+
+  /* ---------- 瓷心回忆（五段 · 沉浸式叙事/对话） ----------
+   * 2026-10-27 改造：幕内不再「一页文字过」，改走 VN 对话框逐条播放（steps）；
+   * 「一页文字」形式只保留在手札版面（lines）。播放完成才算回忆已得，并作为存档节点。
+   */
   function runMemory(main, id, done) {
     var m = D.memories[id];
     if (!m) { done(); return; }
-    save.memories[id] = true;
-    persist();
-    var panel = el('div', 'panel memory-panel');
-    var head = el('div', 'memo-head', m.title);
-    head.appendChild(el('span', 'prov', m.prov));
-    panel.appendChild(head);
-    panel.appendChild(el('div', 'memo-sub', m.era));
-    m.lines.forEach(function (t) {
-      panel.appendChild(el('div', 'memory-line', t));
+    var steps = m.steps || [];
+    if (!steps.length) { done(); return; }
+    /* 入场题签：先把回忆的题名与年代交代清楚（旁白框，不占台） */
+    VNC.stop(); /* 进入回忆：自动/跳过熄灭，交由玩家逐条推进 */
+    VNC.dockBox('', m.title + '（' + m.era + '）', function () {
+      playFrom(0);
     });
-    var wrap = el('div', 'mem-occ');
-    wrap.appendChild(panel);
-    wrap.appendChild(btn('从回忆里回来', 'ghost', function () { done(); }));
-    VNC.occupy(wrap); /* 占台：回忆面板独占舞台 */
+    function playFrom(k) {
+      if (k >= steps.length) {
+        save.memories[id] = true;
+        persist(); /* 存储节点：回忆读完即写档 */
+        if (global.TQCloud) { global.TQCloud.checkpoint(save); }
+        done();
+        return;
+      }
+      var st = steps[k];
+      VNC.dockBox(st.s || '', st.t, function () { playFrom(k + 1); });
+    }
+  }
+
+  /* 手札重放用：浮层内独立播放（纯观看，不写档、不影响进度） */
+  function replayMemory(id) {
+    var m = D.memories[id];
+    if (!m || !m.steps || !m.steps.length) { return; }
+    var old = app.querySelector('.mem-replay-ov');
+    if (old) { old.parentNode.removeChild(old); }
+    var ov = el('div', 'mem-replay-ov');
+    var stage = el('div', 'mem-replay-stage');
+    var dock = el('div', 'dlg-dock');
+    var strip = el('div', 'log-strip');
+    var k = 0, box = null;
+    function show() {
+      if (box && box.parentNode) { box.parentNode.removeChild(box); }
+      if (k >= m.steps.length) {
+        box = el('div', 'dlg-box');
+        var t = el('div', 'dtext', '回忆到此为止。（' + m.title + '）');
+        box.appendChild(t);
+        var re = el('button', 'btn ghost mem-replay-btn', '再看一遍');
+        re.addEventListener('click', function (e) { e.stopPropagation(); k = 0; show(); });
+        var cl = el('button', 'btn ghost mem-replay-btn', '合上');
+        cl.addEventListener('click', function (e) { e.stopPropagation(); close(); });
+        box.appendChild(re); box.appendChild(cl);
+        dock.insertBefore(box, dock.firstChild);
+        return;
+      }
+      var st = m.steps[k];
+      box = st.s ? F.dlgCard(st.s, st.t, function () { k += 1; show(); }) : F.narrCard(st.t, function () { k += 1; show(); });
+      dock.insertBefore(box, dock.firstChild);
+    }
+    var title = el('div', 'mem-replay-title', m.title + ' · ' + m.era + ' · 重放');
+    var closeBtn = el('button', 'log-pc', '合上');
+    closeBtn.addEventListener('click', close);
+    var ph = el('div', 'mem-replay-ph');
+    ph.appendChild(title); ph.appendChild(closeBtn);
+    stage.appendChild(ph);
+    dock.appendChild(strip);
+    stage.appendChild(dock);
+    ov.appendChild(stage);
+    ov.addEventListener('click', function (e) { if (e.target === ov) { close(); } });
+    document.addEventListener('keydown', escH);
+    app.appendChild(ov);
+    show();
+    function escH(e) { var key = e.key || e.keyCode; if (key === 'Escape' || key === 'Esc' || key === 27) { close(); } }
+    function close() { if (ov.parentNode) { ov.parentNode.removeChild(ov); } document.removeEventListener('keydown', escH); }
   }
 
   /* ---------- 玉津园 · 投壶（终幕）：对白走对话框链，投壶占台，结果回对话框 ---------- */
@@ -1070,8 +1201,15 @@
       var head = el('div', 'head', '瓷片 · ' + sh.name);
       head.appendChild(el('span', 'prov', sh.prov));
       detail.appendChild(head);
+      /* 近看全方位旋转（lat-long；LL 缺失自动回退 12 帧转台）：拖拽看任意视角 */
+      var rot = el('div', 'shard-detail-rot');
+      detail.appendChild(rot);
+      if (window.F) { F.spin3d(rot, key); }
+      var rotTag = el('div', 'shard-detail-rot-tag', '拖动旋转 · 全方位');
+      detail.appendChild(rotTag);
       detail.appendChild(el('div', 'quote', sh.text));
       detail.appendChild(el('div', 'source', '——' + sh.source));
+      appendMemCards(detail, key); /* 该幕回忆剧情卡 + 重放入口（在史料卡下方） */
       detail.setAttribute('data-on', '1');
       main.scrollTop = main.scrollHeight;
     }
@@ -1191,8 +1329,13 @@
       var head = el('div', 'head', '瓷片 · ' + sh.name);
       head.appendChild(el('span', 'prov', sh.prov));
       detail.appendChild(head);
+      var rot = el('div', 'shard-detail-rot');
+      detail.appendChild(rot);
+      if (window.F) { F.spin3d(rot, key); }
+      detail.appendChild(el('div', 'shard-detail-rot-tag', '拖动旋转 · 全方位'));
       detail.appendChild(el('div', 'quote', sh.text));
       detail.appendChild(el('div', 'source', '——' + sh.source));
+      appendMemCards(detail, key); /* 该幕回忆剧情卡 + 重放入口（在史料卡下方） */
       detail.setAttribute('data-on', '1');
       list.scrollTop = list.scrollHeight;
     }
@@ -1367,10 +1510,10 @@
       if (sh.source) { card.appendChild(el('div', 's8-viewer-source', '——' + sh.source)); }
       sheet.appendChild(card);
       var chip = el('button', 's8-viewer-chip', '自动旋转');
-      chip.addEventListener('click', function () { if (window.F) { F.shardViewer(mv, id); } });
+      chip.addEventListener('click', function () { if (window.F) { F.spin3d(mv, id); } });
       sheet.appendChild(chip);
       viewer.appendChild(sheet);
-      if (window.F) { F.shardViewer(mv, id); }
+      if (window.F) { F.spin3d(mv, id); }
     }
   }
 
