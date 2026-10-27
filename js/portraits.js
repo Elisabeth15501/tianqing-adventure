@@ -16,6 +16,7 @@
   'use strict';
 
   var TQA = global.TQA;
+  var TP_SHIFT = null; /* 视觉重心补偿计算器（下方赋值） */
 
   /* ============ 颜色小工具 ============ */
   function rgb(c) {
@@ -497,6 +498,63 @@
    *   ★键名坑：生图侧 prompts.py 用 `shangling`，运行时图键是 `shangshiling`
    *     （prompts 键按「尚食令」字面，运行时按 FIG 定义），入包脚本里做了映射，
    *     这里必须写运行时键，否则 TQA.resolve 找不到文件、静默回落矢量像。 */
+  /* ============ 立绘视觉居中表（2026-10-28 实测） ============
+   * cx = 「头肩重心」归一化横坐标（alpha 包围盒上半段中心 / 图宽）。
+   * ★为什么不用整体包围盒：B 级半身像衣摆/袖幅极宽（整体重心 0.39~0.657），
+   *   但头肩重心都落在 0.48~0.56——用整体会把脸推歪。故统一按头肩重心对齐。
+   * ratio = 图宽/图高：0.667=全身（A级），1=半身（B级）。
+   * 新增立绘须补一行（缺省 cx=0.5 / ratio=0.667，不崩但不居中）。 */
+  var FIT = {
+    'fengdao_a1':      { cx: 0.550, ratio: 0.667 },
+    'fuhou_a1':        { cx: 0.550, ratio: 0.667 },
+    'guorong_a1':      { cx: 0.504, ratio: 0.667 },
+    'guorong_a2':      { cx: 0.512, ratio: 0.667 },
+    'guorong_a3':      { cx: 0.501, ratio: 0.667 },
+    'guorong_t':       { cx: 0.506, ratio: 0.667 },
+    'guowei_a1':       { cx: 0.537, ratio: 0.667 },
+    'nvguan_a1':       { cx: 0.563, ratio: 0.667 },
+    'shiguan_a1':      { cx: 0.561, ratio: 0.667 },
+    'wangpu_a1':       { cx: 0.520, ratio: 0.667 },
+    'yinchongyi_a1':   { cx: 0.581, ratio: 0.667 },
+    'zhangyongde_a1':  { cx: 0.597, ratio: 0.667 },
+    'zhaokuangyin_a1': { cx: 0.552, ratio: 0.667 },
+    'qijulang_a1':     { cx: 0.488, ratio: 1 },
+    'shanggong_a1':    { cx: 0.517, ratio: 1 },
+    'shangshiling_a1': { cx: 0.557, ratio: 1 },
+    'sizheng_a1':      { cx: 0.523, ratio: 1 },
+    'zongxun_a1':      { cx: 0.484, ratio: 1 }
+  };
+  /* 视觉重心补偿：按当前槽尺寸与 fit 模式，算出把「头肩重心」推到槽中线所需的位移。
+   * cover 时内容宽度 = 槽高×ratio（图更瘦高则按高贴合）；contain 时内容宽度 = 槽宽。 */
+  function shiftFor(key, slotW, slotH, fit) {
+    var a = CHAR_ASSETS[key];
+    var f = a ? FIT[key + '_' + a] : null;
+    if (!f || !slotW || !slotH) { return 0; }
+    var contentW = slotW;
+    if (fit === 'cover' && (slotH * f.ratio) > slotW) { contentW = slotH * f.ratio; }
+    else if (fit === 'cover') { contentW = slotW; }
+    return -Math.round((f.cx - 0.5) * contentW);
+  }
+  TP_SHIFT = shiftFor;
+
+  /* 把 fit 模式与横向补偿写到槽上：
+   * - 全身像（ratio<0.9）→ cover：铺满舞台，人物本就不宽，左右裁到的是空白；
+   * - 半身像（ratio≥0.9）→ contain：1:1 图在竖版窄槽里若用 cover 会被裁掉近半宽，
+   *   半身像必须完整显示；尺寸比全身小是「景别」差异（近景 vs 中景），不是错误。
+   * --fig-shift-x：按头肩重心把人物推到槽中线（治「朝左的偏右、朝右的偏左」）。 */
+  function applyFit(slot, key) {
+    if (!slot) { return; }
+    var a = CHAR_ASSETS[key];
+    var f = a ? FIT[key + '_' + a] : null;
+    var ratio = f ? f.ratio : 0.667;
+    var fit = ratio >= 0.9 ? 'contain' : 'cover';
+    slot.setAttribute('data-fit', fit);
+    var w = slot.clientWidth, h = slot.clientHeight;
+    if (!w || !h) { /* 尚未布局：下一帧再算 */ requestAnimationFrame(function () { applyFit(slot, key); }); return; }
+    slot.style.setProperty('--fig-shift-x', shiftFor(key, w, h, fit) + 'px');
+  }
+  var TP_APPLY = applyFit;
+
   var CHAR_ASSETS = {
     guorong: 'a1', nvguan: 'a1', shiguan: 'a1',
     wangpu: 'a1', zhangyongde: 'a1', zhaokuangyin: 'a1', yinchongyi: 'a1',
@@ -530,6 +588,8 @@
       return this.meta(selfKey || 'shiguan').label;
     },
     figure: figure,
+    /* 断点/旋屏后槽尺寸变化：重算横向补偿（不改当前角色） */
+    refit: function () { var s2 = TP._slot; if (s2 && s2._tqKey) { applyFit(s2, s2._tqKey); } },
 
     /* ---- 立绘槽：先画占位，再异步升级真图（永不空槽） ---- */
     _slot: null,
@@ -542,6 +602,8 @@
       slot._tqKey = key;
       var c = TP.meta(key);
       slot.innerHTML = figure(key, opts && opts.fill ? 'fill' : null);
+      slot.removeAttribute('data-fit');
+      applyFit(slot, key);
       var ifig = document.createElement('div');
       ifig.className = 'fig-meta';
       ifig.innerHTML = '<div class="tag">' + c.label + '</div>'
@@ -565,6 +627,7 @@
           var m = slot.querySelector('.fig-meta .sub');
           if (m) { m.textContent = (TP.meta(key).title || '') + ' · AI 立绘已入仓'; }
           slot.classList.add('has-real');
+          applyFit(slot, key);
         });
       } else {
         slot.classList.remove('has-real');

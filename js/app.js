@@ -130,6 +130,16 @@
     if (!global.TP || !speaker) { return; }
     TP.show(TP.keyOf(speaker, SELF_KEY), { fill: true }); /* 同一角色不重绘（TP.show 内部判 key，杜绝闪烁） */
   }
+  /* 槽尺寸随断点/旋屏变化：重算立绘横向补偿（不改当前角色） */
+  (function () {
+    var t = 0;
+    function later() {
+      if (t) { clearTimeout(t); }
+      t = setTimeout(function () { if (global.TP && TP.refit) { TP.refit(); } }, 160);
+    }
+    window.addEventListener('resize', later);
+    window.addEventListener('orientationchange', later);
+  })();
 
   /* ---------- 工具 ---------- */
   function el(tag, cls, text) {
@@ -730,7 +740,7 @@
     var wrap = el('div', 'shard-occ');
     var stage = el('div', 'shard-stage');
     wrap.appendChild(stage);
-    F.shardStage(stage, id); /* 轨③转台（侦测失败自动回退 FRACTURE 剪影 + 角标） */
+    F.shardViewer(stage, id); /* 轨③：可拖动擦洗的转台（P1 后内含暗纹）；失败自动降级到内壁静态帧 */
     var toast = el('div', 'shard-toast');
     toast.appendChild(el('div', 'got', (first ? '拾得瓷片' : '瓷片在手') + ' · 共 ' + countShards() + '/16'));
     toast.appendChild(el('div', 'name', sh.name));
@@ -1289,12 +1299,31 @@
       var head = el('div', 'head', '瓷片 · ' + sh.name);
       head.appendChild(el('span', 'prov', sh.prov));
       detail.appendChild(head);
-      /* 近看全方位旋转（lat-long；LL 缺失自动回退 12 帧转台）：拖拽看任意视角 */
+      /* 近看全方位旋转（lat-long；LL 缺失自动回退 12 帧转台，再降级内壁静态帧）
+       * 增补（2026-10-28）：「内壁细看」按钮 = 切到 512px 静态内壁帧（整张画 + 双指缩放），
+       * 再点回旋转。之所以要这个入口：12 档 yaw 的精灵在手机上只能看清构图，
+       * 看不清笔触；静态帧才是「看细节」的那一层。 */
       var rot = el('div', 'shard-detail-rot');
       detail.appendChild(rot);
       if (window.F) { F.spin3d(rot, key); }
-      var rotTag = el('div', 'shard-detail-rot-tag', '拖动旋转 · 全方位');
+      var rotTag = el('div', 'shard-detail-rot-tag', '拖动旋转 · 双指放大 · 转到背面看内壁');
       detail.appendChild(rotTag);
+      var innerBtn = el('button', 'shard-inner-btn', '内壁细看');
+      var onInner = false;
+      innerBtn.addEventListener('click', function () {
+        if (!window.F) { return; }
+        onInner = !onInner;
+        if (onInner) {
+          F.shardInner(rot, key);
+          innerBtn.textContent = '回到旋转';
+          rotTag.textContent = '静态内壁 · 双指缩放 / 拖动平移';
+        } else {
+          F.spin3d(rot, key);
+          innerBtn.textContent = '内壁细看';
+          rotTag.textContent = '拖动旋转 · 双指放大 · 转到背面看内壁';
+        }
+      });
+      detail.appendChild(innerBtn);
       detail.appendChild(el('div', 'quote', sh.text));
       detail.appendChild(el('div', 'source', '——' + sh.source));
       appendMemoCards(detail, key); /* 回忆剧情卡（一页文字只在此处，暂无回放入口） */
@@ -1420,7 +1449,24 @@
       var rot = el('div', 'shard-detail-rot');
       detail.appendChild(rot);
       if (window.F) { F.spin3d(rot, key); }
-      detail.appendChild(el('div', 'shard-detail-rot-tag', '拖动旋转 · 全方位'));
+      var rotTagO = el('div', 'shard-detail-rot-tag', '拖动旋转 · 双指放大 · 转到背面看内壁');
+      detail.appendChild(rotTagO);
+      var innerBtnO = el('button', 'shard-inner-btn', '内壁细看');
+      var onInnerO = false;
+      innerBtnO.addEventListener('click', function () {
+        if (!window.F) { return; }
+        onInnerO = !onInnerO;
+        if (onInnerO) {
+          F.shardInner(rot, key);
+          innerBtnO.textContent = '回到旋转';
+          rotTagO.textContent = '静态内壁 · 双指缩放 / 拖动平移';
+        } else {
+          F.spin3d(rot, key);
+          innerBtnO.textContent = '内壁细看';
+          rotTagO.textContent = '拖动旋转 · 双指放大 · 转到背面看内壁';
+        }
+      });
+      detail.appendChild(innerBtnO);
       detail.appendChild(el('div', 'quote', sh.text));
       detail.appendChild(el('div', 'source', '——' + sh.source));
       appendMemoCards(detail, key); /* 回忆剧情卡 */
@@ -1593,7 +1639,7 @@
       var sh = D.shards[id] || {};
       var card = el('div', 's8-viewer-card');
       card.appendChild(el('div', 's8-viewer-name', sh.name || ('瓷片 ' + id)));
-      card.appendChild(el('span', 's8-viewer-tag', '已归位 · 近看 · 拖动旋转'));
+      card.appendChild(el('span', 's8-viewer-tag', '已归位 · 近看 · 拖动旋转 · 双指放大'));
       card.appendChild(el('div', 's8-viewer-quote', sh.text || ''));
       if (sh.source) { card.appendChild(el('div', 's8-viewer-source', '——' + sh.source)); }
       sheet.appendChild(card);

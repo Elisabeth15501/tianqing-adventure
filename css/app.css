@@ -1,7 +1,5 @@
 :root{--qing:#8FB5B0;--deep:#5E8C8A;--fen:#DDE9E5;--yue:#EFF5F3;--ink:#1F3B3A;--tu:#A67C52;--gold:#D9B36C;--zhi:#B96A62;--muted:#5F7A77}
-:root{--paper:#F3EFE2;--tq-top-inset:0px;--tq-bottom-inset:0px;--tq-left-inset:0px;--tq-right-inset:0px;--tq-topbar-right:0px;
-  /* 对话框组（框 + 四键条）整体离底距离：竖版/宽屏共用，改一处即整体上抬 */
-  --tq-dock-lift:30px}
+:root{--paper:#F3EFE2;--tq-top-inset:0px;--tq-bottom-inset:0px;--tq-left-inset:0px;--tq-right-inset:0px;--tq-topbar-right:0px}
 *{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;overflow:hidden}
 body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
@@ -377,8 +375,7 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   .act-vn .sp-zone{position:relative;top:auto;left:auto;right:auto;width:38%;max-width:460px;min-width:300px;flex-shrink:0;border-right:1px solid rgba(94,140,138,.35);justify-content:flex-end;padding:20px 18px}
   .act-vn .sp-zone .slot{width:100%;max-width:300px;height:58%;min-height:240px;background:rgba(239,245,243,.72)}
   .act-vn .sp-zone .pname{font-size:13px;background:var(--deep);color:var(--yue)}
-  .act-vn .dlg-dock{position:relative;left:auto;right:auto;bottom:auto;flex:1;min-width:0;margin:-18px -26px -14px;
-    padding:18px 26px calc(14px + var(--tq-dock-lift));display:flex;flex-direction:column}
+  .act-vn .dlg-dock{position:relative;left:auto;right:auto;bottom:auto;flex:1;min-width:0;margin:-18px -26px 0;padding:18px 26px calc(14px + var(--tq-dock-lift,45px));display:flex;flex-direction:column}
   .act-vn .dlg-box{margin-top:auto;width:86%}
   .act-vn .dlg-box .dtext{font-size:17px}
   .act-vn .vn-doc{flex:1;min-width:0;max-height:none;display:flex;flex-direction:column;padding:18px 26px 14px}
@@ -472,8 +469,9 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   .act-vn .vn-main{flex:1;display:flex;flex-direction:column;min-height:0}
   .act-vn .vn-doc{margin-top:auto;flex-shrink:0;max-height:46%;min-height:120px;overflow-y:auto;padding:0 16px}
   .vn-main.act-op .vn-doc{padding:0 16px 12px}
-  .act-vn .dlg-dock{position:relative;left:auto;right:auto;bottom:auto;margin:0 -16px;
-    padding:14px 14px calc(12px + var(--tq-dock-lift) + var(--tq-bottom-inset))}
+  /* 对话/叙事框与四键整体上移 45px（用户 10-28 要求；下方留白，避免贴屏幕底边） */
+  .act-vn .dlg-dock{position:relative;left:auto;right:auto;bottom:auto;
+    margin:0 -16px var(--tq-dock-lift,45px);padding:14px 14px 12px}
   .act-vn .dlg-dock .step-tail{display:block;width:150px;margin:10px auto 0;padding:8px 0;font-size:12px;border-radius:15px;background:rgba(243,238,227,.9);color:#2B3A3A;border:none;font-family:inherit}
 }
 
@@ -645,17 +643,27 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .main.act-vn .sp-fig .fig-meta{ display:none; }        /* 立绘上不再叠文字牌 */
 .main.act-vn .sp-fig .fig-real{
   position:absolute; left:0; top:0; width:100%; height:100%;
-  object-fit:cover; object-position:top center;
+  object-fit:cover; object-position:top center;   /* 全身像：铺满，裁掉的是两侧空白 */
   animation:tqFigIn .26s ease both;
 }
+.main.act-vn .sp-fig[data-fit="contain"] .fig-real{
+  object-fit:contain; object-position:bottom center;  /* 半身像：完整显示、底部对齐 */
+}
+.main.act-vn .sp-fig[data-fit="contain"]{ height:74%; }   /* 半身像整体略抬高，给对话框留位置 */
 .main.act-vn .sp-fig .fig-art{ animation:tqFigIn .26s ease both; }
 /* 景别杠杆（[PLACEHOLDER] 默认 1=全身，脚被对话框压住）：调大可收成腰上/胸上景别，
  * 只放大不换图——脸部表情更清晰，同时保持「立绘为画面主体」。 */
 .main.act-vn .sp-fig .fig-real,
-.main.act-vn .sp-fig .fig-art{ transform:scale(var(--fig-zoom,1)); transform-origin:top center; }
+.main.act-vn .sp-fig .fig-art{
+  /* --fig-shift-x：按「头肩重心」把人物推到槽中线（治朝向导致的视觉偏移）
+   * --fig-zoom：景别杠杆 */
+  transform:translateX(var(--fig-shift-x,0px)) scale(var(--fig-zoom,1));
+  transform-origin:top center;
+}
 /* 关键帧里带 scale：animation 的 fill-mode 会盖掉基础 transform，缩放必须写进关键帧才生效 */
-@keyframes tqFigIn{ from{opacity:0; transform:translateY(8px) scale(var(--fig-zoom,1))}
-  to{opacity:1; transform:translateY(0) scale(var(--fig-zoom,1))} }
+@keyframes tqFigIn{
+  from{opacity:0; transform:translateX(var(--fig-shift-x,0px)) translateY(8px) scale(var(--fig-zoom,1))}
+  to{opacity:1; transform:translateX(var(--fig-shift-x,0px)) translateY(0) scale(var(--fig-zoom,1))} }
 /* 层级：对话框/文本列压在立绘之上——保证文字永不被动摇遮挡（回复/选项亦然） */
 .main.act-vn .vn-doc{ position:relative; z-index:2; }
 .main.act-vn .dlg-dock{ z-index:2; }
@@ -670,11 +678,3 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   }
   .main.act-vn .sp-zone .slot.sp-fig{ width:100%; max-width:none; height:86%; }
 }
-
-/* ==================== 矮屏对话框限高修正（2026-10-28）
- * 旧规则 .dlg-dock{max-height:36%/38%} 是给「dock 直属 .main」的旧结构写的；
- * 现在 dock 的父级是 .vn-doc（自带 max-height:46%），百分比基准只剩 ~163px
- * ⇒ 36% ≈ 59px，把 88px 的对话框压扁、底部凭空留出 100px 空白（实测 740 屏）。
- * 限高交给 .vn-doc，dock 自身不设限。 */
-@media (max-height:740px){ .main.act-vn .dlg-dock{ max-height:none } }
-@media (max-height:668px){ .main.act-vn .dlg-dock{ max-height:none } }
