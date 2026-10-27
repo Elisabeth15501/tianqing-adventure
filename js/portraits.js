@@ -160,8 +160,8 @@
       /* 武：甲胄（肩甲 + 胸甲 + 甲片纹）
        * ⚠️ 10-27 服色礼制决议：甲胄入嘉礼寿宴是硬伤，天清节（显德五年九月廿四·广德殿上寿）
        * 属嘉礼，凡现实席上的武臣一律禁甲。故甲胄改为「可选」——只有 c.armor !== false 才绘制。
-       * 张永德 / 赵匡胤 已置 armor:false，改走缺胯袍（两侧开衩证武臣身份），保留武人体量但不露甲片。
-       * 李重进（侍卫亲军）仍画甲，留作 a2 戎服差分。
+       * 张永德 / 赵匡胤 / 李重进 均已置 armor:false，改走缺胯袍（两侧开衩证武臣身份），保留武人体量但不露甲片。
+       * （李重进 10-28 用户裁定与张/赵同制去甲，不再留甲作 a2 戎服差分。）
        * 判据：build 只决定「体量/版型」，甲胄由 armor 单独控制，二者解耦。
        * data-armor 属性供 QA 探针做 DOM 级断言（像素级判据见 .probe_qa/qa_zi_colors.js）。 */
       if (c.armor !== false) {
@@ -258,12 +258,15 @@
   }
 
   /* ============ 合成一幅绘像 ============ */
-  function figure(key) {
+  /* mode='fill' → slice 裁切填满（VN 立绘舞台用，避免 meet 在满框里 letterbox 变小）；
+   * 缺省 meet 保持原样（手札小图/回忆舞台按整身显示，不被裁）。 */
+  function figure(key, mode) {
     var c = FIG[key] || FIG.DEFAULT;
     c = ObjectAssign({ k: 'DEFAULT' }, c);
     if (!c.k) { c.k = 'unknown'; }
     var kid = c.k;
-    var s = '<svg class="fig-art" viewBox="0 0 100 120" preserveAspectRatio="xMidYMax meet" '
+    var par = mode === 'fill' ? 'xMidYMid slice' : 'xMidYMax meet';
+    var s = '<svg class="fig-art" viewBox="0 0 100 120" preserveAspectRatio="' + par + '" '
       + 'xmlns="http://www.w3.org/2000/svg" role="img" aria-label="' + (c.label || '角色绘像') + '">';
     s += '<defs><linearGradient id="tg' + kid + '" x1="0" y1="0" x2="0" y2="1">'
       + '<stop offset="0" stop-color="' + lt(c.robe, 0.2) + '"/>'
@@ -397,10 +400,11 @@
     lichongjin: {
       k: 'lichongjin', label: '李重进 · 侍卫亲军', head: 'pingjin', build: 'w', beard: 'short',
       hair: '#2A2622', headColor: '#2A2F2A', robe: '#79668A', collar: '#E4DED2',
-      belt: '#544568', buckle: '#B79A55', prop: 'jian',
+      belt: '#544568', buckle: '#B79A55', prop: 'jian', armor: false,
       /* 从二品侍卫亲军马步军都指挥使 + 同平章事（使相）；与殿前都点检同级、高于殿前都指挥使。
-       * 用户 10-27 裁定：张/赵去甲，**李重进留甲作 a2 差分** ⇒ armor 保持默认（有甲）。
-       * 冠改平巾帻：武官常服冠（《旧唐书·舆服志》「武官及卫官服之」），不用武弁（朝服冠）。 */
+       * 用户 10-28 裁定（更新 10-27）：李重进与张/赵同制**去甲**——甲胄入嘉礼寿宴是硬伤，
+       * 不再留甲作 a2 差分 ⇒ armor:false，走缺胯袍。佩剑属朝会常制保留（prop:'jian'）。
+       * 冠用平巾帻：武官常服冠（《旧唐书·舆服志》「武官及卫官服之」），不用武弁（朝服冠）。 */
       title: '侍卫亲军马步军都指挥使 + 同平章事 · 从二品'
     },
     /* ===== 10-27 品级核查（宫官/礼官四人；用户口径「要注意他们的官职和品级」）=====
@@ -525,14 +529,14 @@
     /* ---- 立绘槽：先画占位，再异步升级真图（永不空槽） ---- */
     _slot: null,
     bindSlot: function (node) { TP._slot = node; },
-    show: function (key) {
+    show: function (key, opts) {
       var slot = TP._slot;
       if (!slot) { return; }
       if (slot._tqKey === key) { return; }
       var first = !slot._tqKey;
       slot._tqKey = key;
       var c = TP.meta(key);
-      slot.innerHTML = figure(key);
+      slot.innerHTML = figure(key, opts && opts.fill ? 'fill' : null);
       var ifig = document.createElement('div');
       ifig.className = 'fig-meta';
       ifig.innerHTML = '<div class="tag">' + c.label + '</div>'

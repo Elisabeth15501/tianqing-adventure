@@ -123,15 +123,12 @@
   var hasSave = false;
   var VNC = {}; /* VN 对话层通道（dockBox/occupy/retract/lock/stop），runSteps 内接线，小节函数经此占台 */
   var SELF_KEY = 'shiguan'; /* 玩家所扮角色的绘像 key（role=shi 史官 / nv 女官） */
-  var VN_PNAME = null;      /* 立绘槽下方名牌节点，由 VN 舞台持有并随说话人更新 */
 
   /* ---------- 立绘槽：说话人 → 程序化绘像（portraits.js · 未知 speaker 也有像，杜绝空位） ----------
    * 旁白（speaker 为空）不改立绘：保持上一说话人，避免 narr/card 相邻时的闪烁。 */
   function setPortrait(speaker) {
     if (!global.TP || !speaker) { return; }
-    var key = TP.keyOf(speaker, SELF_KEY);
-    TP.show(key);
-    if (VN_PNAME) { VN_PNAME.textContent = TP.labelOf(speaker, SELF_KEY); }
+    TP.show(TP.keyOf(speaker, SELF_KEY), { fill: true }); /* 同一角色不重绘（TP.show 内部判 key，杜绝闪烁） */
   }
 
   /* ---------- 工具 ---------- */
@@ -348,20 +345,16 @@
     var main = el('div', 'main act-vn');
     var vnMain = el('div', 'vn-main');
     var sp = el('div', 'sp-zone');
-    var slot = el('div', 'slot');
+    /* VN 立绘舞台：无边框/无底卡/无独立名牌——立绘即画面主体，名字只在对话框名牌上出现一次 */
+    var slot = el('div', 'slot sp-fig');
     SELF_KEY = save.role === 'nv' ? 'nvguan' : 'shiguan';
-    var roleName = '玩家';
     if (global.TP) {
       TP.bindSlot(slot);
-      TP.show(SELF_KEY);                       /* 程序化绘像占位（素材到则原位升级真图） */
-      roleName = TP.labelOf('', SELF_KEY);
+      TP.show(SELF_KEY, { fill: true });       /* 程序化绘像占位（素材到则原位升级真图） */
     } else {
       slot.innerHTML = F.SIL;
-      slot.appendChild(el('div', 'tag', 'AI 立绘槽 · 轨①'));
     }
     sp.appendChild(slot);
-    VN_PNAME = el('div', 'pname', roleName);
-    sp.appendChild(VN_PNAME);
     vnMain.appendChild(sp);
     var doc = el('div', 'vn-doc');
     vnMain.appendChild(doc);

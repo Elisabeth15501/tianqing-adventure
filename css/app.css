@@ -622,3 +622,47 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 @media (min-aspect-ratio:6/5) and (min-width:900px){:root{--tq-tb-pad-r:28px}}
 @media (max-height:740px){:root{--tq-tb-pad-r:14px}}
 @media (max-height:668px){:root{--tq-tb-pad-r:12px}}
+
+/* ==================== VN 立绘摆放（2026-10-28 · 对齐同类作品惯例）
+ * 三类惯例：①立绘是「画面主体」而非卡片——无边框/无底卡/无独立名牌；
+ * ②底部出血（bottom-anchored），躯干下缘被对话框压住（sprite 在 box 之下，非并列）；
+ * ③名字只在对话框名牌出现一次。竖版单人=居中大立绘；宽屏=左立绘图/右文本双栏。
+ * Chrome 61：禁 min()/max()/clamp()，宽度用百分比 + max-width。 */
+.main.act-vn .sp-zone{
+  position:absolute; left:0; right:0; top:0; bottom:0;
+  display:flex; align-items:flex-end; justify-content:center;
+  padding:0 8px; pointer-events:none; z-index:1; overflow:hidden;
+}
+.main.act-vn .sp-zone .slot.sp-fig{
+  position:relative; display:block; width:88%; max-width:400px; height:86%;
+  border:0; border-radius:0; background:none; padding:0; overflow:hidden;
+}
+.main.act-vn .sp-fig.has-real{ border:0; }
+.main.act-vn .sp-fig .fig-meta{ display:none; }        /* 立绘上不再叠文字牌 */
+.main.act-vn .sp-fig .fig-real{
+  position:absolute; left:0; top:0; width:100%; height:100%;
+  object-fit:cover; object-position:top center;
+  animation:tqFigIn .26s ease both;
+}
+.main.act-vn .sp-fig .fig-art{ animation:tqFigIn .26s ease both; }
+/* 景别杠杆（[PLACEHOLDER] 默认 1=全身，脚被对话框压住）：调大可收成腰上/胸上景别，
+ * 只放大不换图——脸部表情更清晰，同时保持「立绘为画面主体」。 */
+.main.act-vn .sp-fig .fig-real,
+.main.act-vn .sp-fig .fig-art{ transform:scale(var(--fig-zoom,1)); transform-origin:top center; }
+/* 关键帧里带 scale：animation 的 fill-mode 会盖掉基础 transform，缩放必须写进关键帧才生效 */
+@keyframes tqFigIn{ from{opacity:0; transform:translateY(8px) scale(var(--fig-zoom,1))}
+  to{opacity:1; transform:translateY(0) scale(var(--fig-zoom,1))} }
+/* 层级：对话框/文本列压在立绘之上——保证文字永不被动摇遮挡（回复/选项亦然） */
+.main.act-vn .vn-doc{ position:relative; z-index:2; }
+.main.act-vn .dlg-dock{ z-index:2; }
+
+/* 宽屏：左立绘（通栏到舞台底）+ 右文本列；立绘宽度锁定比例，不随文本长度跳变 */
+@media (min-aspect-ratio:6/5) and (min-width:900px){
+  .main.act-vn .sp-zone{
+    position:relative; left:auto; right:auto; top:auto; bottom:auto;
+    width:42%; max-width:520px; min-width:320px; flex-shrink:0;
+    align-items:flex-end; justify-content:center; padding:16px 14px 0;
+    /* 不画分栏竖线：成熟 VN 的立绘与文本之间没有 UI 分隔线（接入背景后更会显假） */
+  }
+  .main.act-vn .sp-zone .slot.sp-fig{ width:100%; max-width:none; height:86%; }
+}
