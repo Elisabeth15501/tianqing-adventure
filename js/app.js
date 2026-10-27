@@ -210,6 +210,13 @@
     clear(app);
     app.classList.add('with-foot');
     app.appendChild(topbar(D.title.sub));
+    /* 时间条（顶栏）下沿的元信息行：史实出处贴右对齐，参与文档流不浮动（修「漂在标题旁看着乱」） */
+    var meta = el('div', 'title-meta');
+    var cr = el('button', 'credits-btn', '史实出处');
+    cr.setAttribute('aria-label', '查看本作史实出处');
+    cr.addEventListener('click', showCredits);
+    meta.appendChild(cr);
+    app.appendChild(meta);
     var main = el('div', 'main title-bottom');
     var wrap = el('div', 'title-wrap');
     var tl = el('div', 'tl');
@@ -235,11 +242,6 @@
     addActions(tr);
     addActions(foot);
     app.appendChild(foot);
-    // 首屏左下角：史实出处入口（鸣谢页式，审核与考据玩家可见）
-    var cr = el('button', 'credits-btn', '史实出处');
-    cr.setAttribute('aria-label', '查看本作史实出处');
-    cr.addEventListener('click', showCredits);
-    app.appendChild(cr);
   }
 
   /* ---------- 史实出处（鸣谢页式：瓷片/瓷心出处由数据派生，不另维护清单） ---------- */
