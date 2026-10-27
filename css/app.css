@@ -387,7 +387,13 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .footbar{ flex-shrink:0; padding:10px 16px calc(12px + var(--tq-bottom-inset));
   background:var(--yue); border-top:1px solid var(--qing) }
 .footbar .btn{ margin:0 0 8px } .footbar .btn:last-child{ margin-bottom:0 }
-.with-foot .credits-btn{ top:calc(var(--tq-top-inset,0px) + var(--tq-topbar-h, 45px) + 8px); bottom:auto; left:calc(14px + var(--tq-left-inset)) }
+.title-meta{display:flex;justify-content:flex-start;align-items:center;flex-shrink:0;
+  padding:8px calc(14px + var(--tq-right-inset)) 0 calc(14px + var(--tq-left-inset))}
+/* 元信息行内的出处键：文档流静态排版（不浮动⇒不会漂、不会压标题），贴时间条（顶栏）下沿左侧 */
+.title-meta .credits-btn{position:static;left:auto;top:auto;bottom:auto;min-height:0;
+  padding:4px 11px;font-size:11.5px;letter-spacing:1px;
+  background:transparent;border-color:rgba(94,140,138,.45);color:var(--muted);opacity:1}
+.title-meta .credits-btn:hover{color:var(--deep);border-color:var(--deep)}
 .cs-fold{min-height:32px}
 .credits-btn{min-height:32px}
 @media (min-aspect-ratio:6/5) and (max-width:899px){

@@ -210,6 +210,14 @@
     clear(app);
     app.classList.add('with-foot');
     app.appendChild(topbar(D.title.sub));
+    /* 时间条（顶栏）下沿的元信息行：史实出处贴左上、参与文档流不浮动——
+     * 既不会被标题/立绘挤到，也天然落在安全区内不与平台按钮重叠。 */
+    var meta = el('div', 'title-meta');
+    var cr = el('button', 'credits-btn', '史实出处');
+    cr.setAttribute('aria-label', '查看本作史实出处');
+    cr.addEventListener('click', showCredits);
+    meta.appendChild(cr);
+    app.appendChild(meta);
     var main = el('div', 'main title-bottom');
     var wrap = el('div', 'title-wrap');
     var tl = el('div', 'tl');
@@ -235,29 +243,7 @@
     addActions(tr);
     addActions(foot);
     app.appendChild(foot);
-    // 左上角（顶栏/时间条之下）：史实出处入口（鸣谢页式，审核与考据玩家可见）
-    var cr = el('button', 'credits-btn', '史实出处');
-    cr.setAttribute('aria-label', '查看本作史实出处');
-    cr.addEventListener('click', showCredits);
-    app.appendChild(cr);
-    syncTopbarH();
   }
-
-  /* 顶栏实测高度 → CSS 变量：让「史实出处」等悬浮控件贴住顶栏下沿，
-   * 不依赖硬编码像素（断点/字体变化后仍对齐）。 */
-  function syncTopbarH() {
-    var tb = app.querySelector('.topbar');
-    if (!tb) { return; }
-    var h = tb.getBoundingClientRect().height;
-    if (h > 0) { document.documentElement.style.setProperty('--tq-topbar-h', Math.round(h) + 'px'); }
-  }
-  /* 断点切换（旋屏/分屏）后顶栏高度会变：重算一次，避免「史实出处」错位 */
-  (function () {
-    var t = 0;
-    function later() { if (t) { clearTimeout(t); } t = setTimeout(syncTopbarH, 140); }
-    window.addEventListener('resize', later);
-    window.addEventListener('orientationchange', later);
-  })();
 
   /* ---------- 史实出处（鸣谢页式：瓷片/瓷心出处由数据派生，不另维护清单） ---------- */
   function showCredits() {
