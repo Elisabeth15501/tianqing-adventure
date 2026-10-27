@@ -6,20 +6,113 @@
 (function (global) {
   'use strict';
 
-  /* ---------- 宿主安全顶距探测（小工具 WebView / 全屏浏览器双态） ----------
-   * 优先序：宿主桥 __TQ_HOST__.insetTop → URL ?insetTop=48 → postMessage → 默认 0。
-   * Chrome 61 禁 env()，宿主 chrome 高度以 JS 测定值写入 CSS 变量消费。 */
+  /* ---------- 平台安全区避让（2026-10-28） ----------
+   * 依据官方 §3.11 getWindowInfo（客户端 9.49+）：safeArea + menuButtons{back,me,share}，
+   * 均为「容器坐标系、逻辑像素」。目标：任何自绘 UI 都不与平台原生按钮/状态栏/Home 条重叠。
+   * 优先序：getWindowInfo（权威） → URL 参数（真机调试） → __TQ_HOST__ / postMessage → 0。
+   * 按钮按中心点归边：上半区→顶部预留到其 bottom；下半区→底部；左/右同理。
+   * 窗口形态变化（旋转/分屏）后重新取一次（文档要求，无 resize 事件可订阅）。 */
   (function () {
-    function setInset(px) {
-      document.documentElement.style.setProperty('--tq-top-inset', px + 'px');
+    var GAP = 6; /* 按钮与自绘 UI 的最小视觉间距 [PLACEHOLDER·真机可微调] */
+    var root = document.documentElement;
+    function setVar(name, px) {
+      root.style.setProperty(name, Math.max(0, Math.round(px)) + 'px');
     }
-    var p = /[?&]insetTop=(\d+(?:\.\d+)?)/.exec(location.search || '');
-    if (p) { setInset(Math.round(parseFloat(p[1]))); return; }
-    if (window.__TQ_HOST__ && window.__TQ_HOST__.insetTop) { setInset(window.__TQ_HOST__.insetTop); return; }
+    function apply(ins) {
+      setVar('--tq-top-inset', ins.top || 0);
+      setVar('--tq-bottom-inset', ins.bottom || 0);
+      setVar('--tq-left-inset', ins.left || 0);
+      setVar('--tq-right-inset', ins.right || 0);
+      /* 顶栏右侧额外避让：小红书右上角原生按钮（分享/我的）压在顶栏右侧握点上时，
+       * 让它把「差事帖/手札」推离——只在按钮确实落在右上角时才生效。 */
+      setVar('--tq-topbar-right', ins.topRight || 0);
+    }
+    /* URL 参数覆盖（真机调试/无容器时手动指定） */
+    function fromQuery() {
+      var q = location.search || '';
+      function num(k) {
+        var m = new RegExp('[?&]' + k + '=(\\d+(?:\\.\\d+)?)').exec(q);
+        return m ? Math.round(parseFloat(m[1])) : 0;
+      }
+      var t = num('insetTop'), b = num('insetBottom'), l = num('insetLeft'), r = num('insetRight');
+      if (!t && !b && !l && !r) { return null; }
+      return { top: t, bottom: b, left: l, right: r, topRight: r };
+    }
+    /* 从 getWindowInfo 结果算四向预留
+     * 归边规则（关键）：平台按钮通常只占顶部条/底部条，故顶部按钮只推 top、底部按钮只推 bottom；
+     * 只有横跨中段的悬浮按钮才推 left/right——否则会把整页内容无谓地左右缩进。 */
+    function measure(info) {
+      if (!info || typeof info !== 'object') { return null; }
+      var W = info.windowWidth || 0, H = info.windowHeight || 0;
+      var ins = { top: 0, bottom: 0, left: 0, right: 0, topRight: 0 };
+      var sa = info.safeArea;
+      if (sa && typeof sa === 'object') {
+        if (typeof sa.top === 'number') { ins.top = Math.max(ins.top, sa.top); }
+        if (typeof sa.left === 'number') { ins.left = Math.max(ins.left, sa.left); }
+        if (typeof sa.right === 'number' && W) { ins.right = Math.max(ins.right, W - sa.right); }
+        if (typeof sa.bottom === 'number' && H) { ins.bottom = Math.max(ins.bottom, H - sa.bottom); }
+      }
+      var mb = info.menuButtons || {};
+      ['back', 'me', 'share'].forEach(function (k) {
+        var r = mb[k];
+        if (!r || typeof r.width !== 'number' || typeof r.height !== 'number' || !r.width || !r.height) { return; }
+        var midY = H ? (r.top + r.bottom) / 2 : 0;
+        if (H && midY < H * 0.22) {
+          /* 顶部条：整页从按钮下沿开始，顶栏右侧同时让开右上角按钮 */
+          if (typeof r.bottom === 'number') { ins.top = Math.max(ins.top, r.bottom + GAP); }
+          if (W && typeof r.left === 'number' && (r.left + r.right) / 2 > W / 2) {
+            ins.topRight = Math.max(ins.topRight, W - r.left + GAP);
+          }
+        } else if (H && midY > H * 0.78) {
+          /* 底部条 */
+          if (typeof r.top === 'number') { ins.bottom = Math.max(ins.bottom, H - r.top + GAP); }
+        } else if (W) {
+          /* 中段悬浮：按左右归边 */
+          if ((r.left + r.right) / 2 > W / 2) {
+            if (typeof r.left === 'number') { ins.right = Math.max(ins.right, W - r.left + GAP); }
+          } else if (typeof r.right === 'number') {
+            ins.left = Math.max(ins.left, r.right + GAP);
+          }
+        }
+      });
+      /* 防御：异常/极端数据不吞掉大半个屏 */
+      if (H && ins.top > H * 0.25) { ins.top = 0; ins.topRight = 0; }
+      if (H && ins.bottom > H * 0.35) { ins.bottom = 0; }
+      if (W && ins.left + ins.right > W * 0.5) { ins.left = 0; ins.right = 0; }
+      return ins;
+    }
+    function pull() {
+      var mt = global.xhs && global.xhs.miniTool;
+      if (!mt || typeof mt.getWindowInfo !== 'function') { return; }
+      var pr;
+      try { pr = mt.getWindowInfo(); } catch (e) { return; }
+      if (!pr || typeof pr.then !== 'function') { return; }
+      pr.then(function (info) {
+        var ins = measure(info);
+        if (ins) { apply(ins); }
+      })['catch'](function () { /* 读取失败：保持现值（默认 0），自绘 UI 仍可用 */ });
+    }
+    /* 初始化顺序：查询参数 > 宿主桥 > 自动测量 */
+    var q = fromQuery();
+    if (q) { apply(q); }
+    else if (window.__TQ_HOST__ && window.__TQ_HOST__.insetTop) {
+      apply({ top: window.__TQ_HOST__.insetTop, bottom: 0, left: 0, right: 0, topRight: 0 });
+    } else { apply({ top: 0, bottom: 0, left: 0, right: 0, topRight: 0 }); }
+    pull();
+    /* 宿主手动推送（兼容旧桥） */
     window.addEventListener('message', function (e) {
       var d = e.data || {};
-      if (d && d.type === 'tq-host-inset' && typeof d.top === 'number') { setInset(Math.round(d.top)); }
+      if (!d) { return; }
+      if (d.type === 'tq-host-inset' && typeof d.top === 'number') {
+        apply({ top: Math.round(d.top), bottom: 0, left: 0, right: 0, topRight: 0 });
+      } else if (d.type === 'tq-host-safearea' && d.inset) {
+        apply(d.inset);
+      }
     });
+    /* 形态变化后重取（延迟一拍，等容器完成布局） */
+    function repull() { setTimeout(pull, 120); }
+    window.addEventListener('resize', repull);
+    window.addEventListener('orientationchange', repull);
   })();
 
   var D = global.TQ_DATA;
