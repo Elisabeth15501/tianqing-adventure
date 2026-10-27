@@ -504,37 +504,71 @@
    *   但头肩重心都落在 0.48~0.56——用整体会把脸推歪。故统一按头肩重心对齐。
    * ratio = 图宽/图高：0.667=全身（A级），1=半身（B级）。
    * 新增立绘须补一行（缺省 cx=0.5 / ratio=0.667，不崩但不居中）。 */
+  /* headW = 头宽/图宽；y0 = 头顶/图高（均由 alpha 实测）。
+   * ★这两个值支撑「跨角色/跨景别头宽统一 + 眼线对齐」——见 applyFit。
+   * headW 超过 0.30 的多半是近景/特殊构图（guorong_a2/a3、zongxun），
+   * 归一化时会被 clamp，避免整张图被过度缩小。 */
   var FIT = {
-    'fengdao_a1':      { cx: 0.550, ratio: 0.667 },
-    'fuhou_a1':        { cx: 0.550, ratio: 0.667 },
-    'guorong_a1':      { cx: 0.504, ratio: 0.667 },
-    'guorong_a2':      { cx: 0.512, ratio: 0.667 },
-    'guorong_a3':      { cx: 0.501, ratio: 0.667 },
-    'guorong_t':       { cx: 0.506, ratio: 0.667 },
-    'guowei_a1':       { cx: 0.537, ratio: 0.667 },
-    'nvguan_a1':       { cx: 0.563, ratio: 0.667 },
-    'shiguan_a1':      { cx: 0.561, ratio: 0.667 },
-    'wangpu_a1':       { cx: 0.520, ratio: 0.667 },
-    'yinchongyi_a1':   { cx: 0.581, ratio: 0.667 },
-    'zhangyongde_a1':  { cx: 0.597, ratio: 0.667 },
-    'zhaokuangyin_a1': { cx: 0.552, ratio: 0.667 },
-    'qijulang_a1':     { cx: 0.488, ratio: 1 },
-    'shanggong_a1':    { cx: 0.517, ratio: 1 },
-    'shangshiling_a1': { cx: 0.557, ratio: 1 },
-    'sizheng_a1':      { cx: 0.523, ratio: 1 },
-    'zongxun_a1':      { cx: 0.484, ratio: 1 }
+    'fengdao_a1':      { cx: 0.550, ratio: 0.667, headW: 0.196, y0: 0.096 },
+    'fuhou_a1':        { cx: 0.550, ratio: 0.667, headW: 0.300, y0: 0.081 },
+    'guorong_a1':      { cx: 0.504, ratio: 0.667, headW: 0.219, y0: 0.079 },
+    'guorong_a2':      { cx: 0.512, ratio: 0.667, headW: 0.280, y0: 0.124 },
+    'guorong_a3':      { cx: 0.501, ratio: 0.667, headW: 0.282, y0: 0.136 },
+    'guorong_t':       { cx: 0.506, ratio: 0.667, headW: 0.264, y0: 0.078 },
+    'guowei_a1':       { cx: 0.537, ratio: 0.667, headW: 0.181, y0: 0.082 },
+    'nvguan_a1':       { cx: 0.563, ratio: 0.667, headW: 0.175, y0: 0.080 },
+    'shiguan_a1':      { cx: 0.561, ratio: 0.667, headW: 0.165, y0: 0.072 },
+    'wangpu_a1':       { cx: 0.520, ratio: 0.667, headW: 0.259, y0: 0.130 },
+    'yinchongyi_a1':   { cx: 0.581, ratio: 0.667, headW: 0.169, y0: 0.081 },
+    'zhangyongde_a1':  { cx: 0.597, ratio: 0.667, headW: 0.180, y0: 0.075 },
+    'zhaokuangyin_a1': { cx: 0.552, ratio: 0.667, headW: 0.199, y0: 0.072 },
+    'qijulang_a1':     { cx: 0.488, ratio: 1,     headW: 0.216, y0: 0.041 },
+    'shanggong_a1':    { cx: 0.517, ratio: 1,     headW: 0.194, y0: 0.078 },
+    'shangshiling_a1': { cx: 0.557, ratio: 1,     headW: 0.219, y0: 0.111 },
+    'sizheng_a1':      { cx: 0.523, ratio: 1,     headW: 0.183, y0: 0.141 },
+    'zongxun_a1':      { cx: 0.484, ratio: 1,     headW: 0.280, y0: 0.010 }
   };
+  /* 归一化参数（[PLACEHOLDER] 有依据但需真机微调）：
+   * HEAD_TARGET 0.235 → 槽宽 329 时头宽 ≈ 77px（手机上一张脸的可辨识下限之上）；
+   * EYE_LINE 0.20 → 眼睛落在槽高 20% 处（三分法上三分之一略上），视线不压字。
+   * HEAD_ASPECT 1.28 → 古风含发髻的头高/头宽近似比（用于由头宽推眼线高度）。 */
+  var HEAD_TARGET = 0.235, EYE_LINE = 0.20, HEAD_ASPECT = 1.28, HEADW_CLAMP = 0.32;
   /* 视觉重心补偿：按当前槽尺寸与 fit 模式，算出把「头肩重心」推到槽中线所需的位移。
    * cover 时内容宽度 = 槽高×ratio（图更瘦高则按高贴合）；contain 时内容宽度 = 槽宽。 */
-  function shiftFor(key, slotW, slotH, fit) {
+  /* 视觉归一化：一次算出「横向补偿 shiftX / 纵向补偿 shiftY / 缩放 scale」。
+   * 三个目标（调研结论：成熟 VN 切换角色时「相机、裁切、头宽、眼线」四者固定）：
+   *  ① 头宽统一：headW×baseW×k = slotW×HEAD_TARGET ⇒ 不同角色/景别头部一样大；
+   *  ② 眼线对齐：眼线 = y0 + 0.55×(头高)，头高 ≈ headW×ratio×HEAD_ASPECT；缩放后再平移，
+   *     使所有角色眼睛落在槽高同一水平线 ⇒ 切换不跳；
+   *  ③ 横向：按头肩重心推到槽中线（治朝左偏右/朝右偏左）。 */
+  function fitFor(key, slotW, slotH, fit) {
     var a = CHAR_ASSETS[key];
     var f = a ? FIT[key + '_' + a] : null;
-    if (!f || !slotW || !slotH) { return 0; }
-    var contentW = slotW;
-    if (fit === 'cover' && (slotH * f.ratio) > slotW) { contentW = slotH * f.ratio; }
-    else if (fit === 'cover') { contentW = slotW; }
-    return -Math.round((f.cx - 0.5) * contentW);
+    if (!f || !slotW || !slotH) { return { x: 0, y: 0, s: 1 }; }
+    /* baseW = 未缩放时图片的显示宽（cover 按高铺满 / contain 按宽贴合） */
+    var baseW;
+    if (fit === 'cover') { baseW = Math.max(slotW, slotH * f.ratio); }
+    else { baseW = Math.min(slotW, slotH * f.ratio); }
+    var headW = Math.max(0.10, Math.min(HEADW_CLAMP, f.headW || 0.20));
+    var k = (slotW * HEAD_TARGET) / (headW * baseW);
+    k = Math.max(0.55, Math.min(2.2, k)); /* 兜底：异常数据不把图放太大/缩没 */
+    var imgH0 = baseW / f.ratio;
+    var headHImg = headW * f.ratio * HEAD_ASPECT;       /* 头高（归一化，相对图高） */
+    var eyeYImg = (f.y0 || 0.08) + 0.55 * headHImg;     /* 眼线（归一化） */
+    /* 纵向：全身像做「眼线对齐」（切换不跳）；半身像不适用——它本就没有下半身，
+     * 按眼线对齐会悬在半空。半身像改为「底边贴槽底」（transform-origin: bottom，
+     * 见 CSS），视觉上像人物从画面下沿生长出来，这是近景的正确构图。 */
+    var shiftY = 0;
+    if (fit === 'cover') {
+      shiftY = slotH * EYE_LINE - eyeYImg * imgH0 * k;
+    }
+    return {
+      x: -Math.round((f.cx - 0.5) * baseW * k),
+      y: Math.round(shiftY),
+      s: +k.toFixed(4)
+    };
   }
+  function shiftFor(key, slotW, slotH, fit) { return fitFor(key, slotW, slotH, fit).x; }
   TP_SHIFT = shiftFor;
 
   /* 把 fit 模式与横向补偿写到槽上：
@@ -551,7 +585,10 @@
     slot.setAttribute('data-fit', fit);
     var w = slot.clientWidth, h = slot.clientHeight;
     if (!w || !h) { /* 尚未布局：下一帧再算 */ requestAnimationFrame(function () { applyFit(slot, key); }); return; }
-    slot.style.setProperty('--fig-shift-x', shiftFor(key, w, h, fit) + 'px');
+    var m = fitFor(key, w, h, fit);
+    slot.style.setProperty('--fig-shift-x', m.x + 'px');
+    slot.style.setProperty('--fig-shift-y', m.y + 'px');
+    slot.style.setProperty('--fig-scale', m.s);
   }
   var TP_APPLY = applyFit;
 
@@ -588,6 +625,7 @@
       return this.meta(selfKey || 'shiguan').label;
     },
     figure: figure,
+    fitFor: fitFor, /* 供验收脚本核对头宽/眼线 */
     /* 断点/旋屏后槽尺寸变化：重算横向补偿（不改当前角色） */
     refit: function () { var s2 = TP._slot; if (s2 && s2._tqKey) { applyFit(s2, s2._tqKey); } },
 

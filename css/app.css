@@ -568,7 +568,13 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .shard-ll{width:200px;height:200px;display:block;cursor:grab;outline:none;margin:8px auto 2px}
 .shard-ll:active{cursor:grabbing}
 .memo-s8 .s8-viewer-stage .shard-ll{width:200px;height:200px;margin:0}
-.shard-detail-rot{width:200px;margin:6px auto 2px;text-align:center}
+.shard-detail-rot{width:200px;margin:6px auto 2px;text-align:center;position:relative}
+/* 内壁静态帧角标 + 「内壁细看」按钮（2026-10-28 交互补强） */
+.shard-detail-rot .prop-badge.inner-badge{right:0;bottom:0}
+.shard-inner-btn{display:block;margin:4px auto 8px;font-size:11px;line-height:1.6;padding:3px 12px;
+  border-radius:12px;border:1px solid #5E8C8A;background:#E3EDE9;color:#1F3B3A;cursor:pointer;
+  font-family:inherit;width:auto}
+.shard-inner-btn:active{background:#D2E3DE}
 .shard-detail-rot .shard-ll{width:200px;height:200px}
 .shard-detail-rot .shard-sprite{width:200px;height:200px;display:block;margin:0 auto}
 .shard-detail-rot-tag{text-align:center;font-size:10px;color:#8B8574;margin:2px 0 6px}
@@ -636,7 +642,7 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   padding:0 8px; pointer-events:none; z-index:1; overflow:hidden;
 }
 .main.act-vn .sp-zone .slot.sp-fig{
-  position:relative; display:block; width:88%; max-width:400px; height:86%;
+  position:relative; display:block; width:88%; max-width:400px; height:90%;
   border:0; border-radius:0; background:none; padding:0; overflow:hidden;
 }
 .main.act-vn .sp-fig.has-real{ border:0; }
@@ -646,10 +652,12 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   object-fit:cover; object-position:top center;   /* 全身像：铺满，裁掉的是两侧空白 */
   animation:tqFigIn .26s ease both;
 }
-.main.act-vn .sp-fig[data-fit="contain"] .fig-real{
+.main.act-vn .sp-zone .slot.sp-fig[data-fit="contain"] .fig-real{
   object-fit:contain; object-position:bottom center;  /* 半身像：完整显示、底部对齐 */
 }
-.main.act-vn .sp-fig[data-fit="contain"]{ height:74%; }   /* 半身像整体略抬高，给对话框留位置 */
+/* 半身像：与全身像共用 90% 槽高（特异性 0,6,0 压过基础 0,5,0）；
+ * 缩放以「底边中心」为原点 ⇒ 贴槽底生长，不悬空。尺寸差异由 fitFor 的头宽归一化统一。 */
+.main.act-vn .sp-zone .slot.sp-fig[data-fit="contain"] .fig-real{ transform-origin:bottom center; }
 .main.act-vn .sp-fig .fig-art{ animation:tqFigIn .26s ease both; }
 /* 景别杠杆（[PLACEHOLDER] 默认 1=全身，脚被对话框压住）：调大可收成腰上/胸上景别，
  * 只放大不换图——脸部表情更清晰，同时保持「立绘为画面主体」。 */
@@ -657,13 +665,13 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .main.act-vn .sp-fig .fig-art{
   /* --fig-shift-x：按「头肩重心」把人物推到槽中线（治朝向导致的视觉偏移）
    * --fig-zoom：景别杠杆 */
-  transform:translateX(var(--fig-shift-x,0px)) scale(var(--fig-zoom,1));
+  transform:translate(var(--fig-shift-x,0px), var(--fig-shift-y,0px)) scale(var(--fig-scale,1));
   transform-origin:top center;
 }
 /* 关键帧里带 scale：animation 的 fill-mode 会盖掉基础 transform，缩放必须写进关键帧才生效 */
 @keyframes tqFigIn{
-  from{opacity:0; transform:translateX(var(--fig-shift-x,0px)) translateY(8px) scale(var(--fig-zoom,1))}
-  to{opacity:1; transform:translateX(var(--fig-shift-x,0px)) translateY(0) scale(var(--fig-zoom,1))} }
+  from{opacity:0; transform:translate(var(--fig-shift-x,0px), var(--fig-shift-y,0px)) translateY(8px) scale(var(--fig-scale,1))}
+  to{opacity:1; transform:translate(var(--fig-shift-x,0px), var(--fig-shift-y,0px)) translateY(0) scale(var(--fig-scale,1))} }
 /* 层级：对话框/文本列压在立绘之上——保证文字永不被动摇遮挡（回复/选项亦然） */
 .main.act-vn .vn-doc{ position:relative; z-index:2; }
 .main.act-vn .dlg-dock{ z-index:2; }
