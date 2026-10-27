@@ -349,7 +349,13 @@
     fuhou: {
       k: 'fuhou', label: '符后', head: 'huacha', build: 'f', beard: 'none',
       hair: '#2A2622', robe: '#8A6070', sash: '#E2CFD6', collar: '#F2EAE0', prop: 'xiu',
-      title: '小符后 · 宣慈皇后（959 立）'
+      /* ⚠️ 10-27 史实修正（勿回滚）：原写「小符后 · 宣慈皇后（959 立）」——错。
+       * 「瓷心 · 碎瓮记」发生在**显德三年（956）春**，说话的是**宣懿皇后大符氏**：
+       * 天雄军节度使符彦卿长女，显德元年(954)册后，显德三年七月廿一崩(956)，谥宣懿。
+       * 小符后（宣慈）是她的妹妹，显德六年(959)才立——956 年她还不是皇后，
+       * 把 959 的封号挂到 956 的回忆里，既是时序硬伤，也把两个人混成一个。
+       * （唯一确证：朱厚照式的「同名两后」在五代只有符氏这一对姐妹，极易串。） */
+      title: '宣懿皇后 · 大符氏（954 册 · 956 崩）'
     },
     guowei: {
       k: 'guowei', label: '郭威 · 先帝', head: 'bai', build: 'm', beard: 'long', old: true,
@@ -464,6 +470,10 @@
     '范质': 'fanzhi', '李谷': 'ligu', '李重进': 'lichongjin', '殷崇义': 'yinchongyi',
     '尚食令': 'shangshiling', '司正': 'sizheng', '黄衣小皇子': 'zongxun',
     '符后': 'fuhou', '郭威': 'guowei', '冯道': 'fengdao', '郭荣': 'guorong', '柴荣': 'shaonian',
+    /* 10-27 补：回忆内以称谓出场的两位——漏在此表会掉 DEFAULT 通用像。
+     * 「官家」＝在世宗本人（guorong）；「皇后」＝宣懿皇后大符氏（fuhou，956 崩）。
+     * 注意：小符后（宣慈，959 立）绝不可套进 956 那段回忆——故 fuhou 的 title 已改为大符氏。 */
+    '官家': 'guorong', '皇后': 'fuhou',
     '浇头未定': 'nvguan', '六岁的眼睛': 'nvguan',
     '尚宫': 'shanggong', '起居郎': 'qijulang',
     '殷崇义举觞，满殿安静': 'yinchongyi',
@@ -473,11 +483,19 @@
 
   /* ============ 真实素材注册（素材入包即自动升级） ============ */
   /* 10-27 服色 v2 四人入仓：王朴/张永德/赵匡胤/殷崇义（用户已过目）。
+   * 10-27 第二批九人入仓：范质/李谷/王溥/李重进/宗训/尚食令/司正/尚宫/起居郎。
+   *   ★键名坑：生图侧 prompts.py 用 `shangling`，运行时图键是 `shangshiling`
+   *     （prompts 键按「尚食令」字面，运行时按 FIG 定义），入包脚本里做了映射，
+   *     这里必须写运行时键，否则 TQA.resolve 找不到文件、静默回落矢量像。
+   *   ★规格：B 级半身 640×640 webp，单张 ≤32KB、合计 290.2KB。
+   *     （不沿用 A 级 1024×1536：包体已超线，B 级显示槽仅 154×206。）
    * 未入仓者继续走本文件的矢量绘像：符后 / 郭威 / 冯道 / 少年（均属「回忆」语境，
-   * 其立绘要等瓷心回忆界面改成叙事/对话界面之后再接，见 memory 10-27）。 */
+   * 其立绘要等回忆界面接真图时再补）。 */
   var CHAR_ASSETS = {
     guorong: 'a1', nvguan: 'a1', shiguan: 'a1',
-    wangpu: 'a1', zhangyongde: 'a1', zhaokuangyin: 'a1', yinchongyi: 'a1'
+    wangpu: 'a1', zhangyongde: 'a1', zhaokuangyin: 'a1', yinchongyi: 'a1',
+    fanzhi: 'a1', ligu: 'a1', wangpu2: 'a1', lichongjin: 'a1', zongxun: 'a1',
+    shangshiling: 'a1', sizheng: 'a1', shanggong: 'a1', qijulang: 'a1'
   };
   (function register() {
     if (!TQA) { return; }

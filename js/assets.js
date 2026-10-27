@@ -20,7 +20,16 @@
       var n = (i < 10 ? '0' + i : String(i));
       TA.reg['shard-' + i] = { kind: 'atlas', src: './assets/shards/shard_' + n + '.webp',
         cols: 4, rows: 3, frames: 12, fw: 160, fh: 160, fps: 12 };
+      /* S8 近看单枚 · lat-long 多向图集（12yaw×pitch，拖拽自由旋转 + 惯性）。
+       * 文件缺失时 resolve 'fail' → spin3d 自动回退 12 帧转台 shardViewer（永不白屏）。 */
+      TA.reg['shard-LL-' + i] = { kind: 'latlong', src: './assets/shards/shard_' + n + '_ll.webp',
+        yaw: 12, pitch: 3, pitchMax: 45, cols: 12, rows: 3, fw: 128, fh: 128,
+        cw: 128, ch: 128, anchor: { yaw: 0, pitch: 1 } };
     }
+    /* 纸槌瓶 · lat-long 多向（近看全方位；旋转对称 ⇒ yaw 视觉弱，俯仰为主反馈） */
+    TA.reg['vessel-LL'] = { kind: 'latlong', src: './assets/shards/vessel_ll.webp',
+      yaw: 12, pitch: 3, pitchMax: 45, cols: 12, rows: 3, fw: 160, fh: 160,
+      cw: 160, ch: 160, anchor: { yaw: 0, pitch: 1 } };
   })();
 
   /* S8 长卷底图（生图清单看板 s8_scroll：1200×1900、≤120KB、超线降矢量轨）。
