@@ -486,17 +486,22 @@
   };
 
   /* ============ 真实素材注册（素材入包即自动升级） ============ */
-  /* 当前仅 3 张锚点已入仓且已过目：郭荣(a1) / 女官 / 史官（双玩家 A/B 线基础形象）。
-   * 其余角色一律走本文件矢量绘像，待用户过目后再决定是否入仓：
-   *   - 13 张未过目立绘（9 张 B 级半身：范质/李谷/王溥/李重进/宗训/尚食令/司正/尚宫/起居郎
-   *     ＋ 4 张 A 级服色 v2：王朴/张永德/赵匡胤/殷崇义）已于 10-28 从游戏仓移出（git rm），
-   *     因系刚生成、用户尚未过目之图，不应提前入仓。
-   *   - 4 张回忆语境像：符后 / 郭威 / 冯道 / 少年，从未入仓。
+  /* 当前 15 张已入仓且已过目（10-28 用户审核通过，commit 入库）：
+   *   3 张锚点：郭荣(a1) / 女官 / 史官（双玩家 A/B 线基础形象）；
+   *   12 张审核通过：王朴/张永德/赵匡胤/殷崇义（A 级服色 v2）＋ 符后/郭威/冯道（回忆语境像）
+   *     ＋ 司正/尚宫/起居郎/尚食令/郭宗训（B 级）。12 张均从生图仓 packed/ 复制入 assets/chars/。
+   * 其余角色走本文件矢量绘像，待重生/复核：
+   *   - 4 张待重生（fanzhi/ligu/wangpu2/lichongjin）：10-28 用户过目指出细节问题（李重进取甲、
+   *     范质被画成烛台、李谷执笏不举觞、王溥长揖不举觞），已改 prompts 待重生，未入仓。
+   *   - 少年郭荣（shaonian）待重生：用户要求由手提花篮改肩挑担子，未入仓。
    *   ★键名坑：生图侧 prompts.py 用 `shangling`，运行时图键是 `shangshiling`
    *     （prompts 键按「尚食令」字面，运行时按 FIG 定义），入包脚本里做了映射，
    *     这里必须写运行时键，否则 TQA.resolve 找不到文件、静默回落矢量像。 */
   var CHAR_ASSETS = {
-    guorong: 'a1', nvguan: 'a1', shiguan: 'a1'
+    guorong: 'a1', nvguan: 'a1', shiguan: 'a1',
+    wangpu: 'a1', zhangyongde: 'a1', zhaokuangyin: 'a1', yinchongyi: 'a1',
+    fuhou: 'a1', guowei: 'a1', fengdao: 'a1',
+    sizheng: 'a1', shanggong: 'a1', qijulang: 'a1', shangshiling: 'a1', zongxun: 'a1'
   };
   (function register() {
     if (!TQA) { return; }
