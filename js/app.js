@@ -129,13 +129,44 @@
   function setPortrait(speaker) {
     if (!global.TP || !speaker) { return; }
     TP.show(TP.keyOf(speaker, SELF_KEY), { fill: true }); /* 同一角色不重绘（TP.show 内部判 key，杜绝闪烁） */
+    reAnchorSoon(); /* 角色锚点可能不同（全身/半身）：重算 */
   }
+  /* ---------- 立绘 ↔ 对话框 锚定（2026-10-28） ----------
+   * 半身像不该被对话框压住：以「对话框上沿」为基准，锚在其上方并留 --fig-dock-gap。
+   * 做法：量出舞台底到对话框顶的距离写入 --fig-dock-lift，sp-zone 据此上收，
+   * 立绘容器整体变矮 ⇒ contain 的半身像自动缩到放得下的尺寸，绝不越界。
+   * 可配：①全局 CSS 变量 ②每角色 FIT[key].anchor/dx/dy ③每幕 D.acts[i].figAnchor。 */
+  function syncFigAnchor() {
+    var stage = app.querySelector('.main.act-vn');
+    if (!stage) { return; }
+    var box = stage.querySelector('.dlg-box');
+    var sp = stage.querySelector('.sp-zone');
+    if (!box || !sp) { return; }
+    var sr = stage.getBoundingClientRect();
+    var br = box.getBoundingClientRect();
+    var lift = Math.max(0, Math.round(sr.bottom - br.top)); /* 舞台底 → 对话框顶 */
+    stage.style.setProperty('--fig-dock-lift', lift + 'px');
+    /* 锚点：角色/幕可覆盖；缺省 stage-bottom（未判定角色时保持原构图，不贸然上浮） */
+    var anchor = 'stage-bottom';
+    if (global.TP && global.TP._slot && global.TP._slot._tqKey) {
+      var a = global.TP.anchorOf(global.TP._slot._tqKey);
+      if (a) { anchor = a; }
+    }
+    var act = D.acts[CUR_ACT];
+    if (act && act.figAnchor) { anchor = act.figAnchor; }
+    sp.setAttribute('data-anchor', anchor);
+  }
+  /* dock 结构变化（换框/尺寸变化）后重锚 */
+  function reAnchorSoon() { setTimeout(syncFigAnchor, 0); }
+  /* 立绘切换（含外部直调 TP.show）也重锚：角色可能从全身换到半身，停靠方位不同 */
+  global.TQ_ON_FIG_CHANGE = function () { reAnchorSoon(); };
+
   /* 槽尺寸随断点/旋屏变化：重算立绘横向补偿（不改当前角色） */
   (function () {
     var t = 0;
     function later() {
       if (t) { clearTimeout(t); }
-      t = setTimeout(function () { if (global.TP && TP.refit) { TP.refit(); } }, 160);
+      t = setTimeout(function () { if (global.TP && TP.refit) { TP.refit(); } syncFigAnchor(); }, 160);
     }
     window.addEventListener('resize', later);
     window.addEventListener('orientationchange', later);
@@ -485,6 +516,7 @@
       }
       curBox = card;
       dock.insertBefore(card, dock.firstChild);
+      reAnchorSoon(); /* 对话框高度变了：重算立绘锚点 */
       if (autoOn && card._tqIsFull()) { armAuto(); }
       main.scrollTop = main.scrollHeight;
       return dock;

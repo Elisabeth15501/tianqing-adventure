@@ -507,6 +507,9 @@
    * ★这两个值支撑「跨角色/跨景别头宽统一 + 眼线对齐」——见 applyFit。
    * headW 超过 0.30 的多半是近景/特殊构图（guorong_a2/a3、zongxun），
    * 归一化时会被 clamp，避免整张图被过度缩小。 */
+  /* 半身像 anchor='dock-top' ⇒ 浮在对话框上方（不被压住）；可逐角色改
+   * anchor（dock-top / dock-left / dock-right / stage-bottom）或补 dx/dy 像素微调。
+   * 全身像不写 anchor，由 anchorOf() 按 ratio 兜底为 stage-bottom（脚被框压）。 */
   var FIT = {
     'fengdao_a1':      { cx: 0.550, ratio: 0.667, headW: 0.196, y0: 0.096 },
     'fuhou_a1':        { cx: 0.550, ratio: 0.667, headW: 0.300, y0: 0.081 },
@@ -521,16 +524,16 @@
     'yinchongyi_a1':   { cx: 0.581, ratio: 0.667, headW: 0.169, y0: 0.081 },
     'zhangyongde_a1':  { cx: 0.597, ratio: 0.667, headW: 0.180, y0: 0.075 },
     'zhaokuangyin_a1': { cx: 0.552, ratio: 0.667, headW: 0.199, y0: 0.072 },
-    'qijulang_a1':     { cx: 0.488, ratio: 1,     headW: 0.216, y0: 0.041 },
-    'shanggong_a1':    { cx: 0.517, ratio: 1,     headW: 0.194, y0: 0.078 },
-    'shangshiling_a1': { cx: 0.430, ratio: 1,     headW: 0.259, y0: 0.080 },
-    'sizheng_a1':      { cx: 0.523, ratio: 1,     headW: 0.183, y0: 0.141 },
-    'zongxun_a1':      { cx: 0.484, ratio: 1,     headW: 0.280, y0: 0.010 },
+    'qijulang_a1':     { cx: 0.488, ratio: 1,     headW: 0.216, y0: 0.041, anchor: 'dock-top' },
+    'shanggong_a1':    { cx: 0.517, ratio: 1,     headW: 0.194, y0: 0.078, anchor: 'dock-top' },
+    'shangshiling_a1': { cx: 0.495, ratio: 1,     headW: 0.211, y0: 0.077, anchor: 'dock-top' },
+    'sizheng_a1':      { cx: 0.523, ratio: 1,     headW: 0.183, y0: 0.141, anchor: 'dock-top' },
+    'zongxun_a1':      { cx: 0.484, ratio: 1,     headW: 0.32, y0: 0.01, anchor: 'dock-top' },
     /* —— 10-28 晚重生（B 级半身，640²；shaonian 为 1024×1536 全身）统一重测 —— */
-    'fanzhi_a1':       { cx: 0.479, ratio: 1,     headW: 0.237, y0: 0.037 },
-    'ligu_a1':         { cx: 0.479, ratio: 1,     headW: 0.198, y0: 0.055 },
-    'wangpu2_a1':      { cx: 0.546, ratio: 1,     headW: 0.220, y0: 0.048 },
-    'lichongjin_a1':   { cx: 0.485, ratio: 1,     headW: 0.202, y0: 0.027 },
+    'fanzhi_a1':       { cx: 0.499, ratio: 1,     headW: 0.227, y0: 0.036, anchor: 'dock-top' },
+    'ligu_a1':         { cx: 0.42, ratio: 1,     headW: 0.172, y0: 0.053, anchor: 'dock-top' },
+    'wangpu2_a1':      { cx: 0.502, ratio: 1,     headW: 0.32, y0: 0.016, anchor: 'dock-top' },
+    'lichongjin_a1':   { cx: 0.548, ratio: 1,     headW: 0.202, y0: 0.027, anchor: 'dock-top' },
     'shaonian_a1':     { cx: 0.556, ratio: 0.667, headW: 0.160, y0: 0.064 }
   };
   /* 归一化参数（[PLACEHOLDER] 有依据但需真机微调）：
@@ -560,12 +563,16 @@
     var imgH0 = baseW / f.ratio;
     var headHImg = headW * f.ratio * HEAD_ASPECT;       /* 头高（归一化，相对图高） */
     var eyeYImg = (f.y0 || 0.08) + 0.55 * headHImg;     /* 眼线（归一化） */
-    /* 纵向：全身像做「眼线对齐」（切换不跳）；半身像不适用——它本就没有下半身，
-     * 按眼线对齐会悬在半空。半身像改为「底边贴槽底」（transform-origin: bottom，
-     * 见 CSS），视觉上像人物从画面下沿生长出来，这是近景的正确构图。 */
+    /* 纵向规则（★三者不可兼得，按优先级取舍）：
+     *   头宽统一（脸一样大）＞ 脚踩槽底（人不悬空）＞ 眼线绝对对齐
+     * 前两项必须成立；眼线只能"尽量"。原因：头宽被归一化后，原图头部占比大的角色
+     * （如符后 headW 0.30）缩放更狠、渲染更矮，若强行把眼线拉到同一条线，脚就会离地
+     * 30~65px，人像悬空——比视线差几像素更伤。根治要在**资产层**统一头部在画布中的位置
+     * （易次元规范：「不同人物头部保持差不多大、立绘高度统一」），运行时不硬掰。
+     * 半身像没有下半身，一律底对齐（transform-origin: bottom），从对话框上沿"长出来"。 */
     var shiftY = 0;
     if (fit === 'cover') {
-      shiftY = slotH * EYE_LINE - eyeYImg * imgH0 * k;
+      shiftY = slotH - imgH0 * k;   /* 图片底 = 槽底（脚踩地/被对话框压住） */
     }
     return {
       x: -Math.round((f.cx - 0.5) * baseW * k),
@@ -631,7 +638,21 @@
       return this.meta(selfKey || 'shiguan').label;
     },
     figure: figure,
+    /* 停靠方位：优先角色配置，否则按宽高比兜底（半身浮框上 / 全身踩舞台底） */
+    anchorOf: function (key) {
+      var an = CHAR_ASSETS[key];
+      var f = an ? FIT[key + '_' + an] : null;
+      if (!f) { return null; }
+      return f.anchor || (f.ratio >= 0.9 ? 'dock-top' : 'stage-bottom');
+    },
+    /* 像素微调（dx 正=右，dy 正=下） */
+    offsetOf: function (key) {
+      var an = CHAR_ASSETS[key];
+      var f = an ? FIT[key + '_' + an] : null;
+      return f ? { dx: f.dx || 0, dy: f.dy || 0 } : { dx: 0, dy: 0 };
+    },
     fitFor: fitFor, /* 供验收脚本核对头宽/眼线 */
+    fitOf: function (key) { var an = CHAR_ASSETS[key]; return an ? (FIT[key + '_' + an] || null) : null; },
     /* 断点/旋屏后槽尺寸变化：重算横向补偿（不改当前角色） */
     refit: function () { var s2 = TP._slot; if (s2 && s2._tqKey) { applyFit(s2, s2._tqKey); } },
 
@@ -676,6 +697,8 @@
       } else {
         slot.classList.remove('has-real');
       }
+      /* 通知宿主重算「立绘↔对话框」锚点：角色切换可能改变停靠方位（全身/半身） */
+      if (typeof global.TQ_ON_FIG_CHANGE === 'function') { global.TQ_ON_FIG_CHANGE(key); }
     },
     /* 供 dev/验证：全部 key 与是否有素材 */
     list: function () {

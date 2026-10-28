@@ -686,3 +686,60 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   }
   .main.act-vn .sp-zone .slot.sp-fig{ width:100%; max-width:none; height:86%; }
 }
+
+/* ==================== 立绘 ↔ 对话框 锚定（2026-10-28）
+ * 目标：半身像浮在对话框上方、留呼吸间距、永不遮字也不出屏。
+ * 机制：JS 量出「舞台底→对话框顶」写入 --fig-dock-lift；sp-zone 据此上收，
+ *       容器变矮 ⇒ contain 的半身像自动缩到放得下，绝不越界（响应式天然成立）。
+ * 可配（三级覆盖，后者优先）：
+ *   ① 全局：--fig-dock-gap（间距）/ --fig-dock-dx / --fig-dock-dy
+ *   ② 每角色：portraits.js FIT[key].anchor / dx / dy
+ *   ③ 每幕：data.js acts[i].figAnchor
+ * 方位：dock-top（默认，居中）/ dock-left / dock-right / stage-bottom（全身像）。 */
+:root{ --fig-dock-gap: 24px; }
+
+/* 默认（stage-bottom）：立绘踩舞台底，脚被对话框压住——全身像的正确构图 */
+.main.act-vn .sp-zone{ bottom: 0; }
+.main.act-vn .sp-zone[data-anchor="stage-bottom"]{ bottom: 0; }
+
+/* dock-top：立绘容器上收到「对话框上沿 + 间距」，半身像整体浮在框上方 */
+.main.act-vn .sp-zone[data-anchor="dock-top"]{
+  bottom: calc(var(--fig-dock-lift, 0px) + var(--fig-dock-gap));
+}
+/* dock-left / dock-right：同样浮在框上方，但水平靠边（双人/偏侧构图用） */
+.main.act-vn .sp-zone[data-anchor="dock-left"],
+.main.act-vn .sp-zone[data-anchor="dock-right"]{
+  bottom: calc(var(--fig-dock-lift, 0px) + var(--fig-dock-gap));
+}
+.main.act-vn .sp-zone[data-anchor="dock-left"]{ justify-content: flex-start; padding-left: 12px; }
+.main.act-vn .sp-zone[data-anchor="dock-right"]{ justify-content: flex-end; padding-right: 12px; }
+
+/* 浮框上方的半身像：底边贴容器底（视觉上「立」在对话框上沿），不再压到文字 */
+.main.act-vn .sp-zone[data-anchor="dock-top"] .slot.sp-fig,
+.main.act-vn .sp-zone[data-anchor="dock-left"] .slot.sp-fig,
+.main.act-vn .sp-zone[data-anchor="dock-right"] .slot.sp-fig{
+  height: 100%; max-height: 100%;
+}
+/* 容器变矮后，半身像高度不得撑破：宽度随之收，避免顶部越出安全区 */
+.main.act-vn .sp-zone[data-anchor="dock-top"] .slot.sp-fig .fig-real,
+.main.act-vn .sp-zone[data-anchor="dock-left"] .slot.sp-fig .fig-real,
+.main.act-vn .sp-zone[data-anchor="dock-right"] .slot.sp-fig .fig-real{
+  object-fit: contain; object-position: bottom center;
+}
+
+/* 宽屏（左立绘右文本）：锚点不适用——立绘列自带高度，仍让脚贴列底 */
+@media (min-aspect-ratio:6/5) and (min-width:900px){
+  .main.act-vn .sp-zone[data-anchor="dock-top"],
+  .main.act-vn .sp-zone[data-anchor="dock-left"],
+  .main.act-vn .sp-zone[data-anchor="dock-right"]{
+    position:relative; bottom:auto; justify-content:center; padding-left:14px; padding-right:14px;
+  }
+}
+
+/* 宽屏补正：上面 dock-top 的 height:100% 会让宽屏立绘列撑满（91.6% 过高），
+ * 宽屏是左右分栏，立绘高度仍按 86% 走（与分栏文本列平衡）。 */
+@media (min-aspect-ratio:6/5) and (min-width:900px){
+  .main.act-vn .sp-zone[data-anchor="dock-top"] .slot.sp-fig,
+  .main.act-vn .sp-zone[data-anchor="dock-left"] .slot.sp-fig,
+  .main.act-vn .sp-zone[data-anchor="dock-right"] .slot.sp-fig{ height:86%; max-height:86%; }
+}
