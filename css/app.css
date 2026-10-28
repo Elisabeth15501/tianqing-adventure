@@ -643,26 +643,23 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 }
 .main.act-vn .sp-zone .slot.sp-fig{
   position:relative; display:block; width:88%; max-width:400px; height:90%;
-  border:0; border-radius:0; background:none; padding:0;
-  /* ★overflow:visible（2026-10-28 修裁切）：槽是排版参考框，不是裁切窗口。
-   * 缩放后的立绘可横向溢出槽，由外层 .sp-zone 只裁「屏幕外」部分。 */
-  overflow:visible;
+  border:0; border-radius:0; background:none; padding:0; overflow:hidden;
 }
 .main.act-vn .sp-fig.has-real{ border:0; }
 .main.act-vn .sp-fig .fig-meta{ display:none; }        /* 立绘上不再叠文字牌 */
 .main.act-vn .sp-fig .fig-real{
   position:absolute; left:0; top:0; width:100%; height:100%;
-  object-fit:cover; object-position:top center;   /* 全身像：铺满，裁掉的是两侧空白 */
+  /* 2026-10-28 三修：一律 contain（原 cover 会把窄头角色的头顶裁掉）。
+   * 底对齐 = 脚踩槽底 / 半身像立在对话框上沿；s=1 不放大（只缩不放更清晰）。 */
+  object-fit:contain; object-position:bottom center;
   animation:tqFigIn .26s ease both;
 }
 .main.act-vn .sp-zone .slot.sp-fig[data-fit="contain"] .fig-real{
-  /* top center：与 JS 的 shiftY(底对齐补偿，按 top-origin 推导) 同基准。
-   * 曾误设 bottom center，导致补偿方向反了、整图下移出血（12/12 分辨率被判裁切）。 */
-  object-fit:contain; object-position:top center;
+  object-fit:contain; object-position:bottom center;
 }
-/* 缩放原点统一 top center（与 JS 补偿同基准）；"贴底"由 shiftY 平移实现，
- * 不靠 origin —— 两者混用会让补偿方向反掉。 */
-.main.act-vn .sp-zone .slot.sp-fig[data-fit="contain"] .fig-real{ transform-origin:top center; }
+/* 半身像：与全身像共用 90% 槽高（特异性 0,6,0 压过基础 0,5,0）；
+ * 缩放以「底边中心」为原点 ⇒ 贴槽底生长，不悬空。尺寸差异由 fitFor 的头宽归一化统一。 */
+.main.act-vn .sp-zone .slot.sp-fig[data-fit="contain"] .fig-real{ transform-origin:bottom center; }
 .main.act-vn .sp-fig .fig-art{ animation:tqFigIn .26s ease both; }
 /* 景别杠杆（[PLACEHOLDER] 默认 1=全身，脚被对话框压住）：调大可收成腰上/胸上景别，
  * 只放大不换图——脸部表情更清晰，同时保持「立绘为画面主体」。 */
@@ -670,8 +667,10 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .main.act-vn .sp-fig .fig-art{
   /* --fig-shift-x：按「头肩重心」把人物推到槽中线（治朝向导致的视觉偏移）
    * --fig-zoom：景别杠杆 */
+  /* scale 由 JS 保证不超过「人物包围盒不出槽」的上限（见 fitFor ③）：
+   * 只放大到安全上限、绝不溢出人物；原点 bottom center ⇒ 放大时脚不动、向上生长。 */
   transform:translate(var(--fig-shift-x,0px), var(--fig-shift-y,0px)) scale(var(--fig-scale,1));
-  transform-origin:top center;
+  transform-origin:bottom center;
 }
 /* 关键帧里带 scale：animation 的 fill-mode 会盖掉基础 transform，缩放必须写进关键帧才生效 */
 @keyframes tqFigIn{
