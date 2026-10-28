@@ -487,14 +487,13 @@
   };
 
   /* ============ 真实素材注册（素材入包即自动升级） ============ */
-  /* 当前 15 张已入仓且已过目（10-28 用户审核通过，commit 入库）：
+  /* 当前 20 张已入仓且已过目：
    *   3 张锚点：郭荣(a1) / 女官 / 史官（双玩家 A/B 线基础形象）；
-   *   12 张审核通过：王朴/张永德/赵匡胤/殷崇义（A 级服色 v2）＋ 符后/郭威/冯道（回忆语境像）
-   *     ＋ 司正/尚宫/起居郎/尚食令/郭宗训（B 级）。12 张均从生图仓 packed/ 复制入 assets/chars/。
-   * 其余角色走本文件矢量绘像，待重生/复核：
-   *   - 4 张待重生（fanzhi/ligu/wangpu2/lichongjin）：10-28 用户过目指出细节问题（李重进取甲、
-   *     范质被画成烛台、李谷执笏不举觞、王溥长揖不举觞），已改 prompts 待重生，未入仓。
-   *   - 少年郭荣（shaonian）待重生：用户要求由手提花篮改肩挑担子，未入仓。
+   *   12 张 10-28 审核入库（commit 478724c）：王朴/张永德/赵匡胤/殷崇义（A 级服色 v2）
+   *     ＋ 符后/郭威/冯道（回忆语境像）＋ 司正/尚宫/起居郎/尚食令/郭宗训（B 级）；
+   *   5 张 10-28 晚重生入库：范质（禁烛火）/李谷（双手捧觞）/王溥（单手举觞）/李重进（去甲）
+   *     ＋ 少年郭荣（肩挑茶担，替换手提花篮旧版）。
+   *   尚食令 10-28 晚由全身版裁切为半身重入仓（FIT 已按裁切版重测）。
    *   ★键名坑：生图侧 prompts.py 用 `shangling`，运行时图键是 `shangshiling`
    *     （prompts 键按「尚食令」字面，运行时按 FIG 定义），入包脚本里做了映射，
    *     这里必须写运行时键，否则 TQA.resolve 找不到文件、静默回落矢量像。 */
@@ -524,9 +523,15 @@
     'zhaokuangyin_a1': { cx: 0.552, ratio: 0.667, headW: 0.199, y0: 0.072 },
     'qijulang_a1':     { cx: 0.488, ratio: 1,     headW: 0.216, y0: 0.041 },
     'shanggong_a1':    { cx: 0.517, ratio: 1,     headW: 0.194, y0: 0.078 },
-    'shangshiling_a1': { cx: 0.557, ratio: 1,     headW: 0.219, y0: 0.111 },
+    'shangshiling_a1': { cx: 0.430, ratio: 1,     headW: 0.259, y0: 0.080 },
     'sizheng_a1':      { cx: 0.523, ratio: 1,     headW: 0.183, y0: 0.141 },
-    'zongxun_a1':      { cx: 0.484, ratio: 1,     headW: 0.280, y0: 0.010 }
+    'zongxun_a1':      { cx: 0.484, ratio: 1,     headW: 0.280, y0: 0.010 },
+    /* —— 10-28 晚重生（B 级半身，640²；shaonian 为 1024×1536 全身）统一重测 —— */
+    'fanzhi_a1':       { cx: 0.479, ratio: 1,     headW: 0.237, y0: 0.037 },
+    'ligu_a1':         { cx: 0.479, ratio: 1,     headW: 0.198, y0: 0.055 },
+    'wangpu2_a1':      { cx: 0.546, ratio: 1,     headW: 0.220, y0: 0.048 },
+    'lichongjin_a1':   { cx: 0.485, ratio: 1,     headW: 0.202, y0: 0.027 },
+    'shaonian_a1':     { cx: 0.556, ratio: 0.667, headW: 0.160, y0: 0.064 }
   };
   /* 归一化参数（[PLACEHOLDER] 有依据但需真机微调）：
    * HEAD_TARGET 0.235 → 槽宽 329 时头宽 ≈ 77px（手机上一张脸的可辨识下限之上）；
@@ -596,6 +601,7 @@
     guorong: 'a1', nvguan: 'a1', shiguan: 'a1',
     wangpu: 'a1', zhangyongde: 'a1', zhaokuangyin: 'a1', yinchongyi: 'a1',
     fuhou: 'a1', guowei: 'a1', fengdao: 'a1',
+    fanzhi: 'a1', ligu: 'a1', wangpu2: 'a1', lichongjin: 'a1', shaonian: 'a1',
     sizheng: 'a1', shanggong: 'a1', qijulang: 'a1', shangshiling: 'a1', zongxun: 'a1'
   };
   (function register() {
