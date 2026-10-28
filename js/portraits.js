@@ -549,7 +549,7 @@
    *  ② 眼线对齐：眼线 = y0 + 0.55×(头高)，头高 ≈ headW×ratio×HEAD_ASPECT；缩放后再平移，
    *     使所有角色眼睛落在槽高同一水平线 ⇒ 切换不跳；
    *  ③ 横向：按头肩重心推到槽中线（治朝左偏右/朝右偏左）。 */
-  function fitFor(key, slotW, slotH, fit) {
+  function fitFor(key, slotW, slotH, fit, slotLeft) {
     var a = CHAR_ASSETS[key];
     var f = a ? FIT[key + '_' + a] : null;
     if (!f || !slotW || !slotH) { return { x: 0, y: 0, s: 1 }; }
@@ -558,8 +558,33 @@
     if (fit === 'cover') { baseW = Math.max(slotW, slotH * f.ratio); }
     else { baseW = Math.min(slotW, slotH * f.ratio); }
     var headW = Math.max(0.10, Math.min(HEADW_CLAMP, f.headW || 0.20));
-    var k = (slotW * HEAD_TARGET) / (headW * baseW);
-    k = Math.max(0.55, Math.min(2.2, k)); /* 兜底：异常数据不把图放太大/缩没 */
+    var kHead = (slotW * HEAD_TARGET) / (headW * baseW);
+    /* ★不裁切硬约束（2026-10-28 修）：头宽目标只许"尽量"，绝不能把图放大到出容器。
+     * 旧版只按头宽算 k，缩放后 drawH 可能远超槽高（横版实测 1049px 塞进 630px，顶裁 28.8%），
+     * 而槽又 overflow:hidden —— 静默裁切。
+     * 约束：k ≤ min(槽宽×0.98/baseW, 槽高×0.98/baseH)，即缩放后留 2% 余量必须装得下。
+     * 取舍：不裁切 ＞ 头宽统一（脸被切比头宽差 10% 严重得多）。 */
+    /* 横向约束用「屏宽」而非槽宽：槽只是排版参考框，图片横向溢出槽是允许的
+     * （槽 overflow:visible），只有溢出屏幕才是真裁切。否则 k 永远 ≤1、头宽无法归一。 */
+    var baseH0 = baseW / f.ratio;
+    /* 横向可用宽 = 槽宽 + 2×min(槽左余量, 槽右余量)。
+     * 用「到屏幕边缘的对称余量」而不是全屏宽：横版立绘列贴左，右余量虽大但左余量为 0，
+     * 若按全屏宽算 k 会把图放大到出屏（实测 3 角色出屏）。这样竖版可溢出槽边，
+     * 横版贴列内，两者都不出屏。 */
+    var vw = (typeof window !== 'undefined' && window.innerWidth) ? window.innerWidth : slotW;
+    /* 可用横向空间 = 槽左余量 + 槽宽 + 槽右余量（不对称也认）。
+     * ★曾用 2×min(左,右) 求对称余量 —— 但槽带 padding 时右侧只剩 8px，
+     * 于是把 k 压到 1.03（所有角色同值），头宽归一失效、人物整体偏小。
+     * 不对称溢出由 shiftX 的 clamp 兜底（保证不出屏），不必在此保守砍 k。 */
+    var room = 0;
+    if (typeof slotLeft === 'number' && slotLeft >= 0) {
+      room = Math.max(0, slotLeft) + Math.max(0, vw - (slotLeft + slotW));
+    }
+    var availW = Math.min(vw, slotW + room) * 0.98;
+    var kFitW = availW / baseW;
+    var kFitH = (slotH * 0.97) / baseH0;
+    var k = Math.min(kHead, kFitW, kFitH);
+    k = Math.max(0.45, Math.min(2.2, k)); /* 兜底：异常数据不把图缩没 */
     var imgH0 = baseW / f.ratio;
     var headHImg = headW * f.ratio * HEAD_ASPECT;       /* 头高（归一化，相对图高） */
     var eyeYImg = (f.y0 || 0.08) + 0.55 * headHImg;     /* 眼线（归一化） */
@@ -570,12 +595,25 @@
      * 30~65px，人像悬空——比视线差几像素更伤。根治要在**资产层**统一头部在画布中的位置
      * （易次元规范：「不同人物头部保持差不多大、立绘高度统一」），运行时不硬掰。
      * 半身像没有下半身，一律底对齐（transform-origin: bottom），从对话框上沿"长出来"。 */
-    var shiftY = 0;
-    if (fit === 'cover') {
-      shiftY = slotH - imgH0 * k;   /* 图片底 = 槽底（脚踩地/被对话框压住） */
+    /* 纵向一律底对齐：图片底 = 槽底。contain 下图片高度 = baseH×k ≤ 槽高，
+     * 所以底对齐后顶部一定留白，永不溢出（不会再出现头顶被切）。 */
+    var shiftY = slotH - imgH0 * k;
+    /* 横向补偿，但不能把图推出屏幕：
+     * 图左 = slotLeft + (slotW - baseW·k)/2 + shiftX ≥ 0
+     * 图右 = 图左 + baseW·k ≤ 屏宽
+     * 重心补偿让「朝左偏右」的人物居中，本意是好的；横版列贴左时若不 clamp
+     * 就会推出去（实测 shanggong/lichongjin 出屏）。 */
+    var shiftX = -Math.round((f.cx - 0.5) * baseW * k);
+    if (typeof slotLeft === 'number' && slotLeft >= 0) {
+      var drawW = baseW * k;
+      var baseL = slotLeft + (slotW - drawW) / 2;
+      var minX = -baseL + 2;                       /* 左边留 2px 安全 */
+      var maxX = vw - 2 - (baseL + drawW);         /* 右边留 2px 安全 */
+      if (minX <= maxX) { shiftX = Math.max(minX, Math.min(maxX, shiftX)); }
+      else { shiftX = Math.round(minX); }          /* 图比屏还宽：强制贴左 */
     }
     return {
-      x: -Math.round((f.cx - 0.5) * baseW * k),
+      x: Math.round(shiftX),
       y: Math.round(shiftY),
       s: +k.toFixed(4)
     };
@@ -593,11 +631,14 @@
     var a = CHAR_ASSETS[key];
     var f = a ? FIT[key + '_' + a] : null;
     var ratio = f ? f.ratio : 0.667;
-    var fit = ratio >= 0.9 ? 'contain' : 'cover';
+    /* ★一律 contain（2026-10-28 修裁切）：cover 必然裁掉溢出的那一边，
+     * 而要求是"所有立绘不被裁切"。contain 保证完整显示，尺寸差异由 k 的头宽归一补回。 */
+    var fit = 'contain';
     slot.setAttribute('data-fit', fit);
     var w = slot.clientWidth, h = slot.clientHeight;
     if (!w || !h) { /* 尚未布局：下一帧再算 */ requestAnimationFrame(function () { applyFit(slot, key); }); return; }
-    var m = fitFor(key, w, h, fit);
+    var rect0 = slot.getBoundingClientRect();
+    var m = fitFor(key, w, h, fit, rect0.left);
     slot.style.setProperty('--fig-shift-x', m.x + 'px');
     slot.style.setProperty('--fig-shift-y', m.y + 'px');
     slot.style.setProperty('--fig-scale', m.s);

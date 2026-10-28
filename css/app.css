@@ -643,7 +643,10 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 }
 .main.act-vn .sp-zone .slot.sp-fig{
   position:relative; display:block; width:88%; max-width:400px; height:90%;
-  border:0; border-radius:0; background:none; padding:0; overflow:hidden;
+  border:0; border-radius:0; background:none; padding:0;
+  /* ★overflow:visible（2026-10-28 修裁切）：槽是排版参考框，不是裁切窗口。
+   * 缩放后的立绘可横向溢出槽，由外层 .sp-zone 只裁「屏幕外」部分。 */
+  overflow:visible;
 }
 .main.act-vn .sp-fig.has-real{ border:0; }
 .main.act-vn .sp-fig .fig-meta{ display:none; }        /* 立绘上不再叠文字牌 */
@@ -653,11 +656,13 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   animation:tqFigIn .26s ease both;
 }
 .main.act-vn .sp-zone .slot.sp-fig[data-fit="contain"] .fig-real{
-  object-fit:contain; object-position:bottom center;  /* 半身像：完整显示、底部对齐 */
+  /* top center：与 JS 的 shiftY(底对齐补偿，按 top-origin 推导) 同基准。
+   * 曾误设 bottom center，导致补偿方向反了、整图下移出血（12/12 分辨率被判裁切）。 */
+  object-fit:contain; object-position:top center;
 }
-/* 半身像：与全身像共用 90% 槽高（特异性 0,6,0 压过基础 0,5,0）；
- * 缩放以「底边中心」为原点 ⇒ 贴槽底生长，不悬空。尺寸差异由 fitFor 的头宽归一化统一。 */
-.main.act-vn .sp-zone .slot.sp-fig[data-fit="contain"] .fig-real{ transform-origin:bottom center; }
+/* 缩放原点统一 top center（与 JS 补偿同基准）；"贴底"由 shiftY 平移实现，
+ * 不靠 origin —— 两者混用会让补偿方向反掉。 */
+.main.act-vn .sp-zone .slot.sp-fig[data-fit="contain"] .fig-real{ transform-origin:top center; }
 .main.act-vn .sp-fig .fig-art{ animation:tqFigIn .26s ease both; }
 /* 景别杠杆（[PLACEHOLDER] 默认 1=全身，脚被对话框压住）：调大可收成腰上/胸上景别，
  * 只放大不换图——脸部表情更清晰，同时保持「立绘为画面主体」。 */
