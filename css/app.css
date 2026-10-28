@@ -595,10 +595,14 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .mem-stage-t{font-size:15px;font-weight:600;letter-spacing:2px;color:#BFD6CF}
 .mem-stage-e{font-size:11px;color:rgba(191,214,207,.6);margin-top:4px;letter-spacing:1px}
 .mem-stage-prog{font-size:10px;color:rgba(191,214,207,.45);margin-top:6px;letter-spacing:2px}
-.mem-stage-body{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:8px}
-.mem-fig{width:132px;height:176px;margin-bottom:10px;display:flex;align-items:flex-end;justify-content:center;opacity:.95}
+/* ★与幕内对话画面对齐（2026-10-29）：普通画面 .dlg-box 底距屏底 88px
+ * （dock-lift 45 + dock 内边距 12 + 四键条 31）。回忆舞台按同一基准上移，
+ * 文字块底也落在 88px ⇒ 两个画面切换时视线不跳。 */
+.mem-stage-body{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:flex-end;padding-bottom:var(--mem-lift,56px)}
+.mem-fig{width:132px;height:176px;margin-bottom:var(--mem-gap,24px);display:flex;align-items:flex-end;justify-content:center;opacity:.95}
 .mem-fig svg,.mem-fig img{width:100%;height:100%;object-fit:contain;object-position:bottom}
-.mem-plate{align-self:center;font-size:12px;letter-spacing:2px;color:#0F1B1E;background:#AFC7C1;border-radius:9px;padding:2px 14px;margin-bottom:8px}
+.mem-plate{align-self:center;font-size:12px;letter-spacing:2px;color:#0F1B1E;background:#AFC7C1;border-radius:9px;padding:2px 14px;margin-bottom:10px}
 .mem-line{max-width:560px;width:100%;text-align:center;font-size:16px;line-height:1.95;color:#E4EFE9;padding:0 6px}
 .mem-line.mem-in{animation:memIn .28s ease}
 @keyframes memIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
@@ -608,8 +612,9 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   .mem-line{font-size:18px}
 }
 @media (max-height:668px){
-  .mem-fig{width:100px;height:134px;margin-bottom:6px}
+  .mem-fig{width:104px;height:138px;margin-bottom:16px}
   .mem-line{font-size:14.5px;line-height:1.8}
+  .mem-stage-body{padding-bottom:56px}
 }
 
 /* 手札 · 回忆剧情卡（一页文字；暂无回放入口） */
