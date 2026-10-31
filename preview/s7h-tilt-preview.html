@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>S7 瓷心空间 · 横版三层 + 陀螺仪预览</title>
+<style>
+body{margin:0;background:#10191D;color:#D8CFA9;
+  font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;line-height:1.6}
+.wrap{max-width:980px;margin:0 auto;padding:20px 16px 56px}
+h1{font-size:16px;font-weight:500;margin:0 0 4px}
+.sub{font-size:12px;color:#8FA9A5;margin:0 0 16px}
+.qa-h2{font-size:14px;font-weight:500;margin:26px 0 8px}
+.bar{display:flex;flex-wrap:wrap;margin:-4px 0 12px}
+.bar div{border:1px solid #2E444C;border-radius:8px;padding:6px 10px;margin:4px 4px 0 0;
+  font-size:12px;color:#9FB6BA}
+.bar b{color:#D8CFA9;font-weight:500}
+
+/* 舞台：三种屏幕形态，用 aspect-ratio 切换 */
+.stagewrap{display:flex;justify-content:center;background:#0C1418;border:1px solid #2E444C;
+  border-radius:12px;padding:12px}
+.scene{position:relative;overflow:hidden;background:#16232A;touch-action:none;
+  border-radius:10px;max-height:62vh}
+.scene[data-form="portrait"]{aspect-ratio:9/16;height:60vh}
+.scene[data-form="mid"]{aspect-ratio:3/4;height:52vh}
+.scene[data-form="landscape"]{aspect-ratio:16/9;width:100%}
+/* 层：比舞台大一圈（overscan），位移时不露边 */
+.layer{position:absolute;left:-6%;top:-6%;width:112%;height:112%;will-change:transform}
+.layer img{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
+
+.thumbs{display:flex;flex-wrap:wrap;margin:0 -5px}
+.thumb{flex:1 1 200px;min-width:170px;margin:5px;border:1px solid #2E444C;border-radius:10px;
+  overflow:hidden;background:#16232A}
+.thumb img{width:100%;display:block}
+.thumb .cap{font-size:11px;color:#9FB6BA;padding:6px 8px;border-top:1px solid #23373D}
+.thumb .cap b{color:#D8CFA9;font-weight:500}
+.ctl{margin:14px 0 0}
+.btn{display:inline-block;border:1px solid #5E8C8A;border-radius:8px;padding:9px 16px;
+  margin:0 8px 8px 0;font-size:13px;background:#16232A;color:#D8CFA9;cursor:pointer}
+.btn:active{background:#1E2F36}
+.btn.on{border-color:#E4C87E;color:#E4C87E}
+.notes{margin-top:16px}
+.note{border-left:2px solid #5E8C8A;padding:2px 0 2px 12px;margin:0 0 12px;font-size:13px;color:#B4C7C4}
+.note em{font-style:normal;color:#E4C87E}
+table.dt{width:100%;border-collapse:collapse;font-size:12px;color:#B4C7C4;margin:6px 0 0}
+table.dt th,table.dt td{border-bottom:1px solid #23373D;padding:6px 8px;text-align:left}
+table.dt th{color:#8FA9A5;font-weight:500}
+.warn{border:1px solid #8A5A2E;background:#2A2018;border-radius:8px;padding:10px 12px;
+  margin:14px 0 0;font-size:12px;color:#E4C87E}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>S7 瓷心空间 · 横版三层 + 陀螺仪预览</h1>
+  <p class="sub">1500×630 · 三层 bg/mg/fg · 层深 6 : 26 : 64（与竖版同一套）· 单文件可直接打开</p>
+
+  <div class="bar">
+    <div>输入源 <b id="s-src">未启动</b></div>
+    <div>cx <b id="s-tx">0.00</b></div>
+    <div>cy <b id="s-ty">0.00</b></div>
+    <div>MG 位移 <b id="s-mg">0.0px</b></div>
+    <div>FG 位移 <b id="s-fg">0.0px</b></div>
+    <div>形态 <b id="s-form">横屏</b></div>
+  </div>
+
+  <div class="stagewrap">
+    <div class="scene" id="sceneS7" data-form="landscape">
+      <div class="layer" data-d="6"><img src="../assets/scenes/s7_cixin_h/bg.webp" alt="BG 釉色底色"></div>
+      <div class="layer" data-d="26"><img src="../assets/scenes/s7_cixin_h/mg.webp" alt="MG 中景瓷片 10 片"></div>
+      <div class="layer" data-d="64"><img src="../assets/scenes/s7_cixin_h/fg.webp" alt="FG 前景瓷片 3 片"></div>
+    </div>
+  </div>
+
+  <div class="ctl">
+    <button class="btn" id="b-gyro">启动陀螺仪（小红书路径）</button>
+    <button class="btn" id="b-ptr">指针兜底</button>
+    <button class="btn" id="b-reset">回中</button>
+  </div>
+  <div class="ctl">
+    <span style="font-size:12px;color:#8FA9A5;margin-right:8px">屏幕形态：</span>
+    <button class="btn on" data-form="landscape">横屏 16:9</button>
+    <button class="btn" data-form="mid">中屏 3:4</button>
+    <button class="btn" data-form="portrait">竖屏 9:16</button>
+  </div>
+
+  <div class="warn" id="w">桌面没有真实传感器。点「启动陀螺仪」会注入 mock 输入（同 <code>window.xhs.miniTool</code> 签名）看手感；「指针兜底」用鼠标拖拽模拟。真机由容器注入真实陀螺仪，调用链不需改。</div>
+
+  <h2 class="qa-h2">三层与体积</h2>
+  <div class="thumbs">
+    <div class="thumb"><img src="../assets/scenes/s7_cixin_h/bg.webp" alt="BG"><div class="cap"><b>BG 背景</b> · d=6 · 不透明 · 115.6KB</div></div>
+    <div class="thumb"><img src="_s7_h/layers/mg.png" alt="MG"><div class="cap"><b>MG 中景</b> · d=26 · 10 片 ×0.96 · 31.2KB</div></div>
+    <div class="thumb"><img src="_s7_h/layers/fg.png" alt="FG"><div class="cap"><b>FG 前景</b> · d=64 · 3 片 ×1.20–1.32 · 28.8KB</div></div>
+  </div>
+
+  <h2 class="qa-h2">怎么判断做对了</h2>
+  <div class="notes">
+    <div class="note"><em>视差方向。</em>把指针往右拖：FG 应该比 MG 走得远（同一 cx 下按 d/64 缩放，d=64 走满 26px，d=26 走 10.6px）。三层不能同步移动，否则等于整幅平移。</div>
+    <div class="note"><em>不露边。</em>层尺寸是舞台的 112%（六面各溢出 6%），LIM=26px 时最坏位移占舞台宽 26/900≈2.9%，不会看到层的直边。</div>
+    <div class="note"><em>三种形态。</em>竖屏 9:16 下 1500×630 的横向底图会被大幅裁切（只留中间约 35% 宽）。这是横向素材进竖屏的固有代价 —— 若竖屏要满幅，得另出一张竖版底，不能靠裁。</div>
+    <div class="note"><em>与竖版的关系。</em>竖版 assets/scenes/s7_cixin/ 是真拆（从同一张画里剥出 13 片）；横版是「AI 只出釉面底 + 复用竖版那 13 片精修单片重新布点」，所以瓷片的金边、开片是同一批，风格一致。</div>
+  </div>
+
+  <h2 class="qa-h2">实测数据</h2>
+  <table class="dt">
+    <tr><th>项</th><th>值</th></tr>
+    <tr><td>画幅</td><td>1500×630（横版）／750×1680（竖版）</td></tr>
+    <tr><td>三层体积</td><td>bg 115.6 + mg 31.2 + fg 28.8 = <b>175.6KB</b></td></tr>
+    <tr><td>层深</td><td>6 / 26 / 64</td></tr>
+    <tr><td>瓷片</td><td>MG 10 片 ×0.96（压暗 4%）／FG 3 片 ×1.20–1.32</td></tr>
+    <tr><td>FG∩MG 遮挡</td><td>1259px（前景压中景，制造前后关系）</td></tr>
+    <tr><td>瓷片亮度比</td><td>按所在位置底图亮度重定标至 ≈1.55（原直接贴为 1.2–3.4）</td></tr>
+  </table>
+
+  <p class="sub" style="margin-top:20px">文件：assets/scenes/s7_cixin_h/{bg,mg,fg}.webp　·　本页用于验证陀螺仪手感与三形态适配</p>
+</div>
+
+<script src="../js/tilt.js"></script>
+<script>
+(function () {
+  'use strict';
+  var elSrc = document.getElementById('s-src');
+  var elTx = document.getElementById('s-tx');
+  var elTy = document.getElementById('s-ty');
+  var elFg = document.getElementById('s-fg');
+  var elMg = document.getElementById('s-mg');
+  var elForm = document.getElementById('s-form');
+
+  var LIM = 26, DMAX = 64;
+  var cx = 0, cy = 0, tx = 0, ty = 0;
+  var scene = document.getElementById('sceneS7');
+  var layers = scene.querySelectorAll('.layer');
+
+  function loop() {
+    cx += (tx - cx) * 0.08;
+    cy += (ty - cy) * 0.08;
+    var fgx = 0, mgx = 0;
+    for (var i = 0; i < layers.length; i++) {
+      var d = parseFloat(layers[i].getAttribute('data-d'));
+      var scale = (d / DMAX) * LIM;
+      var ox = Math.max(-LIM, Math.min(LIM, cx * scale));
+      var oy = Math.max(-LIM * 0.4, Math.min(LIM * 0.4, cy * scale * 0.35));
+      layers[i].style.transform = 'translate(' + ox.toFixed(2) + 'px,' + oy.toFixed(2) + 'px)';
+      if (d === 64) { fgx = ox; }
+      if (d === 26) { mgx = ox; }
+    }
+    elTx.textContent = tx.toFixed(2);
+    elTy.textContent = ty.toFixed(2);
+    elFg.textContent = fgx.toFixed(1) + 'px';
+    elMg.textContent = mgx.toFixed(1) + 'px';
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  var ctrl = new window.TiltController({ onUpdate: function (a, b) { tx = a; ty = b; } });
+  ctrl.onRecenter = function () { cx = 0; cy = 0; };
+  ctrl.attachPointer(scene);
+
+  function setSrc(s) { elSrc.textContent = s; }
+
+  function installMockGyro() {
+    if (window.xhs && window.xhs.miniTool) { return; }
+    var handlers = []; var t = 0;
+    window.xhs = { miniTool: {
+      onGyroscopeChange: function (cb) { handlers.push(cb); },
+      offGyroscopeChange: function (cb) { var i = handlers.indexOf(cb); if (i >= 0) { handlers.splice(i, 1); } },
+      startGyroscope: function () {
+        setInterval(function () {
+          t += 0.06;
+          var frame = { x: Math.sin(t * 0.8) * 1.5 + (Math.random() - 0.5) * 0.35,
+                        y: Math.cos(t * 0.55) * 1.9 + (Math.random() - 0.5) * 0.35, z: 0 };
+          for (var i = 0; i < handlers.length; i++) { handlers[i](frame); }
+        }, 60);
+        return Promise.resolve();
+      },
+      stopGyroscope: function () { return Promise.resolve(); }
+    }};
+    document.getElementById('w').textContent =
+      '当前为 mock 陀螺仪（桌面无真实传感器）。真实小红书容器会注入同签名 window.xhs.miniTool，调用链无需改动。';
+  }
+
+  document.getElementById('b-gyro').addEventListener('click', function () {
+    installMockGyro();
+    ctrl.start('gyro').then(function (k) { setSrc(k === 'gyro' ? '陀螺仪（小红书）' : '陀螺仪不可用'); });
+  });
+  document.getElementById('b-ptr').addEventListener('click', function () {
+    ctrl.start('pointer').then(function () { setSrc('指针兜底'); });
+  });
+  document.getElementById('b-reset').addEventListener('click', function () {
+    tx = 0; ty = 0; cx = 0; cy = 0;
+  });
+
+  // 三种屏幕形态
+  var formBtns = document.querySelectorAll('[data-form].btn');
+
+  function applyForm(f) {
+    scene.setAttribute('data-form', f);
+    for (var j = 0; j < formBtns.length; j++) {
+      formBtns[j].classList.toggle('on', formBtns[j].getAttribute('data-form') === f);
+    }
+    elForm.textContent = f === 'portrait' ? '竖屏 9:16' : (f === 'mid' ? '中屏 3:4' : '横屏 16:9');
+  }
+
+  for (var i = 0; i < formBtns.length; i++) {
+    formBtns[i].addEventListener('click', function () {
+      applyForm(this.getAttribute('data-form'));
+    });
+  }
+
+  // 支持 ?form=portrait|mid|landscape 直接进入某形态（便于逐形态截图验收）
+  var qs = (location.search.match(/[?&]form=([a-z]+)/) || [])[1];
+  if (qs && /^(portrait|mid|landscape)$/.test(qs)) { applyForm(qs); }
+})();
+</script>
+</body>
+</html>
