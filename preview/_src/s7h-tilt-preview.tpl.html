@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>S7 瓷心空间 · 横版三层 + 陀螺仪预览</title>
+<style>
+body{margin:0;background:#10191D;color:#D8CFA9;
+  font-family:"PingFang SC","Microsoft YaHei",system-ui,sans-serif;line-height:1.6;
+  -webkit-text-size-adjust:100%}
+.wrap{max-width:1000px;margin:0 auto;padding:20px 16px 60px}
+h1{font-size:16px;font-weight:500;margin:0 0 4px}
+.sub{font-size:12px;color:#8FA9A5;margin:0 0 16px}
+.qa-h2{font-size:14px;font-weight:500;margin:28px 0 8px;
+  border-left:2px solid #5E8C8A;padding-left:8px}
+.bar{display:flex;flex-wrap:wrap;margin:-4px 0 12px}
+.bar div{border:1px solid #2E444C;border-radius:8px;padding:6px 10px;margin:4px 4px 0 0;
+  font-size:12px;color:#9FB6BA}
+.bar b{color:#D8CFA9;font-weight:500}
+
+/* 舞台：形态用 aspect-ratio 切换 */
+.stagewrap{display:flex;justify-content:center;background:#0C1418;border:1px solid #2E444C;
+  border-radius:12px;padding:12px}
+.scene{position:relative;overflow:hidden;background:#16232A;touch-action:none;
+  border-radius:10px;width:100%}
+.scene[data-form="art"]{aspect-ratio:1500/630;max-height:60vh}
+.scene[data-form="wide"]{aspect-ratio:16/9;max-height:58vh}
+.scene[data-form="mid"]{aspect-ratio:3/4;max-height:56vh;width:auto;height:56vh}
+.scene[data-form="portrait"]{aspect-ratio:9/16;max-height:58vh;width:auto;height:58vh}
+/* 层：比舞台大一圈（overscan），位移时不露边 */
+.layer{position:absolute;left:-6%;top:-6%;width:112%;height:112%;will-change:transform}
+.layer img{width:100%;height:100%;object-fit:cover;object-position:center;display:block}
+
+.ctl{margin:12px 0 0}
+.btn{display:inline-block;border:1px solid #5E8C8A;border-radius:8px;padding:9px 14px;
+  margin:0 8px 8px 0;font-size:13px;background:#16232A;color:#D8CFA9;cursor:pointer;
+  font-family:inherit}
+.btn:active{background:#1E2F36}
+.btn.on{border-color:#E4C87E;color:#E4C87E}
+.lbl{font-size:12px;color:#8FA9A5;display:inline-block;width:52px}
+
+/* 对照：A 组同画幅左右并排；B 组等高并排（宽高比不同，等高才公平） */
+.cmp{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 6px}
+.cmp figure{margin:0}
+.cmp.a figure{flex:1 1 44%;min-width:260px}
+.cmp.a img{width:100%;height:auto}
+.cmp.b{align-items:flex-start}
+.cmp.b figure img{height:min(300px,38vh);width:auto}
+.gh{font-size:12px;color:#8FA9A5;margin:14px 0 6px}
+.cmp img{display:block;border-radius:8px;border:1px solid #2E444C}
+.cmp figcaption{font-size:11px;color:#9FB6BA;padding:5px 2px 0}
+.cmp figcaption b{color:#D8CFA9;font-weight:500}
+.full{border:1px solid #2E444C;border-radius:10px;overflow:hidden;background:#16232A}
+.full img{display:block;width:100%;height:auto}
+.full .cap{font-size:11px;color:#9FB6BA;padding:6px 9px;border-top:1px solid #23373D}
+.full .cap b{color:#D8CFA9;font-weight:500}
+
+.thumbs{display:flex;flex-wrap:wrap;margin:0 -5px}
+.thumb{flex:1 1 220px;min-width:180px;margin:5px;border:1px solid #2E444C;border-radius:10px;
+  overflow:hidden;background:#16232A}
+.thumb img{width:100%;display:block}
+.thumb .cap{font-size:11px;color:#9FB6BA;padding:6px 8px;border-top:1px solid #23373D}
+.thumb .cap b{color:#D8CFA9;font-weight:500;font-family:ui-monospace,Consolas,monospace}
+
+.note{border-left:2px solid #5E8C8A;padding:2px 0 2px 12px;margin:0 0 12px;font-size:13px;color:#B4C7C4}
+.note em{font-style:normal;color:#E4C87E}
+table.dt{width:100%;border-collapse:collapse;font-size:12px;color:#B4C7C4;margin:6px 0 0}
+table.dt th,table.dt td{border-bottom:1px solid #23373D;padding:6px 8px;text-align:left}
+table.dt th{color:#8FA9A5;font-weight:500}
+table.dt td.n{font-family:ui-monospace,Consolas,monospace;text-align:right}
+table.dt td.ok{color:#8FD0B4}
+.warn{border:1px solid #8A5A2E;background:#2A2018;border-radius:8px;padding:10px 12px;
+  margin:14px 0 0;font-size:12px;color:#E4C87E}
+code{font-family:ui-monospace,Consolas,monospace;font-size:12px;color:#A8C6C2}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>S7 瓷心空间 · 横版三层 + 陀螺仪预览</h1>
+  <p class="sub">1500×630 · 三层 bg / mg / fg · 层深 6 : 26 : 64（与竖版同一套）· 图片全部内嵌，单文件可直接打开</p>
+
+  <div class="bar">
+    <div>输入源 <b id="s-src">未启动</b></div>
+    <div>cx <b id="s-tx">0.00</b></div>
+    <div>cy <b id="s-ty">0.00</b></div>
+    <div>MG 位移 <b id="s-mg">0.0px</b></div>
+    <div>FG 位移 <b id="s-fg">0.0px</b></div>
+    <div>形态 <b id="s-form">原幅 1500:630</b></div>
+    <div>素材 <b id="s-set">横版</b></div>
+  </div>
+
+  <div class="stagewrap">
+    <div class="scene" id="sceneS7" data-form="art">
+      <div class="layer" data-d="6"><img data-l="bg" alt="BG 釉色底色"></div>
+      <div class="layer" data-d="26"><img data-l="mg" alt="MG 中景瓷片 10 片"></div>
+      <div class="layer" data-d="64"><img data-l="fg" alt="FG 前景瓷片 3 片"></div>
+    </div>
+  </div>
+
+  <div class="ctl">
+    <button class="btn" id="b-gyro">启动陀螺仪（小红书路径）</button>
+    <button class="btn" id="b-ptr">指针兜底</button>
+    <button class="btn" id="b-reset">回中</button>
+  </div>
+  <div class="ctl">
+    <span class="lbl">形态</span>
+    <button class="btn on" data-form="art">原幅 1500:630</button>
+    <button class="btn" data-form="wide">16:9 手机</button>
+    <button class="btn" data-form="mid">中屏 3:4</button>
+    <button class="btn" data-form="portrait">竖屏 9:16</button>
+  </div>
+  <div class="ctl">
+    <span class="lbl">素材</span>
+    <button class="btn on" data-set="h">横版三层 1500×630</button>
+    <button class="btn" data-set="v">竖版三层 750×1080</button>
+  </div>
+
+  <div class="warn" id="w">桌面没有真实传感器。点「启动陀螺仪」会注入 mock 输入（同 <code>window.xhs.miniTool</code> 签名）看手感；「指针兜底」用鼠标拖拽模拟。真机由容器注入真实陀螺仪，调用链不需改。</div>
+
+  <h2 class="qa-h2">横版底图 vs 竖版底图（色调 / 亮度对齐结果）</h2>
+  <div class="gh">A · 改造前后（同一画幅 1500×630，可直接对比）</div>
+  <div class="cmp a">
+    <figure><img data-img="bgOld" alt="旧横版底图"><figcaption><b>旧横版</b> · 三通道均值偏移 0.75<br>只对得齐均值，高光仍偏冷青（高光段 b* −3.5）</figcaption></figure>
+    <figure><img data-img="bgH" alt="新横版底图"><figcaption><b>新横版</b> · 本次<br>逐 L 段色度仿射 + 光场重定向（高光段 b* +3.5）</figcaption></figure>
+  </div>
+
+  <div class="gh">B · 横版 vs 竖版（等高并排；宽高比差 3.4 倍，只能等高比，不能等宽比）</div>
+  <div class="cmp b">
+    <figure><img data-img="bgH" alt="新横版底图"><figcaption><b>新横版 1500×630</b> · L* 32.1 / a* −7.5 / b* 1.9</figcaption></figure>
+    <figure><img data-img="bgV" alt="竖版底图（基准）"><figcaption><b>竖版 750×1080（基准）</b> · L* 32.3 / a* −7.2 / b* 1.6</figcaption></figure>
+  </div>
+
+  <table class="dt">
+    <tr><th>指标（LAB）</th><th>旧横版</th><th>新横版</th><th>竖版基准</th><th>结论</th></tr>
+    @@ROWS@@
+  </table>
+
+  <h2 class="qa-h2">三层与体积</h2>
+  <div class="thumbs">
+    @@THUMBS@@
+  </div>
+
+  <h2 class="qa-h2">怎么判断做对了</h2>
+  <div class="notes">
+    <div class="note"><em>色调是怎么对上的。</em>不是手调曲线，是三步统计搬运：① 逐 L 段把 a*/b* 的均值与离散度映射到竖版的对应段（高光段 a* 从 −15.9 拉回 −7 一线，冷青消失）；② L 直方图匹配到 70%（1.0 会把纹理压平）；③ 用竖版的低频光场做一次乘法重定向（k=0.85），把「顶部一条横光」掰成「中心亮、四周暗」，这一步把 L* 标准差从 11.3 提到 11.8（竖版 11.7）。详见 <code>tools/s7_tone.py</code>。</div>
+    <div class="note"><em>视差方向。</em>把指针往右拖：FG 应比 MG 走得远（同一 cx 下按 d/64 缩放，d=64 走满 26px，d=26 走 10.6px）。三层同步移动就等于整幅平移，是错的。</div>
+    <div class="note"><em>不露边。</em>层尺寸是舞台的 112%（六面各溢出 6%），LIM=26px 时最坏位移占舞台宽不到 3%，看不到层的直边。</div>
+    <div class="note"><em>横版素材进竖屏会大幅裁切。</em>1500×630 塞进 9:16 只剩中间约 33% 宽 —— 这是宽幅素材进窄屏的固有代价。所以「中屏 / 竖屏」按钮会自动切到竖版三层素材，不要拿横版硬裁。</div>
+    <div class="note"><em>16:9 与 2.38:1 的差。</em>素材是 2.38:1，手机横屏多为 1.78–2.2:1，<code>object-fit:cover</code> 会横向裁掉约 25%。点「16:9 手机」看的就是实机取景：此时最外侧几片瓷片会落在画面外。</div>
+  </div>
+
+  <p class="sub" style="margin-top:20px">文件：assets/scenes/s7_cixin_h/{bg,mg,fg}.webp　·　构建：<code>tools/build_s7h_preview.py</code>（本页由它生成，勿手改）</p>
+</div>
+
+<script>@@IMGMAP@@</script>
+<script>@@TILTJS@@</script>
+<script>
+(function () {
+  'use strict';
+  var elSrc = document.getElementById('s-src');
+  var elTx = document.getElementById('s-tx');
+  var elTy = document.getElementById('s-ty');
+  var elFg = document.getElementById('s-fg');
+  var elMg = document.getElementById('s-mg');
+  var elForm = document.getElementById('s-form');
+  var elSet = document.getElementById('s-set');
+
+  // 图片统一从 IMG 映射取，避免同一张图在文件里内嵌多份
+  var all = document.querySelectorAll('[data-img]');
+  for (var k = 0; k < all.length; k++) {
+    var key = all[k].getAttribute('data-img');
+    if (window.IMG[key]) { all[k].src = window.IMG[key]; }
+  }
+
+  var LIM = 26, DMAX = 64;
+  var cx = 0, cy = 0, tx = 0, ty = 0;
+  var scene = document.getElementById('sceneS7');
+  var layers = scene.querySelectorAll('.layer');
+
+  function loop() {
+    cx += (tx - cx) * 0.08;
+    cy += (ty - cy) * 0.08;
+    var fgx = 0, mgx = 0;
+    for (var i = 0; i < layers.length; i++) {
+      var d = parseFloat(layers[i].getAttribute('data-d'));
+      var scale = (d / DMAX) * LIM;
+      var ox = Math.max(-LIM, Math.min(LIM, cx * scale));
+      var oy = Math.max(-LIM * 0.4, Math.min(LIM * 0.4, cy * scale * 0.35));
+      layers[i].style.transform = 'translate(' + ox.toFixed(2) + 'px,' + oy.toFixed(2) + 'px)';
+      if (d === 64) { fgx = ox; }
+      if (d === 26) { mgx = ox; }
+    }
+    elTx.textContent = tx.toFixed(2);
+    elTy.textContent = ty.toFixed(2);
+    elFg.textContent = fgx.toFixed(1) + 'px';
+    elMg.textContent = mgx.toFixed(1) + 'px';
+    requestAnimationFrame(loop);
+  }
+  requestAnimationFrame(loop);
+
+  var ctrl = new window.TiltController({ onUpdate: function (a, b) { tx = a; ty = b; } });
+  ctrl.onRecenter = function () { cx = 0; cy = 0; };
+  ctrl.attachPointer(scene);
+
+  function setSrc(s) { elSrc.textContent = s; }
+
+  function installMockGyro() {
+    if (window.xhs && window.xhs.miniTool) { return; }
+    var handlers = []; var t = 0;
+    window.xhs = { miniTool: {
+      onGyroscopeChange: function (cb) { handlers.push(cb); },
+      offGyroscopeChange: function (cb) { var i = handlers.indexOf(cb); if (i >= 0) { handlers.splice(i, 1); } },
+      startGyroscope: function () {
+        setInterval(function () {
+          t += 0.06;
+          var frame = { x: Math.sin(t * 0.8) * 1.5 + (Math.random() - 0.5) * 0.35,
+                        y: Math.cos(t * 0.55) * 1.9 + (Math.random() - 0.5) * 0.35, z: 0 };
+          for (var i = 0; i < handlers.length; i++) { handlers[i](frame); }
+        }, 60);
+        return Promise.resolve();
+      },
+      stopGyroscope: function () { return Promise.resolve(); }
+    }};
+    document.getElementById('w').textContent =
+      '当前为 mock 陀螺仪（桌面无真实传感器）。真实小红书容器会注入同签名 window.xhs.miniTool，调用链无需改动。';
+  }
+
+  document.getElementById('b-gyro').addEventListener('click', function () {
+    installMockGyro();
+    ctrl.start('gyro').then(function (k) { setSrc(k === 'gyro' ? '陀螺仪（小红书）' : '陀螺仪不可用'); });
+  });
+  document.getElementById('b-ptr').addEventListener('click', function () {
+    ctrl.start('pointer').then(function () { setSrc('指针兜底'); });
+  });
+  document.getElementById('b-reset').addEventListener('click', function () {
+    tx = 0; ty = 0; cx = 0; cy = 0;
+  });
+
+  // ---- 素材切换：h / v ----
+  var SET_SRC = {
+    h: { bg: 'bgH', mg: 'mgH', fg: 'fgH' },
+    v: { bg: 'bgV', mg: 'mgV', fg: 'fgV' }
+  };
+  var curSet = 'h';
+
+  function applySet(set) {
+    curSet = set;
+    var map = SET_SRC[set];
+    for (var i = 0; i < layers.length; i++) {
+      var l = layers[i].querySelector('img').getAttribute('data-l');
+      layers[i].querySelector('img').src = window.IMG[map[l]];
+    }
+    var bs = document.querySelectorAll('[data-set].btn');
+    for (var j = 0; j < bs.length; j++) {
+      bs[j].classList.toggle('on', bs[j].getAttribute('data-set') === set);
+    }
+    elSet.textContent = set === 'h' ? '横版' : '竖版';
+  }
+
+  // ---- 形态切换；中屏 / 竖屏自动切竖版素材（横版硬裁会掉内容）----
+  function applyForm(f) {
+    scene.setAttribute('data-form', f);
+    var bs = document.querySelectorAll('[data-form].btn');
+    for (var j = 0; j < bs.length; j++) {
+      // 跳过素材按钮：它们也带 data-form 以外的属性，这里只认两者都有 form 的
+      bs[j].classList.toggle('on', bs[j].getAttribute('data-form') === f);
+    }
+    elForm.textContent = f === 'portrait' ? '竖屏 9:16' : (f === 'mid' ? '中屏 3:4'
+      : (f === 'wide' ? '16:9 手机' : '原幅 1500:630'));
+    applySet(f === 'art' || f === 'wide' ? 'h' : 'v');
+  }
+
+  var fbtns = document.querySelectorAll('button[data-form]');
+  for (var i = 0; i < fbtns.length; i++) {
+    fbtns[i].addEventListener('click', function () { applyForm(this.getAttribute('data-form')); });
+  }
+  var sbtns = document.querySelectorAll('button[data-set]');
+  for (var m = 0; m < sbtns.length; m++) {
+    sbtns[m].addEventListener('click', function () { applySet(this.getAttribute('data-set')); });
+  }
+
+  var qs = (location.search.match(/[?&]form=([a-z]+)/) || [])[1];
+  var qsSet = (location.search.match(/[?&]set=([hv])/) || [])[1];
+  applyForm(qs && /^(art|wide|mid|portrait)$/.test(qs) ? qs : 'art');
+  if (qsSet) { applySet(qsSet); }
+})();
+</script>
+</body>
+</html>
