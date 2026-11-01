@@ -98,3 +98,15 @@ _s2_comp_h.png
 
 # 瓷片渲染备份（与 c7_material 等同为中间件）
 artdraft/props3d/shards/_bak_pre_irregular/
+
+# ---------------------------------------------------------------- 过目页 / 验稿页：一律本地，不入远程仓库
+# 口径（2026-11-01 裁定）：凡是「给用户看稿」的 HTML —— 场景与立绘过目页、陀螺仪交互预览页、
+#   多版对照页、层拆分验稿页、拆分前后 A/B 页 —— 都是评审工具，不是游戏资产：
+#   不进远程仓库、不计入包体、不参与部署。
+# 本地存放：dev 仓工作树内的 preview/（本机 C:/Users/elisa/dev/tianqing-adventure/preview/）。
+#   它与 dev 仓同目录，但整目录被 ignore，所以「在仓里、不在库里」；
+#   换机/重装不会随 clone 带走，需手动整目录拷贝（连同 _archive/ 一起）。
+# 唯一例外：preview/README.md 入库，用来固化这条约定与命名规范——
+#   否则新 clone 下来的开发者无从得知 preview/ 该放什么、该不该提交。
+/preview/*
+!/preview/README.md
