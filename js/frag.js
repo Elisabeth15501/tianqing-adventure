@@ -488,8 +488,31 @@
       }
       /* 供自动化测试读取的只读状态（不参与逻辑，不改变任何行为） */
       mount.__tq = function () {
-        return { kind: 'latlong', yaw: yaw, pitch: pitch, zoom: zoom,
-          yawIdx: idxYaw(), pitchIdx: idxPitch(), rows: PIT, cols: YAW };
+        return { kind: 'latlong', yaw: yaw, pitch: pitch, zoom: zoom, auto: !!auto,
+          yawIdx: idxYaw(), pitchIdx: idxPitch(), rows: PIT, cols: YAW, pitchMax: pmax };
+      };
+      /* 外部视角指令（查看器工具条用）：把「按一下」翻译成与拖拽完全等价的状态变更，
+       * 改的仍是同一组 (yaw, pitch, zoom, pan, auto)，下一帧走同一个 draw()。 */
+      mount.__cmd = function (c) {
+        if (!c) { return mount.__tq(); }
+        var touched = false;
+        if (c.pitchAbs !== undefined) { pitch = Math.max(-pmax, Math.min(pmax, c.pitchAbs)); vp = 0; auto = false; touched = true; }
+        if (c.yawStep) { yaw = (yaw + c.yawStep * (360 / YAW) + 360) % 360; vy = 0; auto = false; touched = true; }
+        if (c.yawAbs !== undefined) { yaw = ((c.yawAbs % 360) + 360) % 360; vy = 0; auto = false; touched = true; }
+        if (c.zoom !== undefined) {
+          zoom = Math.max(1, Math.min(2.5, c.zoom));
+          if (zoom <= 1.001) { panX = 0; panY = 0; }
+          touched = true;
+        }
+        if (c.auto !== undefined) { auto = !!c.auto; vy = 0; vp = 0; touched = true; }
+        if (c.reset) {
+          yaw = anchor.yaw * (360 / YAW);
+          pitch = pitchOfIndex(anchor.pitch, PIT, pmax);
+          zoom = 1; panX = 0; panY = 0; vy = 0; vp = 0; auto = false;
+          touched = true;
+        }
+        if (touched) { draw(); }
+        return mount.__tq();
       };
       function tick(now) {
         if (!cv.isConnected) { return; }
@@ -689,6 +712,7 @@
   /* ========== direct2d 小节引擎（回退版默认操作 · 零惩罚） ==========
    * cfg.steps[i]: { label, gest:'drag'|'sweep'|'tap'|'hold', goal, tip, prop, done }
    * 手势与等价按钮双轨并存；进度只增不清；「应节而动」切应节轨（外部回调）。
+   * ★11-01 起：应节按钮默认不挂（单轨），onJie 回调与整条应节轨保留备用。
    */
   TQ.iv = function (main, cfg, cb, onJie) {
     /* ★rich：这三个小游戏（tang / proof / touhu）不从这套"进度累加器"里走，
@@ -719,7 +743,10 @@
     var plus = h('button', 'iv-mini', '＋ 一点');
     var sp = h('div', 'sp');
     var jie = h('button', 'iv-mini g', '应节而动');
-    ctrl.appendChild(minus); ctrl.appendChild(plus); ctrl.appendChild(sp); ctrl.appendChild(jie);
+    ctrl.appendChild(minus); ctrl.appendChild(plus);
+    /* 应节入口：只在应节轨启用时挂出来（第一版单轨，故不出现）。
+       ★不删代码：TQA.GSYS.jie.on 置真即原样恢复这个入口与 onJie 回调。 */
+    if (global.TQA && TQA.modeOpen && TQA.modeOpen('jie')) { ctrl.appendChild(sp); ctrl.appendChild(jie); }
     var hint = h('div', 'iv-hint', '');
     wrap.appendChild(stepsRow); wrap.appendChild(bar); wrap.appendChild(val); wrap.appendChild(ctrl); wrap.appendChild(hint);
     /* 挂载与退场由调用方占台管理（VN 占台机制）；节点不再自行 append 进文档流 */
@@ -974,6 +1001,24 @@
       if (over) { return; }
       if (onJie) { onJie(); }
     });
+    /* ---------- 舞台定高（2026-11-02 修 · 真机无法进入动手小节） ----------
+     * 原本靠 CSS `aspect-ratio:300/210` 给 .iv-stage 定高。宿主 WebView 基线是
+     * Chrome 61，不支持 aspect-ratio（Chrome 88+ 才有）；配合 flex:0 0 auto +
+     * 子元素全绝对定位，高度直接算成 0（实测 2px）⇒ 画布看不见；更致命的是
+     * Canvas.map() 的缩放比 `min(w/300, h/210)` 掉到 0.0095，任何点击/拖动都被
+     * 映射到 300×210 画幅之外，表现为「进得去、点不动」，与「进不去」同感。
+     * 这里按画幅比把高度算成 px 写进 style：不依赖任何新 CSS 特性，老 WebView 一致。
+     * 尺寸来源与 CSS 保持一致：宽取实际可用宽，高 = min(宽×210/300, 58vh)。 */
+    function fitStage() {
+      if (!RICH || !stage || !stage.parentNode) { return false; }
+      var w = stage.clientWidth;
+      if (!w) { return false; }                      /* 尚未入文档：等下一拍 */
+      var vh = global.innerHeight || (document.documentElement && document.documentElement.clientHeight) || 800;
+      var h = Math.round(Math.min(w * 210 / 300, vh * 0.58));
+      if (h > 0 && Math.abs(stage.clientHeight - h) > 1) { stage.style.height = h + 'px'; }
+      return true;
+    }
+
     if (RICH) {
       wrap.classList.add('rich');
       bar.style.display = 'none';
@@ -991,6 +1036,24 @@
         tip: function (t) { val.textContent = t || ''; },
         done: function (missed) { if (!over) { finishStep(!!missed); } }
       });
+      /* TQ.iv 返回时 wrap 还没被 occupyNode 挂进文档（clientWidth=0），故下一帧再量；
+       * 再补一帧兜住真机首帧字体/安全区导致的二次布局。 */
+      (function schedule() {
+        var raf = global.requestAnimationFrame || function (f) { return setTimeout(f, 16); };
+        raf(function () { fitStage(); raf(function () { fitStage(); }); });
+      }());
+      /* 旋屏/分屏/软键盘收起都会改可用宽：重算。
+       * 退场后 self-detach，避免每进一次小节就多挂一对监听。 */
+      var onResizeIv = function () {
+        if (!stage.parentNode) {
+          global.removeEventListener('resize', onResizeIv);
+          global.removeEventListener('orientationchange', onResizeIv);
+          return;
+        }
+        fitStage();
+      };
+      global.addEventListener('resize', onResizeIv);
+      global.addEventListener('orientationchange', onResizeIv);
     }
     enterStep();
     return wrap;

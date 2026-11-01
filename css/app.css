@@ -149,7 +149,13 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 /* ★max-width：aspect-ratio 在 max-height 生效时会"保高放宽容"，横屏下舞台框比画幅宽出一大截
    （1024 宽时框 990、画幅只有 633），两侧留着两块空皮。按 58vh×300/210 把宽也收住，框=画幅。
    不能写 min()——本工程要兼容老 WebView，calc 足矣。 */
-.iv.rich .iv-stage{flex:0 0 auto;width:100%;aspect-ratio:300/210;max-height:58vh;
+/* ★2026-11-02 修（真机进不去动手小节）：这里原来写 aspect-ratio:300/210。
+   aspect-ratio 是 Chrome 88+ 才有的属性，宿主 WebView 基线（Chrome 61）不认；
+   而本规则同时是 flex:0 0 auto + 子元素全绝对定位 ⇒ 高度算成 0，实测只剩 2px：
+   画布看不见，Canvas.map() 的缩放比 sc 变成 0.0095，点哪儿都映射到画幅外，
+   表现就是「进得去、点不动」。改为「70vw 起、58vh 封顶」的纯老属性写法给兜底，
+   精确尺寸由 js/frag.js 的 fitStage() 按画幅比写入 px（老 WebView 同样生效）。 */
+.iv.rich .iv-stage{flex:0 0 auto;width:100%;height:70vw;max-height:58vh;
   max-width:calc(58vh * 300 / 210);min-height:0;margin:0 auto}
 /* 步骤点/读数/提示跟着舞台一起收窄：否则横屏下三个点在整屏宽度上摊开，与画面脱节 */
 .iv.rich .iv-steps,
@@ -622,7 +628,11 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
  * 文字块底也落在 88px ⇒ 两个画面切换时视线不跳。 */
 .mem-stage-body{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;
   justify-content:flex-end;padding-bottom:var(--mem-lift,56px)}
-.mem-fig{width:132px;height:176px;margin-bottom:var(--mem-gap,24px);display:flex;align-items:flex-end;justify-content:center;opacity:.95}
+/* ★立绘尺寸（2026-11-01 放大）：原 132×176 在 390 屏上只占 1/3 宽，
+ * 回忆是「看人」的段落，脸看不清楚就白费了 AI 立绘。
+ * 现按「人物高 ≈ 舞台可用高的 4 成」定档，宽度按全身像 2:3 走，其余交给 object-fit:contain。
+ * 三个断点各自 ×1.7，比例关系保持不变。 */
+.mem-fig{width:224px;height:298px;margin-bottom:var(--mem-gap,24px);display:flex;align-items:flex-end;justify-content:center;opacity:.95}
 .mem-fig svg,.mem-fig img{width:100%;height:100%;object-fit:contain;object-position:bottom}
 .mem-plate{align-self:center;font-size:12px;letter-spacing:2px;color:#0F1B1E;background:#AFC7C1;border-radius:9px;padding:2px 14px;margin-bottom:10px}
 .mem-line{max-width:560px;width:100%;text-align:center;font-size:16px;line-height:1.95;color:#E4EFE9;padding:0 6px}
@@ -630,11 +640,11 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 @keyframes memIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 .mem-stage-hint{flex-shrink:0;text-align:center;font-size:11px;letter-spacing:2px;color:rgba(191,214,207,.55)}
 @media (min-width:700px) and (max-aspect-ratio:119/100){
-  .mem-fig{width:168px;height:224px}
+  .mem-fig{width:280px;height:372px}
   .mem-line{font-size:18px}
 }
 @media (max-height:668px){
-  .mem-fig{width:104px;height:138px;margin-bottom:16px}
+  .mem-fig{width:160px;height:212px;margin-bottom:16px}
   .mem-line{font-size:14.5px;line-height:1.8}
   .mem-stage-body{padding-bottom:56px}
 }
@@ -763,8 +773,13 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
    *   两条锚地规则在这里一律归位为「贴列底、占满可用高」。
    *   选择器 (0,6,0) 与基规则同特异性，靠后声明生效。 */
   .main.act-vn .sp-zone .slot.sp-fig[data-anchor]{ bottom:0; height:100%; }
-  .main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-side="l"],
-  .main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-side="r"]{ width:50%; height:100%; }
+  /* ★双人同框（2026-11-01 调研定案）：全身像 × 2 需要更多横向空间，
+   *   42% 的立绘列会让两人挤成一条。扩到 50%（上限 640），
+   *   两槽各 47%（中间留 6% 的天然中缝 ≈ 37px），各自贴列边。
+   *   中缝是「结构性」的：两槽宽度之和 94% < 100%，不靠 fitFor 夹紧去凑。 */
+  .main.act-vn .sp-zone[data-duo="1"]{ width:50%; max-width:640px; justify-content:space-between; }
+  .main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-side="l"]{ left:0; width:47%; height:100%; }
+  .main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-side="r"]{ right:0; width:47%; height:100%; }
 }
 
 /* ===== 手札 · 瓷片全屏查看器（2026-11-01） =====
