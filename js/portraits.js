@@ -486,6 +486,7 @@
     '尚宫': 'shanggong', '起居郎': 'qijulang',
     '殷崇义举觞，满殿安静': 'yinchongyi',
     '誊样在手': '@self', '笔悬纸上': '@self', '史官在此': '@self',
+    '@self': '@self',   /* 2026-11-02：旁白 figs 通道用——['@self','官家'] 即「玩家+官家」同框 */
     '残页在灯下': '@self', '史笔之终': '@self'
   };
 
@@ -670,7 +671,9 @@
         /* 跪像豁免（10-31）：跪着的人本来就矮一截，把站着的那位拖下来只会让
          * 「头宽已经对齐」这件事白做——所以只要有一方是跪像，就不做身高封顶。 */
         if (!me.kneel && !ot.kneel) {
-          k = Math.min(me.k, kMin * 1.12);
+          /* 1.12 → 1.06（2026-11-02 用户反馈张永德/殷崇义同框偏大）：
+           * 6% 是「高矮有别」仍可读的下限，再大就把听者压成配角。 */
+          k = Math.min(me.k, kMin * 1.06);
         }
       }
     }
@@ -760,6 +763,10 @@
     if (!slot) { return; }
     var fit = 'contain'; /* 2026-10-28：统一 contain（cover 会在窄头角色上裁掉头顶） */
     slot.setAttribute('data-fit', fit);
+    /* 景别标记（2026-11-02）：ratio≥0.9 的 640² 胸像标记 bust——
+     * 横屏 CSS 据此单独压半身像尺寸（全身像不受影响）。 */
+    var _row = fitRow(key, useSlot);
+    slot.setAttribute('data-body', (_row && _row.ratio >= 0.9) ? 'bust' : 'full');
     var w = slot.clientWidth, h = slot.clientHeight;
     if (!w || !h) { /* 尚未布局：下一帧再算 */ requestAnimationFrame(function () { applyFit(slot, key, useSlot); }); return; }
     /* 双人档：槽上带 data-duo="1" 时改用「同景别等高 + 可见带不出半幅」的一套参数。
@@ -846,6 +853,8 @@
       return k;
     },
     meta: function (key) { return FIG[key] || FIG.DEFAULT; },
+    /* 原生朝向：'l' 脸朝左 / 'r' 朝右 / '' 正面（回忆舞台镜像也用它，与双人档同一事实源） */
+    faceOf: function (key) { return FACE[key] || ''; },
     /* 名牌文本：speaker 原样优先，缺省用角色称谓 */
     labelOf: function (speaker, selfKey) {
       if (speaker) { return speaker; }

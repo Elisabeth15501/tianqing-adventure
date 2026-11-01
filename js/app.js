@@ -210,6 +210,25 @@
     if (figR) { figR.setAttribute('data-st', duoCast.r.key === sk ? 'on' : 'off'); }
     reAnchorSoon();
   }
+  /* ---------- 旁白双人同框（2026-11-02） ----------
+   * narr 步可带 figs:['@self','官家'] —— 玩家与官家同台（官家抚瓮一节）。
+   * 左=第一人（玩家），右=第二人（官家，提亮）；叙述不属于任何一方，
+   * 但「看瓮」的主语是官家，故右侧亮。与 setPortrait 的 duoCast 各走各的，
+   * 下一个带 speaker 的 card 会照常重排。 */
+  function setFigs(pair) {
+    if (!global.TP || !figR || !pair || pair.length < 2) { return; }
+    var kl = TP.keyOf(pair[0], SELF_KEY);
+    var kr = TP.keyOf(pair[1], SELF_KEY);
+    if (!kl || !kr) { return; }
+    toDuo();
+    TP.show(kl, { fill: true, side: 'l' });
+    TP.show(kr, { fill: true, side: 'r' });
+    if (TP.refit) { TP.refit(); }
+    figL.setAttribute('data-st', 'off');
+    figR.setAttribute('data-st', 'on');
+    reAnchorSoon();
+  }
+
   /* ---------- 立绘 ↔ 对话框 锚定（2026-10-28） ----------
    * 半身像不该被对话框压住：以「对话框上沿」为基准，锚在其上方并留 --fig-dock-gap。
    * 做法：量出舞台底到对话框顶的距离写入 --fig-dock-lift，sp-zone 据此上收，
@@ -865,6 +884,7 @@
       /* 只对「会露脸」的步骤滚动预取：narr/交互小节不改变 cast，预取也是白拉 */
       if (st.type === 'card') { prefetchAhead(i, 4); }
       if (st.type === 'narr') {
+        if (st.figs) { setFigs(st.figs); }
         dockBox('', st.text, null);
       } else if (st.type === 'card') {
         /* st.slot：该句该用哪一档表情；st.pair / st.pairSlot：第二在场者及其表情（双人同框） */
@@ -924,6 +944,7 @@
           if (j >= sub.length) { busy = false; after(); return; }
           var s2 = sub[j]; j += 1;
           if (s2.type === 'narr') {
+            if (s2.figs) { setFigs(s2.figs); }
             dockBox('', s2.text || '', nextSub);
           } else if (s2.type === 'card') {
             dockBox(s2.speaker || '', s2.text, nextSub, s2.slot, s2.pair, s2.pairSlot);
@@ -1340,6 +1361,14 @@
           + (key === 'DEFAULT' ? ' mem-fig-any' : ' mem-fig-' + key);
         if (global.TP.realInto) { global.TP.realInto(s, key, slotArt); }
         setCast(side, { key: key, slot: slotArt });
+      }
+      /* 面向彼此（2026-11-02）：不再「右位一律镜像」——按原生朝向判定，
+       * 与主线双人档同一规则：左位要朝右（原生朝左的翻），右位要朝左（原生朝右的翻）。
+       * 郭威↔郭荣：郭荣(朝左)在左位翻→朝右，郭威(朝右)在右位翻→朝左，两人对视。 */
+      if (global.TP.faceOf) {
+        var nf = global.TP.faceOf(key);
+        var mir = (side === 'L') ? (nf === 'l') : (nf === 'r');
+        s.setAttribute('data-mir', mir ? '1' : '0');
       }
       s.style.display = '';
     }

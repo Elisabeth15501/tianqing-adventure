@@ -665,7 +665,9 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .mem-figs[data-n="2"] .mem-fig[data-side="r"]{right:2%}
 .mem-fig[data-st="on"]{filter:none;z-index:2}
 .mem-fig[data-st="off"]{filter:brightness(.66) saturate(.85);z-index:1}
-.mem-fig[data-side="r"] svg,.mem-fig[data-side="r"] img{transform:scaleX(-1)} /* 右位镜像 */
+/* 镜像按原生朝向（data-mir，JS 依 FACE 表写入）：目标是同框两人脸朝向彼此。
+ * 旧规则「右位一律镜像」会让原生朝左的角色在右位变成朝外看，两人背对背。 */
+.mem-fig[data-mir="1"] svg,.mem-fig[data-mir="1"] img{transform:scaleX(-1)}
 .mem-fig svg,.mem-fig img{width:100%;height:100%;object-fit:contain;object-position:bottom}
 /* 横屏：竖屏的 44% 双槽会把两人推到屏幕两端（1280 下槽宽 547px）⇒ 收拢到中部，
  * 尺寸略放大补横屏的纵向余量（Chrome 61：只用 max-width，不用 clamp/min）。 */
@@ -1025,3 +1027,29 @@ body.shv-open .main{overflow:hidden}
   background:rgba(255,253,246,.94);border:1px solid #E6DFCE;color:#6B6560;
   letter-spacing:.02em}
 .iv-src-btn:active{background:#FFFDF6}
+
+/* ==================== 横屏（≥900px）内容宽度收束（2026-11-02 · 任务7） ====================
+ * 桌面/横屏全宽下，占台浮层（瓷片卡、选项、差事帖、回看）与对话框会通栏拉满：
+ * 按钮被拉成长条、文本一行四十字，观感变形。这里统一收束到可读栏宽并居中。
+ * VN 的「左立绘列 + 右对话栏」分栏（.main.act-vn）有自己的设计，不在收束之列。 */
+@media (min-width:900px){
+  .shard-occ, .shard-occ .shard-toast, .choice-box{ max-width:640px; margin-left:auto; margin-right:auto; width:100%; box-sizing:border-box; }
+  .choice-box .opt{ max-width:640px; }
+  .dlg-box{ max-width:640px; }
+  .log-strip{ max-width:640px; margin-left:auto; margin-right:auto; }
+  .cs-ov .cs-sheet, .cr-overlay .cr-panel{ max-width:620px; }
+  .log-panel{ max-width:560px; margin-left:auto; margin-right:auto; }
+  /* 瓷片卡里的整宽按钮恢复「内容宽 + 居中」，不再通栏 */
+  .shard-occ .btn{ width:auto; min-width:220px; display:block; margin-left:auto; margin-right:auto; }
+}
+
+/* ==================== 横屏（≥900px）半身立绘限高（2026-11-02 · 任务6） ====================
+ * 半身像（640² 胸像：尚食令/郭宗训/王溥等）contain 进「高 86%」的立绘列时，
+ * 1:1 的图会撑到与列同宽再被高度截着看，横屏下显得比全身像还大。
+ * 横屏给半身像单独压一档：槽高降到 64%，胸像自然缩小到与全身像协调。 */
+@media (min-width:900px){
+  .main.act-vn .sp-zone .slot.sp-fig[data-body="bust"]{ height:64% !important; max-height:64% !important; }
+  .main.act-vn .sp-zone[data-anchor="dock-top"] .slot.sp-fig[data-body="bust"],
+  .main.act-vn .sp-zone[data-anchor="dock-left"] .slot.sp-fig[data-body="bust"],
+  .main.act-vn .sp-zone[data-anchor="dock-right"] .slot.sp-fig[data-body="bust"]{ height:64% !important; max-height:64% !important; }
+}

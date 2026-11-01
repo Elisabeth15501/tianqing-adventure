@@ -125,8 +125,8 @@
     var tc = tone === 'warn' ? '#8A5A3A' : (tone === 'ok' ? '#3F6B58' : '#3A3A34');
     return '<g id="hud" pointer-events="none">' +
       '<rect x="14" y="178" width="272" height="24" rx="7" fill="rgba(255,253,246,.92)" stroke="#D8CFBA" stroke-width="1"/>' +
-      '<text x="24" y="194" font-size="9.5" fill="' + tc + '">' + text + '</text>' +
-      (count ? '<text x="276" y="194" font-size="9.5" text-anchor="end" fill="#3F6B58">' + count + '</text>' : '') +
+      '<text id="hudt" x="24" y="194" font-size="9.5" fill="' + tc + '">' + text + '</text>' +
+      (count ? '<text id="hudc" x="276" y="194" font-size="9.5" text-anchor="end" fill="#3F6B58">' + count + '</text>' : '') +
       '</g>';
   }
 
@@ -1220,9 +1220,16 @@
       if (st.ph !== 'idle') { return; }
       st.ph = 'ai';
       st.tag = '群臣轮番 · 礼官亦预';
-      cap('司正', S.intro || '酒过三巡，园中设壶。');
+      /* 2026-11-02 修：data 里 intro 是对象 {speaker, text}（D.touhu.intro），
+       * 原来直接当字符串塞进 cap ⇒ 画面上出现「[object Object]」，看起来就是
+       * 「司正的开场白没了」。这里按对象取字段，字符串兼容旧写法。 */
+      var it0 = S.intro;
+      var itSp = (it0 && typeof it0 === 'object') ? (it0.speaker || '司正') : '司正';
+      var itTx = (it0 && typeof it0 === 'object') ? (it0.text || '') : (it0 || '酒过三巡，园中设壶。');
+      cap(itSp, itTx);
       paint();
-      after(1100, function () { nextMinister(S.ministers || []); });
+      /* 1100→2400：这句 40 字，1.1 秒读不完就切下一句，观感等于「没出现」 */
+      after(2400, function () { nextMinister(S.ministers || []); });
     }
     function nextMinister(M) {
       if (st.dead) { return; }
@@ -1975,7 +1982,11 @@ function playShang(cv, hooks, cfg, ui) {
     if (!st.drag) { return; }
     st.drag = false;
     if (dist(st.cup, T.drop) < 26) {
-      st.placed = true; st.cup = { x: T.drop.x, y: T.drop.y - 3 };   /* 落位吸附到案面中线 */
+      st.placed = true;
+      /* 2026-11-02 修「杯不在案上」：圈足底在 y+10.7，原吸附 drop.y-3 ⇒ 杯底 140.7，
+       * 已落到案面前沿(y=136)之下，看着像悬空/插进案沿。改吸附到 y=123：
+       * 杯底 ≈133.7，正好落在案面顶(127~136)中带，虚圈(dy=133)也套得住杯底。 */
+      st.cup = { x: T.drop.x, y: T.drop.y - 10 };
       paint();
       hooks.step(1, '觞已落案');
       /* 末尾过渡条（与汤饼/丝结/史官线同一处、同一形制）：点掉才交棒 */
@@ -2173,7 +2184,13 @@ function playFolk(cv, hooks, cfg, ui) {
       }
       return;
     }
-    if (st.beat === 2) { st.down = true; st.lastAng = 0; st.acc = 0; return; }
+    if (st.beat === 2) {
+      /* 2026-11-02 重写（任务9「绕丝太难」）：down 不再清 acc —— 原实现里
+       * 一旦 down 重入（宿主 WebView 点控抖动会重发 pointerdown，实测 B 场景
+       * acc 被清到 0），绕了一半全部作废。现在按住/松手只是暂停，进度保留。 */
+      st.down = true; st.lastAng = 0; st.px = null;
+      return;
+    }
     if (st.beat === 3) { st.drag = dist(p, st.dish) < 24; return; }
     if (st.beat === 4) {
       if (dist(p, { x: 150, y: 86 }) > 20) { return; }
@@ -2193,15 +2210,28 @@ function playFolk(cv, hooks, cfg, ui) {
   }
   function move(p) {
     if (st.beat === 2 && st.down) {
+      st._moves = (st._moves || 0) + 1;
       st.pt = { x: p.x, y: p.y };                 /* 丝头从这里牵出来 */
-      var a = Math.atan2(p.y - 96, p.x - 150);
-      if (st.lastAng) {
-        var da = a - st.lastAng;
-        while (da > Math.PI) { da -= 2 * Math.PI; }
-        while (da < -Math.PI) { da += 2 * Math.PI; }
-        if (Math.abs(da) < 1.2) { st.acc += Math.abs(da); }
+      /* ★转向累积：算「手指路径自己拐了多少弯」，而不是绕固定原点 (150,96) 转角度。
+       * 旧实现的两个死穴（都实测复现过）：
+       *   a) 手指路径必须包住原点——绕小圈(r15)或绕囊体的偏心圈，角度伸缩相抵，acc 恒 0；
+       *   b) down 重入清 acc——见上。
+       * 转向累积对圆心/半径完全不敏感：任何圆滑的环形动作都计数。
+       * 急转向（折返）单步封顶 0.9 弧度：来回直线蹭不出一圈，防刷。 */
+      if (st.px != null) {
+        var dx0 = p.x - st.px, dy0 = p.y - st.py;
+        if (Math.abs(dx0) > 0.8 || Math.abs(dy0) > 0.8) {
+          var ha = Math.atan2(dy0, dx0);
+          if (st.lastAng) {
+            var da = ha - st.lastAng;
+            while (da > Math.PI) { da -= 2 * Math.PI; }
+            while (da < -Math.PI) { da += 2 * Math.PI; }
+            st.acc += Math.min(Math.abs(da), 0.9);
+          }
+          st.lastAng = ha;
+        }
       }
-      st.lastAng = a;
+      st.px = p.x; st.py = p.y;
       var w = Math.min(3, Math.floor(st.acc / (Math.PI * 2) * 3));
       if (w !== st.wound) { st.wound = w; paint(); hooks.step(prog(), lab()); }
       return;
@@ -2226,7 +2256,7 @@ function playFolk(cv, hooks, cfg, ui) {
 
   return {
     beat: function (i) {
-      st.beat = i; st.down = false; st.drag = false; st.lastAng = 0; st.acc = 0; st.pt = null; st.fin = false;
+      st.beat = i; st.down = false; st.drag = false; st.lastAng = 0; st.acc = 0; st.pt = null; st.fin = false; st.px = null; st._moves = 0;
       if (ui && ui.sheet) { ui.sheet.close(); }
       if (i === 0) { st.silk = []; st.taken = []; st.body = 0; st.chosen = false; st.wound = 0; st.spiced = false; st.knot = 0; }
       if (i === 2) { st.wound = 0; }
@@ -2236,8 +2266,10 @@ function playFolk(cv, hooks, cfg, ui) {
     start: function () { }, stop: function () { },
     progress: prog, label: lab,
     state: function () {
+      /* acc/lastAng/_moves：绕丝手势的调试口（QA 探针用） */
       return { beat: st.beat, silk: st.silk.slice(), body: st.body, chosen: !!st.chosen,
-               wound: st.wound, spiced: st.spiced, knot: st.knot, fin: st.fin };
+               wound: st.wound, spiced: st.spiced, knot: st.knot, fin: st.fin,
+               acc: +st.acc.toFixed(2), down: st.down, pts: st._moves || 0 };
     }
   };
 }
@@ -2482,10 +2514,17 @@ function playShiFood(cv, hooks, cfg, ui) {
  * · fx 是摊主在**全景宽度上的比例位置**（0~1），与素材分辨率无关 —— 换成 2880 宽不用改数。
  * · 加载失败自动退回代码占位，不白屏。
  * · 分层视差（S4 方案 L2~L5）留待素材到位后再加，接口形状不变：多张时同样按 fx 归一。 */
+/* 三位摊主（默认值＝data.js s4.vend 的镜像）：分布与文案按《天清节_S4桥市全景_开发方案》
+ * §5.1/§7.1 —— 同一件事问三个人（看的人 / 卖的人 / 外乡人）：
+ *   say  ＝ 摊主台词（问俗气泡，2 句）
+ *   note ＝ 落成的记注（记注体短句，落笔拍按玩家问到的顺序落纸） */
 var DEF_VEND = [
-  { fx: 0.17, name: '卖囊妇人', note: '士庶以丝结承露囊，更相遗问。' },
-  { fx: 0.50, name: '茶摊老板娘', note: '桥头茶摊卖江陵粗茶，市人聚饮。' },
-  { fx: 0.83, name: '南来客商', note: '占城贡香在礼部库，桥市所售非贡余。' }
+  { fx: 0.17, name: '茶摊老板娘', say: '江陵的粗茶。官家没做官家的时候，也是这么喝的。',
+    note: '桥头茶摊卖江陵粗茶，市人聚饮，不问官私。' },
+  { fx: 0.50, name: '卖囊妇人', say: '今日卖空了三个架。买的不都是要送人——有买给自己的。',
+    note: '士庶以丝结承露囊，更相遗问——唐千秋节旧俗，五代承之。' },
+  { fx: 0.83, name: '南来客商', say: '库里的三百匹是贡的，我这些不是。贡的进不了这条街。',
+    note: '占城贡香三百匹尚在礼部库；桥市香摊所售非贡余，乃商舶私贩。' }
 ];
 var PANO_CACHE = {};
 function panoMeta(src) {
@@ -2500,7 +2539,8 @@ function panoMeta(src) {
 }
 function playShiFolk(cv, hooks, cfg, ui) {
   var S4 = (cfg && cfg.s4) || {};
-  var st = { beat: 0, off: 0, seen: [false, false, false], drag: false, sx: 0, so: 0, asked: [], notes: 0 };
+  var st = { beat: 0, off: 0, seen: [false, false, false], drag: false, sx: 0, so: 0,
+             asked: [], notes: 0, travel: 0, bub: -1, rep: -1, repT: 0 };
   var VW = 300, SW = VW * (S4.screens || 3);
   var pano = S4.pano ? panoMeta(S4.pano) : null;
   var VS = (S4.vend && S4.vend.length === 3) ? S4.vend : DEF_VEND;
@@ -2509,9 +2549,28 @@ function playShiFolk(cv, hooks, cfg, ui) {
     for (var vi = 0; vi < 3; vi++) {
       var vv = VS[vi] || DEF_VEND[vi];
       var fx = (vv.fx != null) ? vv.fx : DEF_VEND[vi].fx;
-      VEND.push({ x: fx * SW, name: vv.name || DEF_VEND[vi].name, note: vv.note || DEF_VEND[vi].note });
+      VEND.push({ x: fx * SW,
+        name: vv.name || DEF_VEND[vi].name,
+        say: vv.say || DEF_VEND[vi].say,
+        note: vv.note || DEF_VEND[vi].note });
     }
   })();
+  /* 记注换行：一行 per 字，优先在标点处断（记注体短句最长 29 字，便条一行装不下） */
+  function folkWrap(tx, per) {
+    tx = String(tx);
+    var rows = [], i = 0, PUNCT = '，。；、——！？';
+    while (i < tx.length) {
+      if (tx.length - i <= per) { rows.push(tx.slice(i)); break; }
+      var cut = -1, j;
+      for (j = i + per; j > i + per - 6 && j > i + 1; j--) {
+        if (PUNCT.indexOf(tx.charAt(j - 1)) >= 0) { cut = j; break; }
+      }
+      if (cut < 0) { cut = i + per; }
+      rows.push(tx.slice(i, cut));
+      i = cut;
+    }
+    return rows;
+  }
 
   function stalls() {
     var s = '', i;
@@ -2546,17 +2605,24 @@ function playShiFolk(cv, hooks, cfg, ui) {
     }
     return s;
   }
-  /* 摊主标记：两种素材态共用。
-     观俗这一拍**一个标记都不画**（要"找"才有意义）；问俗起，未问的给一圈很淡的虚线，
-     已问的改朱实线圈 —— 只标"这个能问"，不替玩家指路。 */
+  /* 摊主标记（S4 方案 §5.2 三级渐进）：
+     观俗这一拍**一个标记都不画**（要"找"才有意义）；问俗起，未问的给 6px 柔光点 +
+     极细光圈呼吸（2.4s，SMIL）；已问的改一枚暗朱点常驻 —— 不复点，留下"我来过"的痕迹。
+     点到已问：不计数，朱点闪一下（st.rep 记一次重画，重画时插一次性 animate）。 */
   function vendMarks() {
     var s = '', i, x;
     for (i = 0; i < 3; i++) {
       x = VEND[i].x;
       if (st.asked.indexOf(i) >= 0) {
-        s += '<circle cx="' + x + '" cy="84" r="13" fill="none" stroke="#3F6B58" stroke-width="1.6" opacity=".8"/>';
+        s += '<circle cx="' + x + '" cy="84" r="3.4" fill="#8A4A3A"/>';
+        if (st.rep === i && now() - st.repT < 900) {
+          s += '<circle cx="' + x + '" cy="84" r="10" fill="none" stroke="#8A4A3A" stroke-width="1.6" opacity=".9">' +
+            '<animate attributeName="opacity" values=".9;0" dur="0.7s" fill="freeze"/></circle>';
+        }
       } else if (st.beat >= 1) {
-        s += '<circle cx="' + x + '" cy="84" r="16" fill="none" stroke="#527E79" stroke-width="1.1" stroke-dasharray="4 4" opacity=".38"/>';
+        s += '<circle cx="' + x + '" cy="84" r="3" fill="#E7EFEA" opacity=".9"/>' +
+          '<circle cx="' + x + '" cy="84" r="13" fill="none" stroke="#527E79" stroke-width="1" stroke-dasharray="3 4" opacity=".3">' +
+          '<animate attributeName="opacity" values=".18;.45;.18" dur="2.4s" repeatCount="indefinite"/></circle>';
       }
     }
     return s;
@@ -2584,17 +2650,44 @@ function playShiFolk(cv, hooks, cfg, ui) {
     }
     s += '</g></g>';
     s += '<rect x="0" y="40" width="' + VW + '" height="118" fill="none" stroke="#C9B48A" stroke-width="1"/>';
-    /* 观察位刻度：只说"还有几段没看"，不指路 */
-    for (var k = 0; k < 3; k++) {
-      s += '<rect x="' + (12 + k * 18) + '" y="166" width="12" height="5" rx="2.5" fill="' + (st.seen[k] ? '#7FA9A1' : '#DED7C9') + '"/>';
+    /* 索引条（S4 方案 §5.2）：问俗拍钉在右下角，「茶 · 囊 · 香」三个字位，
+       未问空心、问过实心 —— 只说"还有几个没问"，不指路。落笔拍让位给便条。 */
+    if (st.beat === 1) {
+      var IDX = ['茶', '囊', '香'];
+      for (var k = 0; k < 3; k++) {
+        var ax = 234 + k * 20, ad = st.asked.indexOf(k) >= 0;
+        s += '<rect x="' + ax + '" y="163" width="16" height="16" rx="3" fill="' + (ad ? '#527E79' : 'none') +
+          '" stroke="' + (ad ? '#527E79' : '#B9A67C') + '" stroke-width="1"/>' +
+          '<text x="' + (ax + 8) + '" y="175" font-size="9" text-anchor="middle" fill="' +
+          (ad ? '#FBF6EA' : '#8A7B5E') + '">' + IDX[k] + '</text>';
+      }
+    }
+    /* 问俗气泡（S4 方案 §5.3）：点开摊主出 2 句对话，全景保留在背景、可继续拖动 */
+    if (st.beat === 1 && st.bub >= 0) {
+      var bv = VEND[st.bub];
+      s += '<g pointer-events="none">' +
+        '<rect x="16" y="142" width="268" height="32" rx="6" fill="rgba(251,246,234,.96)" stroke="#C9B48A" stroke-width="1"/>' +
+        '<text x="26" y="154" font-size="7.4" fill="#527E79">' + bv.name + '</text>' +
+        '<text x="26" y="167" font-size="8.2" fill="#3A3A34">' + bv.say + '</text>' +
+        '</g>';
     }
     if (st.beat === 2) {
-      s += '<rect x="54" y="150" width="192" height="46" rx="4" fill="#FBF6EA" stroke="#DED7C9" stroke-width="1.2"/>';
-      for (var n = 0; n < 3; n++) {
-        if (n < st.notes) {
-          s += '<text x="64" y="' + (164 + n * 12) + '" font-size="9" fill="#3A3A34">' + VEND[n].note + '</text>';
+      /* 便条（S4 方案 §7.2）：三条俗记**按玩家问到的顺序**依次落到纸上；
+       * 记注一行装不下（最长 29 字），按标点断成至多两行 */
+      s += '<rect x="46" y="144" width="208" height="56" rx="4" fill="#FBF6EA" stroke="#DED7C9" stroke-width="1.2"/>';
+      var row = 0, n2;
+      for (n2 = 0; n2 < 3; n2++) {
+        var vn = st.asked[n2];
+        if (vn == null) { break; }
+        if (n2 < st.notes) {
+          var rows = folkWrap(VEND[vn].note, 20);
+          for (var r2 = 0; r2 < rows.length; r2++) {
+            s += '<text x="56" y="' + (157 + row * 8.8) + '" font-size="7.6" fill="#3A3A34">' + rows[r2] + '</text>';
+            row += 1;
+          }
         } else {
-          s += '<path d="M64 ' + (161 + n * 12) + ' h172" stroke="#EFE7D5" stroke-width="1"/>';
+          s += '<path d="M56 ' + (154 + row * 8.8) + ' h188" stroke="#EFE7D5" stroke-width="1"/>';
+          row += 1;
         }
       }
     }
@@ -2603,9 +2696,9 @@ function playShiFolk(cv, hooks, cfg, ui) {
   function paint() { cv.html(scene()); }
   function seenAll() { return st.seen[0] && st.seen[1] && st.seen[2]; }
   function markSeen() {
-    var vc = st.off + VW / 2;
+    var vc = st.off + VW / 2, tol = Math.max(40, Math.round(SW * 0.06));   /* 观察位容差 ±6%（S4 方案 G1） */
     for (var i = 0; i < 3; i++) {
-      if (!st.seen[i] && Math.abs(vc - VEND[i].x) < 60) { st.seen[i] = true; }
+      if (!st.seen[i] && Math.abs(vc - VEND[i].x) < tol) { st.seen[i] = true; }
     }
   }
   function prog() {
@@ -2627,8 +2720,13 @@ function playShiFolk(cv, hooks, cfg, ui) {
       for (var i = 0; i < 3; i++) {
         if (Math.abs(p.x + st.off - VEND[i].x) < 26 && p.y > 60 && p.y < 104) {
           st.moved = 0; st.askHit = true;
-          if (st.asked.indexOf(i) < 0) { st.asked.push(i); paint(); hooks.step(prog(), lab()); hooks.tip(VEND[i].name + '：' + VEND[i].note); }
-          if (st.asked.length >= 3) { hooks.done(false); }   /* 中间拍不插条：过渡条只在本节末尾 */
+          if (st.asked.indexOf(i) < 0) {
+            st.asked.push(i); st.bub = i; sfx('select');
+            paint(); hooks.step(prog(), lab()); hooks.tip(VEND[i].name + '：' + VEND[i].say);
+            if (st.asked.length >= 3) { st.bub = -1; hooks.done(false); }   /* 三人齐自动进三拍；过渡条只在本节末尾 */
+          } else {
+            st.rep = i; st.repT = now(); paint();    /* 点到已问：不计数，朱点闪一下 */
+          }
           return;
         }
       }
@@ -2679,8 +2777,476 @@ function playShiFolk(cv, hooks, cfg, ui) {
   };
 }
 
+  /* ============================================================
+     挑灯：擦罩（往复擦五处煤垢）／注油（按住油壶注进盂）／点灯（三下：引火→起焰→落罩）
+     ------------------------------------------------------------
+     从「手感校准页」原样移植（2026-11-02《挑灯_油灯机制改进方案_v1》重做版）：
+     · 物理同页：油在盂里（LP.rimY..botY），罩只是挡风的烟囱 —— 罩内不出现油面；
+       量程＝盂深（1 分 = 2px，盂深 20px = 10 分，七分线 y=124）；
+       三拍是同一次使用：擦罩戴罩（dy=0）→ 注油提罩（dy=−34）→ 点灯第三下落罩（dy→0）。
+     · 阈值同页：擦净判据 sm≤0.02／单帧擦除 0.05／命中半径 r+11；
+       注速 3.2px/s（帧增量封顶 0.1s，切后台不会一次灌满）、油位下限盂沿上 8px；
+       注油松手判定 >131 浅（重试）／≥124 七分／≥118 满／<118 溢（都过，零惩罚）；
+       点灯芯口命中半径 22、油浅焰灭 620/1060/1400ms、落罩补间 320ms、提罩 350ms。
+     · 与校准页同款「骨架一次画好 + patchLamp 逐帧补」：罩的升降走 JS 补间
+       （CSS transition 在 SVG <g> 上不生效），抹布/油壶/焰逐帧改节点不重绘骨架。
+     ============================================================ */
+  var LP = {
+    rimY: 118, botY: 138, mark7: 124,     /* 盂沿 / 内底 / 七分线 */
+    pxPerFen: 2,                          /* 1 分 = 2px：盂深 20px = 10 分，七分线正好 7 分 */
+    lift: 34,                             /* 罩提起高度 */
+    rate: 3.2,                            /* 注速 px/s（空→溢约 6.2s，目标带 7px ≈ 2.2s 容错窗） */
+    shade: 'M110 64 h80 l-8 76 h-64 Z',
+    bowlOut: 'M124 118 h52 l-5 15 q-21 6 -42 0 Z',
+    bowlIn: 'M128 119 h44 l-4 13 q-18 5 -36 0 Z'
+  };
+  /* 擦罩拍：五处煤垢（与校准页 SECTIONS.lamp 第一拍同一份坐标） */
+  var LAMP_SM = [{ x: 124, y: 86, r: 9 }, { x: 150, y: 80, r: 10 }, { x: 176, y: 90, r: 8 },
+                 { x: 134, y: 112, r: 9 }, { x: 170, y: 114, r: 8 }];
+  function lampFen(y) { return Math.max(0, Math.min(10, (LP.botY - y) / LP.pxPerFen)); }
+  function lampBand(y) { return y >= LP.mark7 && y <= 131; }        /* 3.5–7 分：目标带 */
+
+  var LAMP_DEFS = '<defs>' +
+    '<linearGradient id="glsG" x1="0" y1="0" x2="1" y2="0">' +
+      '<stop offset="0" stop-color="#FFFFFF" stop-opacity=".82"/>' +
+      '<stop offset=".26" stop-color="#F0F6F1" stop-opacity=".46"/>' +
+      '<stop offset=".72" stop-color="#DBE7E1" stop-opacity=".36"/>' +
+      '<stop offset="1" stop-color="#FFFFFF" stop-opacity=".7"/>' +
+    '</linearGradient>' +
+    '<linearGradient id="sootG" x1="0" y1="0" x2="0" y2="1">' +
+      '<stop offset="0" stop-color="#5A4630" stop-opacity=".26"/>' +
+      '<stop offset=".42" stop-color="#5A4630" stop-opacity=".09"/>' +
+      '<stop offset="1" stop-color="#5A4630" stop-opacity=".04"/>' +
+    '</linearGradient>' +
+    '<filter id="smSoft" x="-90%" y="-90%" width="280%" height="280%">' +
+      '<feGaussianBlur stdDeviation="1.1"/>' +
+    '</filter>' +
+  '</defs>';
+  /* 底座：玻璃直接坐在一个矮铜脚上；顶/底铜箍收口 */
+  var LAMP_BASE = '<path d="M117 138 h66 l-3 11 h-60 Z" fill="#CBB68C" stroke="#8A6E33" stroke-width="1.1"/>' +
+    '<ellipse cx="150" cy="149" rx="31" ry="4.6" fill="#C3AB7E" stroke="#8A6E33" stroke-width="1"/>' +
+    '<ellipse cx="150" cy="148.6" rx="20" ry="2.8" fill="#AE9468" opacity=".7"/>';
+  var LAMP_RIMS = '<ellipse cx="150" cy="64" rx="40" ry="5.4" fill="#CBB68C" stroke="#8A6E33" stroke-width="1.2"/>' +
+    '<ellipse cx="150" cy="64.8" rx="33" ry="3.2" fill="#7E6A4A" opacity=".42"/>' +
+    '<path d="M120 138 h60 v3 h-60 Z" fill="#C3AB7E" opacity=".85"/>';
+
+  function lampBenchHTML() {
+    return '<ellipse cx="150" cy="150" rx="52" ry="7.4" fill="#7C6A4E" opacity=".1"/>';
+  }
+  /* 溢出来的油：必须画在灯之后（早先夹在案面影里被碗和底座压住，等于没画） */
+  function lampSpillHTML() {
+    return '<g id="spill" opacity="0">' +
+      '<path d="M176 136 q11 5 7 11 q7 3 3 7 l-17 1 q-4 -6 2 -10 q-5 -5 5 -9 Z" fill="#C98F35" opacity=".62"/>' +
+      '<ellipse cx="182" cy="152" rx="13" ry="3.2" fill="#C98F35" opacity=".55"/>' +
+      '<ellipse cx="180" cy="151.2" rx="7" ry="1.6" fill="#E7B45C" opacity=".6"/>' +
+    '</g>';
+  }
+  /* 油盂（灯盏）：油只在这里。oilY=null 表示空盂（液面贴底） */
+  function lampBowlHTML(oilY) {
+    var y = (oilY == null) ? LP.botY : oilY;
+    var top = Math.min(y, LP.botY + 2);
+    var h = Math.max(0, LP.botY + 2 - top);
+    return '<defs><clipPath id="bowlClip"><path d="' + LP.bowlIn + '"/></clipPath></defs>' +
+      '<path d="' + LP.bowlOut + '" fill="#C9A86A" stroke="#8A6E33" stroke-width="1.3" stroke-linejoin="round"/>' +
+      '<path d="' + LP.bowlIn + '" fill="#6B5836"/>' +
+      '<g clip-path="url(#bowlClip)">' +
+        '<rect id="oilrect" x="120" y="' + top.toFixed(1) + '" width="60" height="' + h.toFixed(1) + '" fill="#D9A24A" opacity=".82"/>' +
+        '<rect id="oilsurf" x="120" y="' + (top - .7).toFixed(1) + '" width="60" height="1.4" fill="#F2C97E" opacity="' + (h > 0 ? '.85' : '0') + '"/>' +
+      '</g>' +
+      '<path d="M129 ' + LP.mark7 + ' h42" stroke="#F0C070" stroke-width="1.2" opacity=".5" stroke-dasharray="5 3"/>' +
+      '<ellipse cx="150" cy="' + LP.rimY + '" rx="26" ry="4" fill="none" stroke="#8A6E33" stroke-width="1.2"/>';
+  }
+  function lampWickHTML() {
+    return '<rect x="145" y="112" width="10" height="7" rx="1.4" fill="#9A8459" stroke="#7E6A4A" stroke-width=".8"/>' +
+      '<path d="M150 134 v-20" stroke="#3E3226" stroke-width="2.6" stroke-linecap="round"/>' +
+      '<path d="M150 116 q1.6 -2 3.2 0" fill="none" stroke="#5E4E3A" stroke-width="1.4"/>';
+  }
+  /* 玻璃罩：可提可落。dy=0 戴着，dy=−34 提起 */
+  function lampShadeHTML(dy, o) {
+    o = o || {};
+    return '<g id="shade" transform="translate(0,' + (dy || 0) + ')">' +
+      '<path d="' + LP.shade + '" fill="url(#glsG)" stroke="#7E9A92" stroke-width="1.6"/>' +
+      '<path id="soot" d="' + LP.shade + '" fill="url(#sootG)" opacity="' + (o.soot == null ? .9 : o.soot) + '"/>' +
+      LAMP_RIMS +
+      '<path d="M117 76 c-2 22 -2 42 0 58" stroke="#FFFFFF" stroke-width="4" opacity=".5" fill="none" stroke-linecap="round"/>' +
+      '<path d="M183 80 c1 18 1 34 0 50" stroke="#FFFFFF" stroke-width="2" fill="none" opacity=".26" stroke-linecap="round"/>' +
+      (o.inner || '') +
+    '</g>';
+  }
+  /* 焰：0 / 0.55 / 1。焰根压在芯口 y=112 上 */
+  function lampFlameHTML(k) {
+    if (k <= 0.02) { return ''; }
+    return '<g id="flame" transform="translate(150,112) scale(' + k.toFixed(2) + ')">' +
+      '<path d="M0 1 C-7 -5 -5 -14 0 -21 C5 -14 7 -5 0 1 Z" fill="#F0A63C" opacity=".95"/>' +
+      '<path d="M0 0 C-3.4 -4 -2.4 -10 0 -14 C2.4 -10 3.4 -4 0 0 Z" fill="#FFEFBF" opacity=".95"/>' +
+      '<ellipse cx="0" cy="-4" rx="7" ry="9" fill="#F7C560" opacity=".22"/>' +
+    '</g>';
+  }
+  /* 右侧刻线柱：量程＝盂深（不是罩高），三条刻线 0 / 七分 / 溢 */
+  function lampGaugeHTML(oilY) {
+    var y = (oilY == null) ? LP.botY : oilY;
+    var top = Math.min(y, LP.botY);
+    var h = Math.max(0, LP.botY - top);
+    return '<rect x="248" y="' + LP.rimY + '" width="9" height="' + (LP.botY - LP.rimY) + '" rx="4" fill="#EFE7D4" stroke="#C9B48A" stroke-width="1"/>' +
+      '<rect x="249" y="' + LP.mark7 + '" width="7" height="' + (131 - LP.mark7) + '" fill="#8FB5B0" opacity=".45"/>' +
+      '<rect id="gauge" x="250" y="' + (LP.botY - h).toFixed(1) + '" width="5" height="' + h.toFixed(1) + '" rx="2.5" fill="#D9A24A"/>' +
+      '<path d="M243 ' + LP.rimY + ' h5 M243 ' + LP.mark7 + ' h5 M243 ' + LP.botY + ' h5" stroke="#8A7B5E" stroke-width="1.1" opacity=".8"/>' +
+      '<text class="gtxt" x="261" y="' + (LP.mark7 + 3.2) + '" font-size="6.6" fill="#527E79">七分</text>' +
+      '<text class="gtxt" x="241" y="' + (LP.rimY - .6) + '" font-size="6.6" text-anchor="end" fill="#B06A3A">溢</text>';
+  }
+  function lampReadText(y) {
+    var f = lampFen(y);
+    return f > 7.02 ? ('油 ' + f.toFixed(1) + ' 分') : ('油 ' + f.toFixed(1) + ' / 7 分');
+  }
+  function lampReadHTML(oilY) {
+    var y = (oilY == null) ? LP.botY : oilY;
+    return '<text id="oillbl" class="gtxt" x="252" y="' + (LP.rimY - 14) + '" font-size="8.4" text-anchor="middle" fill="#7A5B1E">' + lampReadText(y) + '</text>' +
+      '<text class="gtxt" x="252" y="' + (LP.rimY - 6) + '" font-size="6.4" text-anchor="middle" fill="#8A7B5E">盂内油位</text>';
+  }
+
+  /* ---------- 第一拍 · 擦罩（带罩，dy=0） ---------- */
+  function lampScrubHTML(sm) {
+    var sms = '', si, m;
+    for (si = 0; si < sm.length; si++) {
+      m = sm[si];
+      sms += '<g id="smg' + si + '" filter="url(#smSoft)">' +
+               '<ellipse cx="' + m.x + '" cy="' + m.y + '" rx="' + (m.r * 1.15).toFixed(1) + '" ry="' + (m.r * 0.62).toFixed(1) + '" fill="#54422C" opacity=".34"/>' +
+               '<ellipse cx="' + (m.x + m.r * 0.5).toFixed(1) + '" cy="' + (m.y + m.r * 0.55).toFixed(1) + '" rx="' + (m.r * 0.62).toFixed(1) + '" ry="' + (m.r * 0.30).toFixed(1) + '" fill="#3E2F1E" opacity=".26"/>' +
+               '<ellipse cx="' + (m.x - m.r * 0.5).toFixed(1) + '" cy="' + (m.y - m.r * 0.3).toFixed(1) + '" rx="' + (m.r * 0.5).toFixed(1) + '" ry="' + (m.r * 0.26).toFixed(1) + '" fill="#6E5A44" opacity=".18"/>' +
+               '<circle cx="' + (m.x - m.r * 0.9).toFixed(1) + '" cy="' + (m.y + m.r * 0.7).toFixed(1) + '" r="' + (m.r * 0.16).toFixed(1) + '" fill="#4E3E29" opacity=".3"/>' +
+               '<circle cx="' + (m.x + m.r * 0.95).toFixed(1) + '" cy="' + (m.y - m.r * 0.5).toFixed(1) + '" r="' + (m.r * 0.12).toFixed(1) + '" fill="#4E3E29" opacity=".24"/>' +
+             '</g>' +
+             '<g id="gl' + si + '" opacity="0">' +
+               '<path d="M' + (m.x - m.r * 0.8).toFixed(1) + ' ' + (m.y + 1).toFixed(1) +
+               ' q' + (m.r * 0.8).toFixed(1) + ' -5 ' + (m.r * 1.6).toFixed(1) + ' 0" fill="none" stroke="#FFFDF6" stroke-width="2.6" opacity=".85" stroke-linecap="round"/>' +
+             '</g>';
+    }
+    return LAMP_DEFS + lampBenchHTML() + LAMP_BASE + lampBowlHTML(null) + lampWickHTML() +
+      lampShadeHTML(0, { inner: sms }) + lampSpillHTML() +
+      '<g id="tool" opacity="0"><path d="M134 88 h32 l-3 25 h-26 Z" fill="#E8E0CE" stroke="#B9A67C" stroke-width="1.2"/>' +
+      '<path d="M137 96 q7 4 13 0 M137 104 q7 4 13 0" fill="none" stroke="#CBBE9C" stroke-width="1"/>' +
+      '<path d="M134 88 h32" stroke="#FFFDF6" stroke-width="1.4"/></g>';
+  }
+
+  /* ---------- 第二拍 · 注油（提罩，油在盂里） ---------- */
+  function lampOilHTML(oilY, dy) {
+    return LAMP_DEFS + lampBenchHTML() + LAMP_BASE +
+      lampBowlHTML(oilY) + lampWickHTML() +
+      lampShadeHTML(dy) +
+      lampGaugeHTML(oilY) + lampReadHTML(oilY) + lampSpillHTML() +
+      '<g id="pot" transform="translate(222,74)">' +
+        '<path d="M-13 -8 h17 a8 8 0 0 1 8 8 v8 a8 8 0 0 1 -8 8 h-17 Z" fill="#B99A55" stroke="#8A6E33" stroke-width="1.2"/>' +
+        '<path d="M9 6 l-13 6" fill="none" stroke="#8A6E33" stroke-width="2.6"/>' +
+        '<ellipse cx="-3" cy="-8" rx="9" ry="3" fill="#D8C48A" stroke="#8A6E33" stroke-width=".9"/>' +
+      '</g>' +
+      '<path id="stream" d="M196 92 Q182 98 172 106" fill="none" stroke="#D9A24A" stroke-width="2.4" opacity="0" stroke-linecap="round"/>' +
+      '<circle id="drop" cx="172" cy="106" r="2" fill="#D9A24A" opacity="0"/>';
+  }
+
+  /* ---------- 第三拍 · 点灯（引火 → 起焰 → 落罩） ---------- */
+  function lampLightHTML(oilY, dy, sooty) {
+    return LAMP_DEFS + lampBenchHTML() + LAMP_BASE +
+      lampBowlHTML(oilY) + lampWickHTML() +
+      lampShadeHTML(dy, { soot: sooty ? 1 : .9 }) + lampSpillHTML() +
+      '<g id="glow" opacity="0"><ellipse cx="150" cy="112" rx="30" ry="26" fill="#F7C560" opacity=".16"/>' +
+        '<ellipse cx="150" cy="150" rx="40" ry="8" fill="#F0A63C" opacity=".12"/></g>' +
+      '<g id="smokeBox" opacity="0">' +
+        '<path d="M150 108 c-3 -6 3 -9 0 -15 c-3 -6 3 -9 0 -15" fill="none" stroke="#9AA6A2" stroke-width="1.4" opacity=".75" stroke-linecap="round"/>' +
+        '<path d="M153 109 c-2 -5 2 -8 0 -13" fill="none" stroke="#B4BEB8" stroke-width="1" opacity=".55" stroke-linecap="round"/>' +
+      '</g>' +
+      '<g id="sparkBox" opacity="0">' +
+        '<circle cx="146" cy="107" r="1.5" fill="#F0A63C"/><circle cx="154" cy="104" r="1.1" fill="#E7873A"/>' +
+        '<circle cx="149" cy="100" r="1" fill="#F0A63C"/>' +
+      '</g>' +
+      '<g id="flameBox"></g>' +
+      '<g id="tool" opacity="0"><path d="M0 0 l14 -6" stroke="#C9B48A" stroke-width="2.4" stroke-linecap="round"/>' +
+        '<circle cx="0" cy="0" r="2.6" fill="#E7873A" opacity=".9"/></g>';
+  }
+
+  function playLamp(cv, hooks, cfg, ui) {
+    var st = { beat: 0, down: false, tool: null, sm: [1, 1, 1, 1, 1],
+      pour: false, oilT0: 0, lightN: 0, flameK: 0, shadeDy: 0, lightDone: false,
+      gate: false, _downBeat: -1, dead: false, live: false, lift: null };
+    /* 油位跨拍存续：注油定下的那一盂油，点灯要用（数据死在上一拍就穿帮） */
+    var RUN = { oilY: LP.botY, spilled: false, sooty: false };
+
+    /* ★定时器自带退台检查：残留 setTimeout 不许把 hooks.done 打进下一段剧情 */
+    function after(ms, fn) {
+      setTimeout(function () {
+        if (st.dead || !cv.svg.isConnected) { st.dead = true; return; }
+        fn();
+      }, ms);
+    }
+    /* 罩的升降：JS 补间（CSS transition 在 SVG 组上不生效），由主循环逐帧推 */
+    function lampLift(from, to, ms, cb) {
+      st.lift = { from: from, to: to, t0: now(), ms: ms, cb: cb || null };
+    }
+
+    function cleanN() { var n = 0, i; for (i = 0; i < st.sm.length; i++) { if (st.sm[i] <= 0.02) { n++; } } return n; }
+    function oilNow() { return (RUN.oilY == null) ? LP.botY : RUN.oilY; }
+
+    function scene() {
+      var s;
+      if (st.beat === 0) { s = lampScrubHTML(st.sm); }
+      else if (st.beat === 1) { s = lampOilHTML(oilNow(), st.shadeDy || 0); }
+      else { s = lampLightHTML(oilNow(), st.shadeDy || 0, RUN.sooty); }
+      /* 收尾不画提示条：那块位置留给 DOM 的过渡对话框 */
+      if (!st.gate) {
+        if (st.beat === 0) {
+          s += ui.hud('抹布压到玻璃上来回擦——五处污迹，擦到哪处哪处就透亮',
+            cleanN() + '/5 处', cleanN() >= 5 ? 'ok' : null);
+        } else if (st.beat === 1) {
+          s += ui.hud('按住油壶，注到七分线——右边柱子涨进青区就是刚好，过了盂沿就溢',
+            '油 ' + lampFen(oilNow()).toFixed(1) + ' / 7 分', lampBand(oilNow()) ? 'ok' : null);
+        } else {
+          s += ui.hud('在芯口点三下：一下引火，二下起焰，三下落罩',
+            ['待引火', '已引火', '焰起了', '罩已落'][st.lightN || 0], null);
+        }
+      }
+      return s;
+    }
+    function paint() { if (!st.dead) { cv.html(scene()); draw(); } }
+
+    /* ---------- 逐帧补：骨架不重绘，只改会变的节点 ---------- */
+    function patchLamp() {
+      var y = oilNow();
+      var top = Math.min(y, LP.botY + 2), h = Math.max(0, LP.botY + 2 - top);
+      var r = cv.q('#oilrect');
+      if (r) { r.setAttribute('y', top.toFixed(1)); r.setAttribute('height', h.toFixed(1)); }
+      var sf = cv.q('#oilsurf');
+      if (sf) { sf.setAttribute('y', (top - .7).toFixed(1)); sf.setAttribute('opacity', h > 0 ? '.85' : '0'); }
+      var gg = cv.q('#gauge');
+      if (gg) {
+        var t2 = Math.min(y, LP.botY), h2 = Math.max(0, LP.botY - t2);
+        gg.setAttribute('y', t2.toFixed(1)); gg.setAttribute('height', h2.toFixed(1));
+        gg.setAttribute('fill', (y < LP.rimY) ? '#B06A3A' : (lampBand(y) ? '#5E8C86' : (y > 131 ? '#C9A97A' : '#D9A24A')));
+      }
+      var lb = cv.q('#oillbl');
+      if (lb) {
+        lb.textContent = lampReadText(y);
+        lb.setAttribute('fill', (y < LP.rimY) ? '#B06A3A' : (lampBand(y) ? '#3F6B58' : '#7A5B1E'));
+      }
+      var sp = cv.q('#spill');
+      if (sp) { sp.setAttribute('opacity', (RUN.spilled || y < LP.rimY) ? '1' : '0'); }
+      var sd = cv.q('#shade');
+      if (sd) { sd.setAttribute('transform', 'translate(0,' + (st.shadeDy || 0) + ')'); }
+      var fb = cv.q('#flameBox');
+      if (fb) { fb.innerHTML = lampFlameHTML(st.flameK || 0); }
+      var smk = cv.q('#smokeBox');
+      if (smk) { smk.setAttribute('opacity', (st.lightN || 0) >= 2 ? '.4' : ((st.lightN || 0) >= 1 ? '1' : '0')); }
+      var spk = cv.q('#sparkBox');
+      if (spk) { spk.setAttribute('opacity', (st.lightN || 0) === 1 ? '1' : '0'); }
+      var gl = cv.q('#glow');
+      if (gl) { gl.setAttribute('opacity', (st.lightN || 0) >= 3 ? '1' : '0'); }
+      var pot = cv.q('#pot');
+      if (pot) { pot.setAttribute('transform', 'translate(222,74) rotate(' + (st.pour ? -24 : 0) + ')'); }
+      var stm = cv.q('#stream');
+      if (stm) { stm.setAttribute('opacity', st.pour ? '.9' : '0'); }
+      var dr = cv.q('#drop');
+      if (dr) { dr.setAttribute('opacity', st.pour ? '.85' : '0'); }
+      var tl = cv.q('#tool');
+      if (tl && st.beat === 2) {
+        tl.setAttribute('opacity', (st.lightN || 0) < 2 && st.tool ? '1' : '0');
+        if (st.tool) { tl.setAttribute('transform', 'translate(' + st.tool.x.toFixed(1) + ',' + st.tool.y.toFixed(1) + ')'); }
+      }
+    }
+    /* 擦罩：抹布跟手，扫过哪处哪处成组变淡；擦净的补一道反光，整罩煤垢跟着变透 */
+    function drawScrub() {
+      var rq = cv.q('#tool');
+      if (rq) {
+        rq.setAttribute('opacity', st.tool ? '1' : '0');
+        if (st.tool) { rq.setAttribute('transform', 'translate(' + (st.tool.x - 150).toFixed(1) + ',' + (st.tool.y - 100).toFixed(1) + ')'); }
+      }
+      if (st.down && st.tool) {
+        var i, sum = 0;
+        for (i = 0; i < LAMP_SM.length; i++) {
+          if (st.sm[i] <= 0) { continue; }
+          if (dist(st.tool, LAMP_SM[i]) < LAMP_SM[i].r + 11) {
+            st.sm[i] = Math.max(0, st.sm[i] - 0.05);
+            if (st.sm[i] <= 0) { sfx('brush'); }
+          }
+        }
+        for (i = 0; i < LAMP_SM.length; i++) { sum += st.sm[i]; }
+        if (st._smN !== Math.round(sum * 100)) {
+          st._smN = Math.round(sum * 100);
+          for (i = 0; i < LAMP_SM.length; i++) {
+            var ge = cv.q('#smg' + i);
+            if (ge) { ge.setAttribute('opacity', st.sm[i].toFixed(2)); }
+            var gl2 = cv.q('#gl' + i);
+            if (gl2) { gl2.setAttribute('opacity', st.sm[i] <= 0 ? '1' : '0'); }
+          }
+          var so = cv.q('#soot');
+          if (so) { so.setAttribute('opacity', (0.92 * (sum / LAMP_SM.length)).toFixed(3)); }
+          var hc = cv.q('#hudc');
+          if (hc) { hc.textContent = label(); }
+          hooks.step(progress(), label());
+          /* 分次完成、擦净即过（同校准页 checkDone→judgeSweep：只按"还剩几处脏"判） */
+          if (cleanN() >= LAMP_SM.length) { hooks.done(false); }
+        }
+      }
+    }
+    function draw() {
+      if (st.dead) { return; }
+      if (st.beat === 0) { drawScrub(); return; }
+      patchLamp();
+      if (st.beat === 1) {
+        var hc1 = cv.q('#hudc');
+        if (hc1) { hc1.textContent = label(); }
+      }
+    }
+
+    function progress() {
+      if (st.beat === 0) { return cleanN() / LAMP_SM.length; }
+      if (st.beat === 1) { return clamp((LP.botY - oilNow()) / (LP.botY - LP.mark7), 0, 1); }
+      return Math.min(1, (st.lightN || 0) / 3);
+    }
+    function label() {
+      if (st.beat === 0) { return '已净 ' + cleanN() + ' / ' + LAMP_SM.length + ' 处'; }
+      if (st.beat === 1) { return '油 ' + lampFen(oilNow()).toFixed(1) + ' / 7 分'; }
+      return ['待引火', '已引火', '焰起了', '罩已落'][st.lightN || 0];
+    }
+
+    /* 注油松手判定（阈值与校准页 judgeOil 逐条一致） */
+    function judgeOil() {
+      var y = oilNow();
+      if (y > 131) { hooks.tip('油浅了——芯吸不上，火立不住。再按住补一点。'); return; }
+      RUN.spilled = RUN.spilled || y < LP.rimY;
+      hooks.done(false);      /* 七分＝正好；满一点／溢了同样过（校准页判 good，零惩罚） */
+    }
+
+    /* 点灯三下：引火 → 起焰 → 落罩。三下各出一件新事，不再是一个火苗放大三次 */
+    function lampTap(p) {
+      if (st.gate) { return; }
+      var n = st.lightN || 0;
+      if (n === 0) {
+        if (dist(p, { x: 150, y: 112 }) > 22) { hooks.tip('火要凑到芯口——点在芯上。'); return; }
+        st.lightN = 1; st.tool = p; sfx('tap'); paint(); return;
+      }
+      if (n === 1) {
+        st.lightN = 2; st.tool = p; st.flameK = .55; paint(); sfx('bead');
+        if (oilNow() > 131) {
+          /* 油浅：焰起两下自己灭（看得见的后果），零惩罚、不锁死 —— 第三下照样能落罩 */
+          after(620, function () { if (st.dead || st.gate || (st.lightN || 0) < 2) { return; } st.flameK = 0; draw(); hooks.tip('油浅了，芯吸不上——火立不住。'); });
+          after(1060, function () { if (st.dead || st.gate || (st.lightN || 0) < 2) { return; } st.flameK = .45; draw(); });
+          after(1400, function () { if (st.dead || st.gate || (st.lightN || 0) < 2) { return; } st.flameK = 0; draw(); });
+        }
+        return;
+      }
+      if (n === 2) {
+        st.lightN = 3;
+        st.flameK = (oilNow() > 131) ? .6 : 1;
+        RUN.sooty = (oilNow() < LP.mark7);     /* 油满/溢 → 罩内积一层烟（接第一拍擦掉的那层） */
+        sfx('select');
+        /* ★先看罩落回去，再交棒：判定一落本拍就结束，动画会被腰斩 */
+        lampLift(st.shadeDy || 0, 0, 320, function () { st.lightDone = true; finishLight(); });
+      }
+    }
+    function finishLight() {
+      if (st.gate) { return; }
+      st.gate = true; paint(); hooks.step(1, '罩已落');
+      if (ui && ui.sheet) {
+        ui.sheet({ title: (cfg && cfg.steps && cfg.steps[2] && cfg.steps[2].done) || '火苗稳了。',
+                   body: (cfg && cfg.done) || '灯亮了。', go: '收灯' },
+          function () { st.gate = false; hooks.done(false); });
+      } else { hooks.done(false); }
+    }
+
+    function down(p) {
+      if (st.gate) { return; }                       /* 收尾态：交给过渡对话框 */
+      guardDown(st, st.beat);
+      st.down = true;
+      if (st.beat === 0) { st.tool = p; }
+      else if (st.beat === 1) { st.pour = true; st.oilT0 = now(); st.tool = p; }  /* 按住即注，不看手指在哪 */
+      else { lampTap(p); }
+    }
+    function move(p) {
+      /* ★拍已换、手势还没抬手：这一串 move 属于上一拍，直接丢掉 */
+      if (st._downBeat !== st.beat) { return; }
+      if (st.beat === 0) { if (st.down) { st.tool = p; } }
+      else if (st.beat === 1) { /* 注油不看位置 */ }
+      else { if (st.down) { st.tool = p; } }
+    }
+    function up() {
+      if (!guardUp(st, st.beat)) { return; }
+      st.down = false;
+      if (st.beat === 1) { st.pour = false; judgeOil(); }
+      /* 擦罩分次完成、抬手不清零；点灯三下各自成事 —— 都不在抬手时判 */
+    }
+
+    /* 主循环：单 rAF + 140ms 保险丝（无头/后台吞帧时手动推，画面仍走完） */
+    var raf = 0, fuse = 0;
+    function schedule() {
+      raf = requestAnimationFrame(tick);
+      if (fuse) { clearTimeout(fuse); }
+      fuse = setTimeout(function () {
+        fuse = 0;
+        if (!raf) { return; }
+        cancelAnimationFrame(raf); raf = 0;
+        tick();
+      }, 140);
+    }
+    function tick() {
+      raf = 0;
+      if (fuse) { clearTimeout(fuse); fuse = 0; }
+      if (!st.live || st.dead) { return; }
+      if (!cv.svg.isConnected) { st.dead = true; return; }
+      if (st.lift) {
+        var k = clamp((now() - st.lift.t0) / st.lift.ms, 0, 1);
+        st.shadeDy = st.lift.from + (st.lift.to - st.lift.from) * (1 - Math.pow(1 - k, 3));
+        var cb = null;
+        if (k >= 1) { cb = st.lift.cb; st.lift = null; }
+        draw();
+        if (cb) { cb(); }
+      } else if (st.beat === 1 && st.pour && !st.gate) {
+        /* 油面按时间涨：3.2px/s，帧增量封顶 0.1s —— 切后台回来不会一次灌满 */
+        var dt = Math.min(0.1, (now() - (st.oilT0 || now())) / 1000);
+        st.oilT0 = now();
+        RUN.oilY = Math.max(LP.rimY - 8, oilNow() - LP.rate * dt);
+        if (RUN.oilY < LP.rimY - 1) { RUN.spilled = true; }
+        draw();
+        hooks.step(progress(), label());
+      } else {
+        draw();
+      }
+      if (st.live && !st.dead) { schedule(); }
+    }
+
+    return {
+      beat: function (i) {
+        st.beat = i; st.down = false; st.tool = null; st.gate = false;
+        st._downBeat = -1; st.lightDone = false; st.lightN = 0; st.flameK = 0; st.lift = null;
+        if (i === 0) { st.sm = [1, 1, 1, 1, 1]; st.shadeDy = 0; }
+        else if (i === 1) {
+          /* 罩戴着进拍，30ms 后提起来 —— 三拍是同一次使用 */
+          RUN.oilY = LP.botY; RUN.spilled = false; RUN.sooty = false;
+          st.shadeDy = 0; st.pour = false;
+          paint();
+          after(30, function () { lampLift(0, -LP.lift, 350); });
+          hooks.step(progress(), label());
+          return;
+        }
+        else { st.shadeDy = -LP.lift; }
+        paint(); hooks.step(progress(), label());
+      },
+      down: down, move: move, up: up,
+      start: function () { st.live = true; if (!raf && !fuse) { schedule(); } },
+      stop: function () {
+        st.live = false; st.dead = true;
+        if (raf) { cancelAnimationFrame(raf); raf = 0; }
+        if (fuse) { clearTimeout(fuse); fuse = 0; }
+      },
+      progress: progress, label: label,
+      state: function () {
+        return { beat: st.beat, sm: st.sm.slice(), clean: cleanN(),
+                 oilFen: +(lampFen(oilNow()).toFixed(2)), spilled: RUN.spilled, sooty: RUN.sooty,
+                 shadeDy: Math.round(st.shadeDy), lightN: st.lightN || 0, flameK: st.flameK || 0,
+                 lightDone: !!st.lightDone, gate: st.gate };
+      }
+    };
+  }
+
   var MAKERS = { tang: playTang, proof: playProof, touhu: playTouhu,
-    shifood: playShiFood, shang: playShang, folk: playFolk, shifolk: playShiFolk };
+    shifood: playShiFood, shang: playShang, folk: playFolk, shifolk: playShiFolk, lamp: playLamp };
 
   var TQM = {};
   TQM.has = function (k) { return !!MAKERS[k]; };
