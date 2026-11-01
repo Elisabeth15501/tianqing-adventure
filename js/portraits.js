@@ -509,32 +509,55 @@
    * 归一化时会被 clamp，避免整张图被过度缩小。 */
   /* 半身像 anchor='dock-top' ⇒ 浮在对话框上方（不被压住）；可逐角色改
    * anchor（dock-top / dock-left / dock-right / stage-bottom）或补 dx/dy 像素微调。
-   * 全身像不写 anchor，由 anchorOf() 按 ratio 兜底为 stage-bottom（脚被框压）。 */
+   * 全身像不写 anchor，由 anchorOf() 按 ratio 兜底为 stage-bottom（脚被框压）。
+   * ★kneel（2026-10-31 · 跪像分类，不是缩放系数）：标记**跪坐/盘坐**的立绘。
+   *   实测：跪像在**单人档**里比例是对的（头宽 87~88px，与立像 88px 一致）——
+   *   单人是按 headW 归一化的，跪像的头一样被拉到槽宽的 0.255。
+   *   问题出在**双人档**：duoGeom 只按「铺满槽高 + 不溢半幅」求 k，完全不管 headW，
+   *   于是头大的角色（跪像 headW 0.25~0.30、王孙 0.32）在高度受限的断点上会被放大
+   *   25%（768 宽实测：王朴 129 vs 郭荣 103）。故 ⑵ 双人档补 headW 归一化。
+   *   ⑶ 跪像还要免于「身高差 12% 封顶」——跪着的人本来就矮一截，不该把站着的那位拖下来。 */
   var FIT = {
-    'fengdao_a1':      { cx: 0.550, ratio: 0.667, headW: 0.196, y0: 0.096, bw: 0.462, y1: 0.958 },
-    'fuhou_a1':        { cx: 0.550, ratio: 0.667, headW: 0.300, y0: 0.081, bw: 0.786, y1: 0.954 },
-    'guorong_a1':      { cx: 0.504, ratio: 0.667, headW: 0.219, y0: 0.079, bw: 0.432, y1: 0.948 },
-    'guorong_a2':      { cx: 0.512, ratio: 0.667, headW: 0.280, y0: 0.124, bw: 0.947, y1: 0.893 },
-    'guorong_a3':      { cx: 0.501, ratio: 0.667, headW: 0.282, y0: 0.136, bw: 0.833, y1: 0.905 },
-    'guorong_t':       { cx: 0.506, ratio: 0.667, headW: 0.264, y0: 0.078, bw: 0.445, y1: 0.949 },
-    'guowei_a1':       { cx: 0.537, ratio: 0.667, headW: 0.181, y0: 0.082, bw: 0.505, y1: 0.955 },
-    'nvguan_a1':       { cx: 0.563, ratio: 0.667, headW: 0.175, y0: 0.080, bw: 0.375, y1: 0.965 },
-    'shiguan_a1':      { cx: 0.561, ratio: 0.667, headW: 0.165, y0: 0.072, bw: 0.441, y1: 0.972 },
-    'wangpu_a1':       { cx: 0.520, ratio: 0.667, headW: 0.259, y0: 0.130, bw: 0.755, y1: 0.947 },
-    'yinchongyi_a1':   { cx: 0.581, ratio: 0.667, headW: 0.169, y0: 0.081, bw: 0.437, y1: 0.975 },
-    'zhangyongde_a1':  { cx: 0.597, ratio: 0.667, headW: 0.180, y0: 0.075, bw: 0.638, y1: 0.97 },
-    'zhaokuangyin_a1': { cx: 0.552, ratio: 0.667, headW: 0.199, y0: 0.072, bw: 0.529, y1: 0.971 },
-    'qijulang_a1':     { cx: 0.488, ratio: 1,     headW: 0.216, y0: 0.041, anchor: 'dock-top', bw: 0.881, y1: 0.998 },
-    'shanggong_a1':    { cx: 0.517, ratio: 1,     headW: 0.194, y0: 0.078, anchor: 'dock-top', bw: 0.781, y1: 0.998 },
-    'shangshiling_a1': { cx: 0.495, ratio: 1,     headW: 0.211, y0: 0.077, anchor: 'dock-top', bw: 0.716, y1: 0.998 },
-    'sizheng_a1':      { cx: 0.523, ratio: 1,     headW: 0.183, y0: 0.141, anchor: 'dock-top', bw: 0.97, y1: 0.998 },
-    'zongxun_a1':      { cx: 0.484, ratio: 1,     headW: 0.32, y0: 0.01, anchor: 'dock-top', bw: 0.97, y1: 0.998 },
-    /* —— 10-28 晚重生（B 级半身，640²；shaonian 为 1024×1536 全身）统一重测 —— */
-    'fanzhi_a1':       { cx: 0.499, ratio: 1,     headW: 0.227, y0: 0.036, anchor: 'dock-top', bw: 1.0, y1: 0.988 },
-    'ligu_a1':         { cx: 0.42, ratio: 1,     headW: 0.172, y0: 0.053, anchor: 'dock-top', bw: 1.0, y1: 0.998 },
-    'wangpu2_a1':      { cx: 0.502, ratio: 1,     headW: 0.32, y0: 0.016, anchor: 'dock-top', bw: 0.914, y1: 0.998 },
-    'lichongjin_a1':   { cx: 0.548, ratio: 1,     headW: 0.202, y0: 0.027, anchor: 'dock-top', bw: 1.0, y1: 0.998 },
-    'shaonian_a1':     { cx: 0.556, ratio: 0.667, headW: 0.160, y0: 0.064, bw: 0.911, y1: 0.944 }
+    'fengdao_a1':      { cx: 0.550, ratio: 0.667, headW: 0.196, y0: 0.096, bw: 0.462, y1: 0.958, bwv: 0.444},
+    'fuhou_a1':        { cx: 0.550, ratio: 0.667, headW: 0.300, y0: 0.081, bw: 0.786, y1: 0.954, bwv: 0.554, kneel: 1},
+    'fuhou_e2':       { cx: 0.528, ratio: 0.667, headW: 0.250, y0: 0.074, bw: 0.715, y1: 0.955, bwv: 0.473, kneel: 1},
+    'guorong_a1':      { cx: 0.504, ratio: 0.667, headW: 0.219, y0: 0.079, bw: 0.432, y1: 0.948, bwv: 0.431},
+    'guorong_n1':     { cx: 0.491, ratio: 0.667, headW: 0.255, y0: 0.078, bw: 0.535, y1: 0.954, bwv: 0.529},
+    'guorong_a2':      { cx: 0.512, ratio: 0.667, headW: 0.280, y0: 0.124, bw: 0.947, y1: 0.893, bwv: 0.610, kneel: 1},
+    'guorong_a3':      { cx: 0.501, ratio: 0.667, headW: 0.282, y0: 0.136, bw: 0.833, y1: 0.905, bwv: 0.646, kneel: 1},
+    'guorong_t':       { cx: 0.506, ratio: 0.667, headW: 0.264, y0: 0.078, bw: 0.445, y1: 0.949, bwv: 0.444},
+    'guowei_a1':       { cx: 0.537, ratio: 0.667, headW: 0.181, y0: 0.082, bw: 0.505, y1: 0.955, bwv: 0.450},
+    'guowei_e3':      { cx: 0.525, ratio: 0.667, headW: 0.243, y0: 0.089, bw: 0.960, y1: 0.939, bwv: 0.635, kneel: 1},
+    'nvguan_a1':       { cx: 0.563, ratio: 0.667, headW: 0.175, y0: 0.080, bw: 0.375, y1: 0.965, bwv: 0.374},
+    'shiguan_a1':      { cx: 0.561, ratio: 0.667, headW: 0.165, y0: 0.072, bw: 0.441, y1: 0.972, bwv: 0.440},
+    'wangpu_a1':       { cx: 0.520, ratio: 0.667, headW: 0.259, y0: 0.130, bw: 0.755, y1: 0.947, bwv: 0.496, kneel: 1},
+    'wangpu_e2':      { cx: 0.503, ratio: 0.667, headW: 0.315, y0: 0.109, bw: 0.432, y1: 0.927, bwv: 0.419},
+    'yinchongyi_a1':   { cx: 0.581, ratio: 0.667, headW: 0.169, y0: 0.081, bw: 0.437, y1: 0.975, bwv: 0.436},
+    'yinchongyi_e2':  { cx: 0.544, ratio: 0.667, headW: 0.180, y0: 0.079, bw: 0.436, y1: 0.976, bwv: 0.437},
+    'yinchongyi_e3':  { cx: 0.475, ratio: 0.667, headW: 0.180, y0: 0.079, bw: 0.496, y1: 0.976, bwv: 0.497},
+    'yinchongyi_e1':  { cx: 0.544, ratio: 0.667, headW: 0.180, y0: 0.079, bw: 0.443, y1: 0.976, bwv: 0.444},
+    'zhangyongde_a1':  { cx: 0.597, ratio: 0.667, headW: 0.180, y0: 0.075, bw: 0.638, y1: 0.97, bwv: 0.612},
+    'zhangyongde_e1': { cx: 0.536, ratio: 0.667, headW: 0.160, y0: 0.081, bw: 0.479, y1: 0.970, bwv: 0.479},
+    'zhaokuangyin_a1': { cx: 0.552, ratio: 0.667, headW: 0.199, y0: 0.072, bw: 0.529, y1: 0.971, bwv: 0.502},
+    'zhaokuangyin_e3': { cx: 0.539, ratio: 0.667, headW: 0.212, y0: 0.077, bw: 0.523, y1: 0.973, bwv: 0.524},
+    'zhaokuangyin_e1': { cx: 0.544, ratio: 0.667, headW: 0.199, y0: 0.071, bw: 0.514, y1: 0.973, bwv: 0.488},
+    'qijulang_a1':     { cx: 0.488, ratio: 1,     headW: 0.216, y0: 0.041, anchor: 'dock-top', bw: 0.881, y1: 0.998, bwv: 0.723},
+    'shanggong_a1':    { cx: 0.517, ratio: 1,     headW: 0.194, y0: 0.078, anchor: 'dock-top', bw: 0.781, y1: 0.998, bwv: 0.739},
+    'shangshiling_a1': { cx: 0.495, ratio: 1,     headW: 0.211, y0: 0.077, anchor: 'dock-top', bw: 0.716, y1: 0.998, bwv: 0.659},
+    'sizheng_a1':      { cx: 0.523, ratio: 1,     headW: 0.183, y0: 0.141, anchor: 'dock-top', bw: 0.97, y1: 0.998, bwv: 0.967},
+    /* —— 2026-10-31 B 级半身 → A 级全身重出（用户裁定：与 A 级并排时景别不通约）——
+     * 原 640² 胸像（ratio=1、anchor=dock-top）已作废，改为 1024×1536 全身（ratio=0.667、
+     * 不写 anchor ⇒ anchorOf 按 ratio 兜底 stage-bottom，脚被对话框压住）。
+     * ★headW 口径：自动量测（头顶 20% 段最大行宽）会被「举到肩高的觞」污染
+     *   （lichongjin 量到 0.401、ligu 0.315），故改用「头顶定列、排除侧向器物」的净头宽
+     *   × 1.40 的锚定换算（1.40 = 既有 guorong_a1 表值 0.219 / 同法实测 0.156），
+     *   使五个值与同列同姿态的王朴 0.259、张永德 0.259 落在同一区间。 */
+    'fanzhi_a1':       { cx: 0.474, ratio: 0.667, headW: 0.232, y0: 0.021, bw: 0.475, y1: 0.964, bwv: 0.472},
+    'ligu_a1':         { cx: 0.480, ratio: 0.667, headW: 0.237, y0: 0.023, bw: 0.533, y1: 0.964, bwv: 0.533},
+    'wangpu2_a1':      { cx: 0.467, ratio: 0.667, headW: 0.221, y0: 0.040, bw: 0.528, y1: 0.965, bwv: 0.528},
+    'lichongjin_a1':   { cx: 0.577, ratio: 0.667, headW: 0.224, y0: 0.021, bw: 0.671, y1: 0.966, bwv: 0.657},
+    'zongxun_a1':      { cx: 0.486, ratio: 0.667, headW: 0.265, y0: 0.041, bw: 0.534, y1: 0.953, bwv: 0.534},
+    'shaonian_a1':     { cx: 0.556, ratio: 0.667, headW: 0.160, y0: 0.064, bw: 0.911, y1: 0.944, bwv: 0.910}
   };
   /* 归一化参数（[PLACEHOLDER] 有依据但需真机微调）：
    * HEAD_TARGET 0.235 → 槽宽 329 时头宽 ≈ 77px（手机上一张脸的可辨识下限之上）；
@@ -560,8 +583,99 @@
    *   ④ 横向按头肩重心微调，但夹紧到「人物包围盒(bw)不出槽」，避免横向裁切。
    * 代价：头宽不再强行统一（会差 10~20%），这是"不裁切"的必然让步；
    * 要根治统一性须在**资产层**统一头部在画布中的位置。 */
-  function fitFor(key, slotW, slotH, fit) {
-    var a = CHAR_ASSETS[key];
+  /* ★槽位解析（2026-10-31 接线）：显式 slot 优先，但**必须已注册**，否则回落默认槽。
+   * 规则来自「槽位永不为空」：data.js 可以先挂上 slot，图还没出的槽自动退回 a1，
+   * 等图入仓再跑一次什么都不用改（TQA.reg 里有了就升级）。 */
+  function pickSlot(key, slot) {
+    if (slot && TQA && TQA.reg && TQA.reg['char-' + key + '-' + slot]) { return slot; }
+    return CHAR_ASSETS[key] || null;
+  }
+  function fitRow(key, slot) {
+    var a = pickSlot(key, slot);
+    return a ? (FIT[key + '_' + a] || null) : null;
+  }
+
+  /* ★双人同框（2026-10-31）
+   * 三条硬规则，顺序即优先级：
+   *  ① 等高：同景别的两个人共用一个缩放 k。同框里「身高差 30%」比「头宽差 15%」刺眼得多，
+   *     而各角色 headW 0.16~0.32 是素材层面的事实，靠逐人缩放去凑头宽会直接把身高拉开。
+   *  ② 可见带约束：全身像的衣摆落在对话框后面（看不见），横向只按「上半 60% 的实测宽度」
+   *     bwv 约束；用整幅 bw 会把 390 屏上的两个人压到 340px 高（王朴 bw 0.754 全在衣摆上）。
+   *     半身像整体在框上方，宽处就是可见处，仍用 bw。
+   *  ③ 各留中缝：本体与半幅边缘至少 DUO_GAP 像素 ⇒ 两人之间恒定留 ≥2×DUO_GAP，
+   *     且是「可见部分」不交叠，不是靠调数值碰运气。 */
+  var DUO_GAP = 14;      /* 人物本体与半幅边缘的最小像素间隙 */
+  var DUO_BLEED = 0.12;  /* 半身像允许向「画面外侧」多占的屏宽比例 */
+  var DUO_HEAD_H = 0.134;/* 双人档头宽占槽高的比例（10-31 实测：390 档 83/622、768 档 103/765）*/
+
+  function duoGeom(slot, key, useSlot, stageW) {
+    var f = fitRow(key, useSlot);
+    if (!f) { return null; }
+    var W = slot.clientWidth, H = slot.clientHeight;
+    if (!W || !H) { return null; }
+    var baseW = Math.min(W, H * f.ratio);
+    var baseH = baseW / f.ratio;
+    var y0 = (typeof f.y0 === 'number') ? f.y0 : 0.08;
+    var headW = Math.max(0.08, f.headW || 0.20);
+    var bwFull = Math.max(0.10, Math.min(1, f.bw || 0.6));
+    var bwVis = (f.ratio < 0.9 && f.bwv) ? Math.min(bwFull, f.bwv) : bwFull;
+    /* 半身像（640² 胸像）整幅就是「脸+肩」，若同样按半幅硬夹，390 屏上两张脸只剩 38px。
+     * 胸像的正确取景本来就允许肩部出画：给一个外溢额度，且只算在**靠屏幕边那一侧**
+     * （见 duoPlan 的 tc 外推）——溢出的部分是肩，被画框裁掉；中缝交叠因此减半。
+     * 全身像不给额度：它的宽度是衣摆，外溢会真的压到隔壁那个人。 */
+    var bleed = (f.ratio >= 0.9) ? Math.round((stageW || W * 2) * DUO_BLEED) : 0;
+    var kTop = H / Math.max(1, baseH * (1 - y0));
+    var kSide = (W + bleed - DUO_GAP * 2) / Math.max(1, bwVis * baseW);
+    /* ★头宽归一化（10-31 加）：双人档原来只受「铺满槽高 / 不溢半幅」两个几何约束，
+     *   完全不管 headW ⇒ 头大的角色（跪像、王孙）在高度受限的断点上会大一圈。
+     *   这里补一个 headW 上限：让所有人的头都落在 0.134×槽高。
+     *   只做「压小」不做「放大」——几何约束仍是硬上限，放大只会把头顶切掉。 */
+    var kHeadD = (H * DUO_HEAD_H) / Math.max(1, headW * baseW);
+    return {
+      ratio: f.ratio, bw: bwVis, bleed: bleed, kneel: !!f.kneel,
+      head: headW * baseW,               /* k=1 时的头宽（px） */
+      k: Math.min(kTop * 0.96, kSide, Math.max(kHeadD, 0.6))
+    };
+  }
+  function duoPlan(slot) {
+    var stageW = (slot.parentNode && slot.parentNode.clientWidth) || slot.clientWidth * 2;
+    var me = duoGeom(slot, slot._tqKey, slot._tqSlot, stageW);
+    if (!me) { return null; }
+    var map = TP._sides || {};
+    var other = null;
+    Object.keys(map).forEach(function (k) {
+      if (map[k] !== slot && map[k] && map[k]._tqKey) { other = map[k]; }
+    });
+    var k = me.k;
+    if (other) {
+      var ot = duoGeom(other, other._tqKey, other._tqSlot, stageW);
+      /* 同景别：各自取自己的上限，但对「身高差」封顶 12%（STAIR_CAP）。
+       *   为什么不直接等高：等高取 min(k)，宽衣摆的一方会把另一方整个拖小；
+       *   为什么不干脆不管：郭威 e3 这类张臂姿势的 k 只有 1.35，与郭荣 1.84 差 27%，
+       *   并排就是大人带小孩。封顶 12% 既保住「高矮有别」的自然感，又不会离谱。
+       * 混景别（胸像 × 全身）：k 不可通约，互不牵制 —— 否则同场里换一个人说话，
+       *   另一个人的尺寸会跟着跳（5-1 夜宴 官家 会忽大忽小），那是硬伤。 */
+      if (ot && Math.abs(ot.ratio - me.ratio) < 0.05) {
+        var kMin = Math.min(me.k, ot.k);
+        /* 跪像豁免（10-31）：跪着的人本来就矮一截，把站着的那位拖下来只会让
+         * 「头宽已经对齐」这件事白做——所以只要有一方是跪像，就不做身高封顶。 */
+        if (!me.kneel && !ot.kneel) {
+          k = Math.min(me.k, kMin * 1.12);
+        }
+      }
+    }
+    if (!isFinite(k) || k <= 0) { k = 1; }
+    if (k < 0.55) { k = 0.55; }   /* 兜底：再小就没有可读性了 */
+    /* 有外溢额度时把人物往画面外侧推：溢出的落在屏幕边（被裁），中缝交叠减半 */
+    var side = slot.getAttribute('data-side');
+    var W = slot.clientWidth || 1;
+    var tc = 0.5;
+    if (me.bleed > 0) { tc = (side === 'l') ? 0.5 - me.bleed / (2 * W) : 0.5 + me.bleed / (2 * W); }
+    return { k: k, bw: me.bw, bleed: me.bleed, tc: tc };
+  }
+
+  function fitFor(key, slotW, slotH, fit, useSlot, opt) {
+    var a = pickSlot(key, useSlot);
     var f = a ? FIT[key + '_' + a] : null;
     if (!f || !slotW || !slotH) { return { x: 0, y: 0, s: 1 }; }
     /* ① contain 基准：整幅先完整放进槽（宽高比更瘦高则按高贴合） */
@@ -569,34 +683,43 @@
     var baseH = baseW / f.ratio;
     var headW = Math.max(0.08, f.headW || 0.20);
     var bw = Math.max(0.10, Math.min(1, f.bw || 0.6));
+    /* 双人档传入的可见带宽度（bwv）；单人不传 ⇒ 与接线前完全一致 */
+    var bwUse = (opt && opt.bw) ? Math.max(0.10, Math.min(1, opt.bw)) : bw;
     var y0 = (typeof f.y0 === 'number') ? f.y0 : 0.08;
     /* ② 想放大到「头宽统一」需要多少倍 */
     var kHead = (slotW * HEAD_TARGET) / (headW * baseW);
     /* ③ 但放大有硬上限：放大后「人物包围盒」仍须完整落在槽内（裁的是空白不算裁）
      *    顶部：baseH*k*(1-y0) ≤ slotH；水平：bw*baseW*k ≤ slotW
-     *    × 0.98 留 2% 安全余量，避免亚像素抗锯齿贴边。 */
+     *    × 0.94 留 6% 安全余量：alpha bbox 量的是 24 阈值的实体，
+     *    发丝/衣角半透明边缘还会再宽 2~4px。 */
     var kTop = slotH / Math.max(1, baseH * (1 - y0));
-    var kSide = slotW / Math.max(1, bw * baseW);
-    var kMax = Math.min(kTop * 0.94, kSide * 0.88); /* 横向多留：衣摆/发丝半透明边更宽 */ /* 6% 余量：alpha bbox 量的是 24 阈值的实体，
-                                              * 发丝/衣角半透明边缘还会再宽 2~4px */
+    var kSide = slotW / Math.max(1, bwUse * baseW) * 0.88;
+    var kMax = Math.min(kTop * 0.94, kSide);
     /* ④ 缩小同样必要（宽头角色 k=1 时头就 99px，会明显比同场角色大一圈）；
-     *    缩小永不产生裁切，只损失一点画面占比，故下限放到 HEAD_MIN_K。
-     *    小幅缩小的视觉代价（人身高差 10~20%）低于头宽差 1.6 倍的代价。 */
+     *    缩小永不产生裁切，只损失一点画面占比，故下限放到 HEAD_MIN_K。 */
     var k = Math.max(HEAD_MIN_K, Math.min(kHead, kMax));
+    if (opt && opt.k) { k = opt.k; }   /* 双人档：头宽归一化后的共用基准 k 由 duoPlan 算好 */
     if (!isFinite(k) || k <= 0) { k = 1; }
-    /* ⑤ 横向：按头肩重心推到槽中线，再夹紧到「人物包围盒不出槽」 */
-    var half = bw / 2;
+    /* ⑤ 横向：按头肩重心推到槽中线（tc=0.5），再夹紧到「人物包围盒不出槽」。
+     *    双人档可给 tc ≠ 0.5，把人物推到半幅内侧，但夹紧不变。 */
+    var half = bwUse / 2;
     var cx = (typeof f.cx === 'number') ? f.cx : 0.5;
+    /* ⑤b 水平镜像（双人档右位）：镜像以「图心」为轴，人物包围盒随之翻到 1-cx，
+     *    故重心与夹紧边界都必须按 1-cx 重算 —— 只翻图不改 cx 的话，
+     *    本来朝左的角色镜像后会更贴边，极端情况下被裁掉半张脸。 */
+    if (opt && opt.mir) { cx = 1 - cx; }
     var pad = (slotW - baseW * k) / 2;
-    var want = -(cx - 0.5) * baseW * k;
-    var xMin = -(cx - half) * baseW * k - pad;
-    var xMax = slotW - pad - (cx + half) * baseW * k;
+    var tc = (opt && typeof opt.tc === 'number') ? opt.tc : 0.5;
+    var want = (tc - 0.5) * slotW - (cx - 0.5) * baseW * k;
+    var bleed = (opt && opt.bleed) ? opt.bleed : 0;
+    var xMin = -(cx - half) * baseW * k - pad - bleed;
+    var xMax = slotW - pad - (cx + half) * baseW * k + bleed;
     /* 再内缩 3px：抗锯齿/半透明边缘不贴槽边 */
     xMin += 3; xMax -= 3;
     if (xMax < xMin) { xMin = xMax = (xMin + xMax) / 2; }
     var x = Math.max(xMin, Math.min(xMax, want));
     /* ⑥ 纵向：底对齐（脚踩槽底 / 半身像立在对话框上沿），scale 原点 bottom center */
-    return { x: Math.round(x), y: 0, s: +k.toFixed(4) };
+    return { x: Math.round(x), y: 0, s: +k.toFixed(4), sx: (opt && opt.mir) ? -+k.toFixed(4) : +k.toFixed(4) };
   }
   function shiftFor(key, slotW, slotH, fit) { return fitFor(key, slotW, slotH, fit).x; }
   TP_SHIFT = shiftFor;
@@ -606,18 +729,29 @@
    * - 半身像（ratio≥0.9）→ contain：1:1 图在竖版窄槽里若用 cover 会被裁掉近半宽，
    *   半身像必须完整显示；尺寸比全身小是「景别」差异（近景 vs 中景），不是错误。
    * --fig-shift-x：按头肩重心把人物推到槽中线（治「朝左的偏右、朝右的偏左」）。 */
-  function applyFit(slot, key) {
+  function applyFit(slot, key, useSlot) {
     if (!slot) { return; }
-    var a = CHAR_ASSETS[key];
-    var f = a ? FIT[key + '_' + a] : null;
     var fit = 'contain'; /* 2026-10-28：统一 contain（cover 会在窄头角色上裁掉头顶） */
     slot.setAttribute('data-fit', fit);
     var w = slot.clientWidth, h = slot.clientHeight;
-    if (!w || !h) { /* 尚未布局：下一帧再算 */ requestAnimationFrame(function () { applyFit(slot, key); }); return; }
-    var m = fitFor(key, w, h, fit);
+    if (!w || !h) { /* 尚未布局：下一帧再算 */ requestAnimationFrame(function () { applyFit(slot, key, useSlot); }); return; }
+    /* 双人档：槽上带 data-duo="1" 时改用「同景别等高 + 可见带不出半幅」的一套参数。
+     * plan 依赖「对面那个槽」当前是谁，所以两边算出来的 k 必然相同；
+     * 换人后要两边一起重算 —— 见 TP.refit()（app.js 每次双人换人后都会调用）。 */
+    var opt = null;
+    /* 双人档右位：水平镜像（两人面对面而不是同向看）。判定放在这里而不是 CSS，
+     * 因为镜像会改变包围盒重心，位姿必须一起重算（见 fitFor ⑤b）。 */
+    var mir = (slot.getAttribute('data-duo') === '1' && slot.getAttribute('data-side') === 'r');
+    if (slot.getAttribute('data-duo') === '1') {
+      var plan = duoPlan(slot);
+      opt = plan ? { k: plan.k, bw: plan.bw, tc: plan.tc, bleed: plan.bleed, mir: mir } : null;
+    }
+    if (!opt && mir) { opt = { mir: mir }; }
+    var m = fitFor(key, w, h, fit, useSlot, opt);
     slot.style.setProperty('--fig-shift-x', m.x + 'px');
     slot.style.setProperty('--fig-shift-y', m.y + 'px');
     slot.style.setProperty('--fig-scale', m.s);
+    slot.style.setProperty('--fig-sx', m.sx == null ? m.s : m.sx);
   }
   var TP_APPLY = applyFit;
 
@@ -628,11 +762,27 @@
     fanzhi: 'a1', ligu: 'a1', wangpu2: 'a1', lichongjin: 'a1', shaonian: 'a1',
     sizheng: 'a1', shanggong: 'a1', qijulang: 'a1', shangshiling: 'a1', zongxun: 'a1'
   };
+  /* 已入仓的派生槽。资源键 = char-<key>-<slot>，与 assets/chars/tq_chars_<key>_<slot>_final.webp 一一对应；
+   * FIT 表已按同一 head_frac 口径补齐（33 条）。未指定 slot 时走 CHAR_ASSETS 默认槽。
+   * ★guorong 的 a2/a3/t 早就入仓却一直没注册（只注册了 a1）——「guorong_t 已入仓未接线」
+   *   的真实成因就在这里：不是没写 if，是资源根本没进 TQA.reg。10-31 一并补上。 */
+  var DERIV = {
+    guorong: ['a2', 'a3', 't', 'n1'], fuhou: ['e2'],
+    zhaokuangyin: ['e1', 'e3'], yinchongyi: ['e1', 'e2', 'e3'],
+    guowei: ['e3'], wangpu: ['e2'], zhangyongde: ['e1']
+  };
   (function register() {
     if (!TQA) { return; }
     Object.keys(CHAR_ASSETS).forEach(function (k) {
       var pose = CHAR_ASSETS[k];
       TQA.reg['char-' + k] = { kind: 'image', src: './assets/chars/tq_chars_' + k + '_' + pose + '_final.webp' };
+    });
+    Object.keys(DERIV).forEach(function (k) {
+      DERIV[k].forEach(function (slot) {
+        TQA.reg['char-' + k + '-' + slot] = {
+          kind: 'image', src: './assets/chars/tq_chars_' + k + '_' + slot + '_final.webp'
+        };
+      });
     });
   }());
 
@@ -656,36 +806,67 @@
     },
     figure: figure,
     /* 停靠方位：优先角色配置，否则按宽高比兜底（半身浮框上 / 全身踩舞台底） */
-    anchorOf: function (key) {
-      var an = CHAR_ASSETS[key];
-      var f = an ? FIT[key + '_' + an] : null;
+    anchorOf: function (key, slot) {
+      var f = fitRow(key, slot);
       if (!f) { return null; }
       return f.anchor || (f.ratio >= 0.9 ? 'dock-top' : 'stage-bottom');
     },
     /* 像素微调（dx 正=右，dy 正=下） */
-    offsetOf: function (key) {
-      var an = CHAR_ASSETS[key];
-      var f = an ? FIT[key + '_' + an] : null;
+    offsetOf: function (key, slot) {
+      var f = fitRow(key, slot);
       return f ? { dx: f.dx || 0, dy: f.dy || 0 } : { dx: 0, dy: 0 };
     },
     fitFor: fitFor, /* 供验收脚本核对头宽/眼线 */
-    fitOf: function (key) { var an = CHAR_ASSETS[key]; return an ? (FIT[key + '_' + an] || null) : null; },
-    /* 断点/旋屏后槽尺寸变化：重算横向补偿（不改当前角色） */
-    refit: function () { var s2 = TP._slot; if (s2 && s2._tqKey) { applyFit(s2, s2._tqKey); } },
+    fitOf: function (key, slot) { return fitRow(key, slot); },
+    /* 断点/旋屏/单↔双切换后槽尺寸变化：重算所有在场立绘（不改当前角色） */
+    refit: function () {
+      var map = TP._sides || (TP._slot ? { main: TP._slot } : {});
+      Object.keys(map).forEach(function (k) {
+        var n = map[k];
+        if (n && n._tqKey) { applyFit(n, n._tqKey, n._tqSlot); }
+      });
+    },
 
-    /* ---- 立绘槽：先画占位，再异步升级真图（永不空槽） ---- */
+    /* ---- 立绘槽：先画占位，再异步升级真图（永不空槽） ----
+     * 2026-10-31：由「单槽」扩成「舞台 + 若干按侧的槽」。_sides 是 side→节点 的映射
+     * （main 单人 / l 左 / r 右），TP.show(key,{side:'r'}) 即可分别驱动。
+     * 兼容：老的 bindSlot(node) 仍然可用，等价于「只有一个 main 槽」。 */
     _slot: null,
-    bindSlot: function (node) { TP._slot = node; },
+    _sides: null,
+    _zone: null,
+    bindSlot: function (node) { TP._slot = node; TP._sides = node ? { main: node } : null; },
+    bindStage: function (zone) {
+      TP._zone = zone || null;
+      TP._sides = {};
+      if (!zone) { TP._slot = null; return; }
+      [].slice.call(zone.querySelectorAll('.slot.sp-fig')).forEach(function (n) {
+        var s = n.getAttribute('data-side') || 'main';
+        if (s === 'off') { return; }   /* off = 空槽，不参与渲染与锚定 */
+        TP._sides[s] = n;
+      });
+      TP._slot = TP._sides.main || TP._sides.r || TP._sides.l || null;
+    },
+    slotOf: function (side) {
+      if (TP._sides && TP._sides[side]) { return TP._sides[side]; }
+      return side === 'main' ? TP._slot : null;
+    },
     show: function (key, opts) {
-      var slot = TP._slot;
+      var side = opts && opts.side;
+      var slot = (side && TP.slotOf(side)) || TP._slot;
       if (!slot) { return; }
-      if (slot._tqKey === key) { return; }
+      /* ★派生槽（2026-10-31）：opts.slot 指定表情/姿态档，如 'e2' 'n1' 't'。
+       * 未注册或未指定 → 回落 CHAR_ASSETS 默认槽，渲染行为与接线前完全一致。 */
+      var useSlot = pickSlot(key, opts && opts.slot);
+      if (slot._tqKey === key && slot._tqSlot === useSlot) { return; }
       var first = !slot._tqKey;
       slot._tqKey = key;
+      slot._tqSlot = useSlot;
+      var gen = (slot._tqGen || 0) + 1; /* 世代号：异步 resolve 回来时若已换人或换槽则丢弃 */
+      slot._tqGen = gen;
       var c = TP.meta(key);
       slot.innerHTML = figure(key, opts && opts.fill ? 'fill' : null);
       slot.removeAttribute('data-fit');
-      applyFit(slot, key);
+      applyFit(slot, key, useSlot);
       var ifig = document.createElement('div');
       ifig.className = 'fig-meta';
       ifig.innerHTML = '<div class="tag">' + c.label + '</div>'
@@ -693,10 +874,10 @@
       slot.appendChild(ifig);
       if (first) { slot.classList.add('fig-fade'); } /* 首次不做渐显，避免首帧闪 */
       /* 真图升级（未注册 → resolve 'none'，维持占位） */
-      var ak = 'char-' + key;
+      var ak = 'char-' + key + (useSlot && useSlot !== CHAR_ASSETS[key] ? '-' + useSlot : '');
       if (TQA && TQA.reg[ak]) {
         TQA.resolve(ak, function (stt) {
-          if (stt !== 'ok' || slot._tqKey !== key) { return; }
+          if (stt !== 'ok' || slot._tqGen !== gen || slot._tqKey !== key || slot._tqSlot !== useSlot) { return; }
           var im = TQA.image(ak);
           if (!im) { return; }
           var pic = document.createElement('img');
@@ -709,18 +890,47 @@
           var m = slot.querySelector('.fig-meta .sub');
           if (m) { m.textContent = (TP.meta(key).title || '') + ' · AI 立绘已入仓'; }
           slot.classList.add('has-real');
-          applyFit(slot, key);
+          applyFit(slot, key, useSlot);
         });
       } else {
         slot.classList.remove('has-real');
       }
       /* 通知宿主重算「立绘↔对话框」锚点：角色切换可能改变停靠方位（全身/半身） */
-      if (typeof global.TQ_ON_FIG_CHANGE === 'function') { global.TQ_ON_FIG_CHANGE(key); }
+      if (typeof global.TQ_ON_FIG_CHANGE === 'function') { global.TQ_ON_FIG_CHANGE(key, useSlot); }
     },
-    /* 供 dev/验证：全部 key 与是否有素材 */
+    /* 把真立绘画进任意节点（回忆舞台 mem-fig 等自定义容器）：
+     * 未注册返回 false，调用方的矢量占位保留。node._tqTok 防「快速连点换人」时旧图后到。 */
+    realInto: function (node, key, slot) {
+      if (!node || !TQA) { return false; }
+      var a = pickSlot(key, slot);
+      if (!a) { return false; }
+      var ak = 'char-' + key + (a !== CHAR_ASSETS[key] ? '-' + a : '');
+      if (!TQA.reg[ak]) { return false; }
+      var tok = (node._tqTok || 0) + 1;
+      node._tqTok = tok;
+      TQA.resolve(ak, function (stt) {
+        if (stt !== 'ok' || node._tqTok !== tok) { return; }
+        var im = TQA.image(ak);
+        if (!im) { return; }
+        var pic = document.createElement('img');
+        pic.className = 'mem-fig-real';
+        pic.src = im.src;
+        pic.alt = (TP.meta(key).label || '') + ' 立绘';
+        node.innerHTML = '';
+        node.appendChild(pic);
+      });
+      return true;
+    },
+    /* 供 dev/验证：全部 key、默认槽、已注册的派生槽（接线盘点用） */
     list: function () {
       return Object.keys(FIG).filter(function (k) { return k !== 'DEFAULT'; }).map(function (k) {
-        return { key: k, label: FIG[k].label, real: !!(TQA && TQA.reg['char-' + k]) };
+        var slots = (DERIV[k] || []).slice();
+        return {
+          key: k, label: FIG[k].label, slot: CHAR_ASSETS[k] || null,
+          real: !!(TQA && TQA.reg['char-' + k]),
+          slots: slots,
+          slotsReal: slots.filter(function (s) { return !!(TQA && TQA.reg['char-' + k + '-' + s]); })
+        };
       });
     }
   };

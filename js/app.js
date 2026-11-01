@@ -125,11 +125,73 @@
   var SELF_KEY = 'shiguan'; /* 玩家所扮角色的绘像 key（role=shi 史官 / nv 女官） */
 
   /* ---------- 立绘槽：说话人 → 程序化绘像（portraits.js · 未知 speaker 也有像，杜绝空位） ----------
-   * 旁白（speaker 为空）不改立绘：保持上一说话人，避免 narr/card 相邻时的闪烁。 */
-  function setPortrait(speaker) {
-    if (!global.TP || !speaker) { return; }
-    TP.show(TP.keyOf(speaker, SELF_KEY), { fill: true }); /* 同一角色不重绘（TP.show 内部判 key，杜绝闪烁） */
-    reAnchorSoon(); /* 角色锚点可能不同（全身/半身）：重算 */
+   * 旁白（speaker 为空）不改立绘：保持上一说话人，避免 narr/card 相邻时的闪烁。
+   * slot（2026-10-31 接线）：指定表情/姿态派生档，如「符后 e2 正色质问」。
+   * 不传、或该槽还没出图，都由 TP.show → pickSlot 回落默认锚点，与接线前完全一致。
+   * 双人（2026-10-31 v2）：st.pair 带第二个在场角色 ⇒ 左右两槽同框，说话的一方 data-st=on。
+   *   分边是「黏住」的：同一场里谁在哪边定下来就不再换，只在换人说话时切换明暗与前后。 */
+  var figL = null, figR = null, zoneEl = null;   /* 左槽 / 右槽（单人时右槽即 main） */
+  var duoOn = false;
+  var duoCast = { l: null, r: null };            /* 当前双人场：{ key, slot } */
+
+  function toDuo() {
+    if (duoOn || !figL || !figR) { return; }
+    duoOn = true;
+    figL.style.display = '';
+    figL.setAttribute('data-side', 'l');
+    figR.setAttribute('data-side', 'r');
+    figL.setAttribute('data-duo', '1');
+    figR.setAttribute('data-duo', '1');
+    if (zoneEl) { zoneEl.setAttribute('data-duo', '1'); }
+    duoCast = { l: null, r: null };
+    if (global.TP && TP.bindStage) { TP.bindStage(zoneEl); }
+    if (global.TP && TP.refit) { TP.refit(); }   /* 槽宽 88%→50%，必须重算归一化 */
+  }
+  function toSingle() {
+    if (!duoOn || !figL || !figR) { return; }
+    duoOn = false;
+    figL.style.display = 'none';
+    figL.setAttribute('data-side', 'off');
+    figL.removeAttribute('data-duo');
+    figL.removeAttribute('data-st');
+    figR.setAttribute('data-side', 'main');
+    figR.removeAttribute('data-duo');
+    figR.removeAttribute('data-st');
+    if (zoneEl) { zoneEl.removeAttribute('data-duo'); }
+    duoCast = { l: null, r: null };
+    if (global.TP && TP.bindStage) { TP.bindStage(zoneEl); }
+    if (global.TP && TP.refit) { TP.refit(); }
+  }
+
+  function setPortrait(speaker, slot, pair, pairSlot) {
+    if (!global.TP || !speaker || !figR) { return; }
+    var sk = TP.keyOf(speaker, SELF_KEY);
+    var pk = pair ? TP.keyOf(pair, SELF_KEY) : null;
+    if (pk === sk) { pk = null; }   /* 同一人不出两张像 */
+    if (!pk) {
+      toSingle();
+      TP.show(sk, { fill: true, slot: slot });
+      reAnchorSoon(); /* 角色锚点可能不同（全身/半身）：重算 */
+      return;
+    }
+    toDuo();
+    var sSide = { key: sk, slot: slot }, pSide = { key: pk, slot: pairSlot };
+    if (!duoCast.l || !duoCast.r) {
+      duoCast = { l: pSide, r: sSide };          /* 新开一对：听者左、说者右 */
+    } else if (duoCast.l.key === sk) {
+      duoCast.l.slot = slot; duoCast.r = pSide;  /* 说话人已在左：左侧续用，右侧换成听者 */
+    } else if (duoCast.r.key === sk) {
+      duoCast.r.slot = slot; duoCast.l = pSide;
+    } else {
+      duoCast = { l: pSide, r: sSide };          /* 换了个第三人：重排 */
+    }
+    TP.show(duoCast.l.key, { fill: true, slot: duoCast.l.slot, side: 'l' });
+    TP.show(duoCast.r.key, { fill: true, slot: duoCast.r.slot, side: 'r' });
+    /* 两人共用一个 k（等高）：任一侧换人都会改变对方的 k，必须两边一起重算 */
+    if (TP.refit) { TP.refit(); }
+    if (figL) { figL.setAttribute('data-st', duoCast.l.key === sk ? 'on' : 'off'); }
+    if (figR) { figR.setAttribute('data-st', duoCast.r.key === sk ? 'on' : 'off'); }
+    reAnchorSoon();
   }
   /* ---------- 立绘 ↔ 对话框 锚定（2026-10-28） ----------
    * 半身像不该被对话框压住：以「对话框上沿」为基准，锚在其上方并留 --fig-dock-gap。
@@ -146,15 +208,20 @@
     var br = box.getBoundingClientRect();
     var lift = Math.max(0, Math.round(sr.bottom - br.top)); /* 舞台底 → 对话框顶 */
     stage.style.setProperty('--fig-dock-lift', lift + 'px');
-    /* 锚点：角色/幕可覆盖；缺省 stage-bottom（未判定角色时保持原构图，不贸然上浮） */
-    var anchor = 'stage-bottom';
-    if (global.TP && global.TP._slot && global.TP._slot._tqKey) {
-      var a = global.TP.anchorOf(global.TP._slot._tqKey);
-      if (a) { anchor = a; }
-    }
     var act = D.acts[CUR_ACT];
-    if (act && act.figAnchor) { anchor = act.figAnchor; }
-    sp.setAttribute('data-anchor', anchor);
+    var forced = (act && act.figAnchor) ? act.figAnchor : null; /* 每幕可强指定构图 */
+    /* 双人时两个槽可能一个是全身（踩底）、一个是半身（浮框上沿）——
+     * 锚点必须逐槽判定，写在 .sp-zone 上只能有一份，混排时必错一个。 */
+    var map = (global.TP && global.TP._sides) || {};
+    Object.keys(map).forEach(function (side) {
+      var n = map[side];
+      if (!n || !n._tqKey) { return; }
+      var a = forced || global.TP.anchorOf(n._tqKey, n._tqSlot) || 'stage-bottom';
+      n.setAttribute('data-anchor', a);
+    });
+    /* 兼容：舞台上保留主槽那一份（旧样式/验收脚本仍读 .sp-zone[data-anchor]） */
+    var main = map.main || map.r || map.l;
+    if (main) { sp.setAttribute('data-anchor', main.getAttribute('data-anchor') || 'stage-bottom'); }
   }
   /* dock 结构变化（换框/尺寸变化）后重锚 */
   function reAnchorSoon() { setTimeout(syncFigAnchor, 0); }
@@ -386,16 +453,24 @@
     var main = el('div', 'main act-vn');
     var vnMain = el('div', 'vn-main');
     var sp = el('div', 'sp-zone');
-    /* VN 立绘舞台：无边框/无底卡/无独立名牌——立绘即画面主体，名字只在对话框名牌上出现一次 */
-    var slot = el('div', 'slot sp-fig');
+    /* VN 立绘舞台：无边框/无底卡/无独立名牌——立绘即画面主体，名字只在对话框名牌上出现一次。
+     * 2026-10-31：两槽（左/右）。单人时左槽 off、右槽 main；双人时 l + r 同时在场。 */
+    var slotL = el('div', 'slot sp-fig');
+    var slotR = el('div', 'slot sp-fig');
+    slotL.setAttribute('data-side', 'off');
+    slotL.style.display = 'none';
+    slotR.setAttribute('data-side', 'main');
+    figL = slotL; figR = slotR; zoneEl = sp;
+    duoOn = false; duoCast = { l: null, r: null };
     SELF_KEY = save.role === 'nv' ? 'nvguan' : 'shiguan';
+    sp.appendChild(slotL);                     /* 先入树再绑定：bindStage 靠 querySelectorAll 收槽 */
+    sp.appendChild(slotR);
     if (global.TP) {
-      TP.bindSlot(slot);
+      TP.bindStage(sp);
       TP.show(SELF_KEY, { fill: true });       /* 程序化绘像占位（素材到则原位升级真图） */
     } else {
-      slot.innerHTML = F.SIL;
+      slotR.innerHTML = F.SIL;
     }
-    sp.appendChild(slot);
     vnMain.appendChild(sp);
     var doc = el('div', 'vn-doc');
     vnMain.appendChild(doc);
@@ -494,9 +569,9 @@
       }
       return dock;
     }
-    function dockBox(speaker, text, cb) {
+    function dockBox(speaker, text, cb, slot, pair, pairSlot) {
       retract(); /* 幂等清场：sub 分支链不经过 next()，对话框回归时统一退占台/解键锁 */
-      setPortrait(speaker); /* 说话人驱动立绘（立绘槽 = 角色绘像，非静态占位） */
+      setPortrait(speaker, slot, pair, pairSlot); /* 说话人驱动立绘；pair = 同框的第二人 */
       var dock = ensureDock();
       var old = dock.querySelector('.dlg-box');
       if (old && old.parentNode) { old.parentNode.removeChild(old); }
@@ -566,7 +641,8 @@
       if (st.type === 'narr') {
         dockBox('', st.text, null);
       } else if (st.type === 'card') {
-        dockBox(st.speaker || '', st.text, null);
+        /* st.slot：该句该用哪一档表情；st.pair / st.pairSlot：第二在场者及其表情（双人同框） */
+        dockBox(st.speaker || '', st.text, null, st.slot, st.pair, st.pairSlot);
       } else if (st.type === 'iv') {
         var ivCfg = D.iv[st.cfg] || D.iv.tang;
         if (window.TQA && TQA.tifaJie()) { /* §10.5 L2：设置「应节」——本节直接走节奏条，判定奖励同躬行 */
@@ -621,7 +697,7 @@
           if (s2.type === 'narr') {
             dockBox('', s2.text || '', nextSub);
           } else if (s2.type === 'card') {
-            dockBox(s2.speaker || '', s2.text, nextSub);
+            dockBox(s2.speaker || '', s2.text, nextSub, s2.slot, s2.pair, s2.pairSlot);
           } else if (s2.type === 'iv') {
             var ivCfg2 = D.iv[s2.cfg] || D.iv.tang;
             if (window.TQA && TQA.tifaJie()) { /* §10.5 L2：应节直入 */
@@ -792,7 +868,7 @@
   function showChoice(main, st, done, pushStep) {
     var box = el('div', 'choice-box');
     box.setAttribute('role', 'radiogroup');
-    setPortrait(st.speaker || ''); /* 选择项的视角名（多为玩家自称）也驱动立绘 */
+    setPortrait(st.speaker || '', st.slot, st.pair, st.pairSlot); /* 选择项的视角名（多为玩家自称）也驱动立绘 */
     box.appendChild(el('div', 'speaker', st.speaker || ''));
     box.appendChild(el('div', 'prompt', st.prompt || ''));
     var picked = false;
@@ -999,7 +1075,11 @@
         slot.innerHTML = global.TP.figure(key);
         slot.style.display = '';
         slot.className = 'mem-fig mem-fig-' + (key === 'DEFAULT' ? 'any' : key);
+        /* 有真图就换掉矢量占位：st.slot 指定派生档（如郭威 e3「病中跪坐」），
+         * 未出图则 realInto 返回 false，占位保留——回忆段缺图不再是硬伤。 */
+        if (global.TP.realInto) { global.TP.realInto(slot, key, st.slot); }
       } else {
+        slot._tqTok = (slot._tqTok || 0) + 1; /* 作废在途的异步真图，避免旁白行突然冒出上一句的立绘 */
         slot.innerHTML = '';
         slot.style.display = 'none';
       }
@@ -1087,13 +1167,13 @@
     // 群臣轮番（各自两矢，命中数运行时随机，一卡带过）
     cfg.ministers.forEach(function (mst) {
       var mh = (Math.random() < 0.75 ? 1 : 0) + (Math.random() < 0.55 ? 1 : 0); // 加权 0–2 矢
-      q.push({ sp: mst.speaker, t: mst.line + cfg.minResult[mh] });
+      q.push({ sp: mst.speaker, t: mst.line + cfg.minResult[mh], slot: mst.slot });
     });
     q.push({ sp: '司正', t: '礼官请矢——两矢，中者为胜。' });
     (function playQ() {
       if (q.length) {
         var it = q.shift();
-        VNC.dockBox(it.sp, it.t, playQ);
+        VNC.dockBox(it.sp, it.t, playQ, it.slot);
         return;
       }
       // 玩家两矢（回退版 · 拉弓式拖拽投壶）：落空也推进，计命中数；占台演出
@@ -1104,7 +1184,7 @@
     })();
     function playRong(hits) {
       // 压轴：官家对投（两矢各五成命中，运行时随机——与玩家 hits 比较）
-      var q2 = [{ sp: '官家', t: cfg.rongIntro }];
+      var q2 = [{ sp: '官家', t: cfg.rongIntro, slot: 't' }]; /* 压轴＝投壶执矢档 */
       var rongHits = 0;
       for (var r = 0; r < 2; r++) {
         var rh = Math.random() < 0.5;
@@ -1116,7 +1196,7 @@
       (function play2() {
         if (q2.length) {
           var it2 = q2.shift();
-          VNC.dockBox(it2.sp, it2.t, play2);
+          VNC.dockBox(it2.sp, it2.t, play2, it2.slot);
           return;
         }
         awardDeco('jinzhi', '金矢', main); // 胜负零惩罚，参与即纪念

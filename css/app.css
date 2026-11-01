@@ -142,6 +142,11 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .ending-scene .ending-vessel svg{filter:drop-shadow(0 10px 22px rgba(0,0,0,.45))}
 .ending-scene .ending-vessel::before{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(239,245,243,.16),rgba(239,245,243,0) 68%);z-index:-1}
 .iv{position:relative;height:100%;display:flex;flex-direction:column}
+/* 小游戏（tang / proof / touhu）是 300×210 的横构图。
+   舞台原本 flex:1 撑满竖屏，横图会被缩成一条、上下留大片空白；
+   rich 模式下舞台按画幅比收住，整块交互在剩余高度里垂直居中。 */
+.iv.rich{justify-content:center}
+.iv.rich .iv-stage{flex:0 0 auto;width:100%;aspect-ratio:300/210;max-height:58vh;min-height:0}
 .iv-stage{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,#F5F9F7 0%,#DDE9E5 60%,#BFD2CD 100%);border:1px solid var(--qing);border-radius:12px;overflow:hidden}
 .iv-stage.dark{background:radial-gradient(circle at 50% 36%,#3E5B5E 0%,#22383C 80%)}
 .iv-stage .zone-tag{position:absolute;top:8px;left:8px;font-size:10px;letter-spacing:1px;background:rgba(31,59,58,.62);color:var(--yue);border-radius:9px;padding:2px 9px;z-index:4}
@@ -636,119 +641,100 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 @media (max-height:740px){:root{--tq-tb-pad-r:14px}}
 @media (max-height:668px){:root{--tq-tb-pad-r:12px}}
 
-/* ==================== VN 立绘摆放（2026-10-28 · 对齐同类作品惯例）
- * 三类惯例：①立绘是「画面主体」而非卡片——无边框/无底卡/无独立名牌；
- * ②底部出血（bottom-anchored），躯干下缘被对话框压住（sprite 在 box 之下，非并列）；
- * ③名字只在对话框名牌出现一次。竖版单人=居中大立绘；宽屏=左立绘图/右文本双栏。
- * Chrome 61：禁 min()/max()/clamp()，宽度用百分比 + max-width。 */
+/* ==================== VN 立绘摆放（2026-10-31 v2 · 单人 / 双人同框）
+ * 结构：.sp-zone = 整块舞台（绝对定位、裁边、不吃鼠标，层级压在对话框之下）；
+ *       .slot.sp-fig = 独立定位盒，各自锚地、各自做 FIT 归一化——不再依赖父容器的 flex 排布。
+ *       这样双人时「互不重叠」是**结构性保证**：fitFor 把人物本体（bw）夹在各自半幅内，
+ *       不是靠调数值凑出来的。
+ * 单人：宽 88%（≤420）居中；半身浮在对话框上沿，全身踩舞台底（脚被框压住）。
+ * 双人：左右两槽各占 50%，贴左/贴右；同框时每人头部约为单人的 3/4（同类作品惯例），
+ *       在听的一方只缩不放（transform-origin: bottom center ⇒ 脚不动、人矮下去）并压暗。
+ * 语义：data-side = main / l / r（off = 空槽不出场）；data-st = on（说话）/ off（在听）。
+ * Chrome 61：禁 min()/max()/clamp()，宽度一律百分比 + max-width。
+ */
+:root{
+  --fig-dock-gap:24px;   /* 立绘底 ↔ 对话框顶 的呼吸间距 */
+  --fig-duo-dim:.87;     /* 在听者亮度：压暗但不要把古画的墨色压脏 */
+}
 .main.act-vn .sp-zone{
   position:absolute; left:0; right:0; top:0; bottom:0;
-  display:flex; align-items:flex-end; justify-content:center;
-  padding:0 8px; pointer-events:none; z-index:1; overflow:hidden;
+  display:block; padding:0; pointer-events:none; z-index:1; overflow:hidden;
 }
 .main.act-vn .sp-zone .slot.sp-fig{
-  position:relative; display:block; width:88%; max-width:400px; height:90%;
+  position:absolute; bottom:0; height:90%;
   border:0; border-radius:0; background:none; padding:0; overflow:hidden;
+  transform-origin:bottom center;
+  transition:transform .22s ease, opacity .22s ease, filter .22s ease;
 }
 .main.act-vn .sp-fig.has-real{ border:0; }
-.main.act-vn .sp-fig .fig-meta{ display:none; }        /* 立绘上不再叠文字牌 */
+.main.act-vn .sp-fig .fig-meta{ display:none; }   /* 名字只在对话框名牌出现一次，立绘上不叠字牌 */
+
+/* —— 单人：居中、88%、上限 420（中屏另加档） —— */
+.main.act-vn .sp-fig[data-side="main"]{ left:0; right:0; margin:0 auto; width:88%; max-width:420px; }
+
+/* —— 双人：贴左 / 贴右，各占一半 —— */
+.main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-side="l"]{ left:0; width:50%; }
+.main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-side="r"]{ right:0; width:50%; }
+/* 在听者：只缩不放（脚的位置不动），压暗、略降饱和；不做模糊——古画风一糊就脏 */
+.main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-st="off"]{
+  transform:scale(.955); opacity:.97;
+  filter:brightness(var(--fig-duo-dim)) saturate(.9);
+  z-index:1;
+}
+.main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-st="on"]{ z-index:2; }
+
+/* —— 锚地：全身踩舞台底（脚被对话框压住）/ 半身浮在对话框上沿并留 --fig-dock-gap ——
+ * 选择器必须带满 .sp-zone .slot 一级：否则被上面 5 个类的定位规则压住（2026-10-31 实测踩到，
+ * 症状是半身像不浮起、直接落到舞台底）。 */
+.main.act-vn .sp-zone .slot.sp-fig[data-anchor="stage-bottom"]{ bottom:0; height:90%; }
+.main.act-vn .sp-zone .slot.sp-fig[data-anchor="dock-top"]{
+  bottom:calc(var(--fig-dock-lift,0px) + var(--fig-dock-gap));
+  height:calc(100% - var(--fig-dock-lift,0px) - var(--fig-dock-gap));
+}
+
+/* 图片：一律 contain（cover 会把窄头角色的头顶裁掉），底对齐；缩放原点 bottom center */
 .main.act-vn .sp-fig .fig-real{
   position:absolute; left:0; top:0; width:100%; height:100%;
-  /* 2026-10-28 三修：一律 contain（原 cover 会把窄头角色的头顶裁掉）。
-   * 底对齐 = 脚踩槽底 / 半身像立在对话框上沿；s=1 不放大（只缩不放更清晰）。 */
   object-fit:contain; object-position:bottom center;
   animation:tqFigIn .26s ease both;
 }
-.main.act-vn .sp-zone .slot.sp-fig[data-fit="contain"] .fig-real{
-  object-fit:contain; object-position:bottom center;
-}
-/* 半身像：与全身像共用 90% 槽高（特异性 0,6,0 压过基础 0,5,0）；
- * 缩放以「底边中心」为原点 ⇒ 贴槽底生长，不悬空。尺寸差异由 fitFor 的头宽归一化统一。 */
+.main.act-vn .sp-zone .slot.sp-fig[data-fit="contain"] .fig-real{ object-fit:contain; object-position:bottom center; }
 .main.act-vn .sp-zone .slot.sp-fig[data-fit="contain"] .fig-real{ transform-origin:bottom center; }
 .main.act-vn .sp-fig .fig-art{ animation:tqFigIn .26s ease both; }
-/* 景别杠杆（[PLACEHOLDER] 默认 1=全身，脚被对话框压住）：调大可收成腰上/胸上景别，
- * 只放大不换图——脸部表情更清晰，同时保持「立绘为画面主体」。 */
+/* 景别杠杆：--fig-shift-x（头肩重心横向补偿）/ --fig-scale（归一化缩放，数学上不溢出人物）
+ * --fig-sx = 水平缩放分量：正常等于 --fig-scale；双人档右位为负值 ⇒ 水平镜像。
+ * 用 scale(sx, sy) 两参数形式而不是再叠一个 scaleX(-1)，是为了保持
+ * 「原点 bottom center + 同一变换链」，位姿计算才能和 fitFor 的 cx 反转对得上。 */
 .main.act-vn .sp-fig .fig-real,
 .main.act-vn .sp-fig .fig-art{
-  /* --fig-shift-x：按「头肩重心」把人物推到槽中线（治朝向导致的视觉偏移）
-   * --fig-zoom：景别杠杆 */
-  /* scale 由 JS 保证不超过「人物包围盒不出槽」的上限（见 fitFor ③）：
-   * 只放大到安全上限、绝不溢出人物；原点 bottom center ⇒ 放大时脚不动、向上生长。 */
-  transform:translate(var(--fig-shift-x,0px), var(--fig-shift-y,0px)) scale(var(--fig-scale,1));
+  transform:translate(var(--fig-shift-x,0px), var(--fig-shift-y,0px)) scale(var(--fig-sx,var(--fig-scale,1)), var(--fig-scale,1));
   transform-origin:bottom center;
 }
 /* 关键帧里带 scale：animation 的 fill-mode 会盖掉基础 transform，缩放必须写进关键帧才生效 */
 @keyframes tqFigIn{
-  from{opacity:0; transform:translate(var(--fig-shift-x,0px), var(--fig-shift-y,0px)) translateY(8px) scale(var(--fig-scale,1))}
-  to{opacity:1; transform:translate(var(--fig-shift-x,0px), var(--fig-shift-y,0px)) translateY(0) scale(var(--fig-scale,1))} }
-/* 层级：对话框/文本列压在立绘之上——保证文字永不被动摇遮挡（回复/选项亦然） */
+  from{opacity:0; transform:translate(var(--fig-shift-x,0px), var(--fig-shift-y,0px)) translateY(8px) scale(var(--fig-sx,var(--fig-scale,1)), var(--fig-scale,1))}
+  to{opacity:1; transform:translate(var(--fig-shift-x,0px), var(--fig-shift-y,0px)) translateY(0) scale(var(--fig-sx,var(--fig-scale,1)), var(--fig-scale,1))} }
+/* 层级：对话框/文本列压在立绘之上——保证文字永不被遮挡（回复/选项亦然） */
 .main.act-vn .vn-doc{ position:relative; z-index:2; }
 .main.act-vn .dlg-dock{ z-index:2; }
 
-/* 宽屏：左立绘（通栏到舞台底）+ 右文本列；立绘宽度锁定比例，不随文本长度跳变 */
+/* —— 中屏（竖版 UI，文本列 620）：单人给到 460，避免在 620 宽舞台上显得又瘦又小 —— */
+@media (min-width:700px) and (max-aspect-ratio:119/100){
+  .main.act-vn .sp-fig[data-side="main"]{ max-width:460px; }
+}
+
+/* —— 宽屏（左立绘 / 右文本双栏）：立绘列自带高度，脚贴列底 —— */
 @media (min-aspect-ratio:6/5) and (min-width:900px){
   .main.act-vn .sp-zone{
     position:relative; left:auto; right:auto; top:auto; bottom:auto;
     width:42%; max-width:520px; min-width:320px; flex-shrink:0;
-    align-items:flex-end; justify-content:center; padding:16px 14px 0;
-    /* 不画分栏竖线：成熟 VN 的立绘与文本之间没有 UI 分隔线（接入背景后更会显假） */
+    display:flex; align-items:flex-end; justify-content:center;
+    padding:16px 14px 0;
   }
-  .main.act-vn .sp-zone .slot.sp-fig{ width:100%; max-width:none; height:86%; }
-}
-
-/* ==================== 立绘 ↔ 对话框 锚定（2026-10-28）
- * 目标：半身像浮在对话框上方、留呼吸间距、永不遮字也不出屏。
- * 机制：JS 量出「舞台底→对话框顶」写入 --fig-dock-lift；sp-zone 据此上收，
- *       容器变矮 ⇒ contain 的半身像自动缩到放得下，绝不越界（响应式天然成立）。
- * 可配（三级覆盖，后者优先）：
- *   ① 全局：--fig-dock-gap（间距）/ --fig-dock-dx / --fig-dock-dy
- *   ② 每角色：portraits.js FIT[key].anchor / dx / dy
- *   ③ 每幕：data.js acts[i].figAnchor
- * 方位：dock-top（默认，居中）/ dock-left / dock-right / stage-bottom（全身像）。 */
-:root{ --fig-dock-gap: 24px; }
-
-/* 默认（stage-bottom）：立绘踩舞台底，脚被对话框压住——全身像的正确构图 */
-.main.act-vn .sp-zone{ bottom: 0; }
-.main.act-vn .sp-zone[data-anchor="stage-bottom"]{ bottom: 0; }
-
-/* dock-top：立绘容器上收到「对话框上沿 + 间距」，半身像整体浮在框上方 */
-.main.act-vn .sp-zone[data-anchor="dock-top"]{
-  bottom: calc(var(--fig-dock-lift, 0px) + var(--fig-dock-gap));
-}
-/* dock-left / dock-right：同样浮在框上方，但水平靠边（双人/偏侧构图用） */
-.main.act-vn .sp-zone[data-anchor="dock-left"],
-.main.act-vn .sp-zone[data-anchor="dock-right"]{
-  bottom: calc(var(--fig-dock-lift, 0px) + var(--fig-dock-gap));
-}
-.main.act-vn .sp-zone[data-anchor="dock-left"]{ justify-content: flex-start; padding-left: 12px; }
-.main.act-vn .sp-zone[data-anchor="dock-right"]{ justify-content: flex-end; padding-right: 12px; }
-
-/* 浮框上方的半身像：底边贴容器底（视觉上「立」在对话框上沿），不再压到文字 */
-.main.act-vn .sp-zone[data-anchor="dock-top"] .slot.sp-fig,
-.main.act-vn .sp-zone[data-anchor="dock-left"] .slot.sp-fig,
-.main.act-vn .sp-zone[data-anchor="dock-right"] .slot.sp-fig{
-  height: 100%; max-height: 100%;
-}
-/* 容器变矮后，半身像高度不得撑破：宽度随之收，避免顶部越出安全区 */
-.main.act-vn .sp-zone[data-anchor="dock-top"] .slot.sp-fig .fig-real,
-.main.act-vn .sp-zone[data-anchor="dock-left"] .slot.sp-fig .fig-real,
-.main.act-vn .sp-zone[data-anchor="dock-right"] .slot.sp-fig .fig-real{
-  object-fit: contain; object-position: bottom center;
-}
-
-/* 宽屏（左立绘右文本）：锚点不适用——立绘列自带高度，仍让脚贴列底 */
-@media (min-aspect-ratio:6/5) and (min-width:900px){
-  .main.act-vn .sp-zone[data-anchor="dock-top"],
-  .main.act-vn .sp-zone[data-anchor="dock-left"],
-  .main.act-vn .sp-zone[data-anchor="dock-right"]{
-    position:relative; bottom:auto; justify-content:center; padding-left:14px; padding-right:14px;
+  .main.act-vn .sp-zone .slot.sp-fig{
+    position:relative; left:auto; right:auto; bottom:auto; margin:0;
+    width:100%; max-width:none; height:86%;
   }
-}
-
-/* 宽屏补正：上面 dock-top 的 height:100% 会让宽屏立绘列撑满（91.6% 过高），
- * 宽屏是左右分栏，立绘高度仍按 86% 走（与分栏文本列平衡）。 */
-@media (min-aspect-ratio:6/5) and (min-width:900px){
-  .main.act-vn .sp-zone[data-anchor="dock-top"] .slot.sp-fig,
-  .main.act-vn .sp-zone[data-anchor="dock-left"] .slot.sp-fig,
-  .main.act-vn .sp-zone[data-anchor="dock-right"] .slot.sp-fig{ height:86%; max-height:86%; }
+  .main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-side="l"],
+  .main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-side="r"]{ width:50%; height:86%; }
 }

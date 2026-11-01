@@ -7,3 +7,94 @@ Thumbs.db
 node_modules/
 dist/
 *.zip
+
+# 美术生产中间件（仅开发用，不入游戏仓；最终入包资产走 assets/）
+artdraft/ai_gen/_raw/
+artdraft/ai_gen/qc/
+artdraft/ai_gen/_backup_*/
+artdraft/props3d/c7_material/
+artdraft/props3d/jobs/
+artdraft/props3d/mothers/
+artdraft/props3d/previews/
+artdraft/props3d/renders/
+artdraft/props3d/shards_bak_*/
+artdraft/refs/
+
+# Blender 工具 / 运行环境（误入素材目录，体积 ~3GB）
+artdraft/props3d/tools/blender-4.5.15-windows-x64/
+artdraft/props3d/tools/blender*/
+artdraft/props3d/tools/*.dll
+artdraft/props3d/tools/*.pyc
+artdraft/__pycache__/
+
+# 测试 / 诊断脚本与产物
+artdraft/gradtest.*
+artdraft/gradshot.js
+artdraft/shot_*.js
+artdraft/build*.py
+artdraft/prep_images.py
+artdraft/prep_refs.py
+artdraft/prep_seal.py
+artdraft/refs_data.py
+
+# 工作区根目录临时件（若误 copy 进游戏仓）
+_bak_*.html
+_audit_full.png
+_audit_shot1.png
+_seed_sweep.txt
+
+# 测试结果（仅开发证据，不入库）
+artdraft/shots/
+_e2e/
+proto_s1_parallax/
+smoke*.png
+result.json
+run.log
+
+# 游戏仓根目录散落的诊断 / 调参截图（仅开发证据）
+_probe_sandbox.txt
+_s2_comp_full_h.png
+_s2_comp_h.png
+半身像_多断点一致性.png
+半身像锚定_方案预览.png
+
+# 仓根诊断 / 像素比对 / 断点截图 / 探针输出（均为开发证据，前导点=隐藏，前缀取自实测）
+# .probe_*.png|.js      —— 立绘像素比对 & 截图探针输出（54）
+# .pxA/.pxB/_*.png      —— 立绘两版像素差异图
+# .clippx/.clip_*.png   —— 裁剪比对图
+# .cr_*.png             —— 断点截图
+# .pv_*.png             —— 预览
+# .dbg_*/.mem*/*.mc_*/*.ms_*/*.fig_*/*.now_*/*.old_*/*.center_last/*.vn_smoke_* —— 调试/记忆/冒烟
+# 注：仅匹配「仓根」的隐藏散件；assets/preview 下被跟踪/入库的正式文件不受影响
+/.probe_*.png
+/.probe_*.js
+/.pxA_*.png
+/.pxB_*.png
+/.clippx_*.png
+/.clip_*.png
+/.cr_*.png
+/.pv_*.png
+/.dbg_*.png
+/.mem_*.png
+/.memp_*.png
+/.mc_*.png
+/.ms_*.png
+/.fig_*.png
+/.vn_smoke_*.png
+/.now_*.png
+/.old_*.png
+/.center_last.png
+# 修复前后对比 / bug 截图 / 安全区 / 架构 / 诊断
+/.after_*.png
+/.arch_*.png
+/.before_*.png
+/.bug_*.png
+/.crshot_*.png
+/.safe_*.png
+/.diag*.png
+/.q_mem*.png
+/.diag.json
+/.old_clip.json
+
+# 瓷片渲染备份（与 c7_material 等同为中间件）
+artdraft/props3d/shards/_bak_pre_irregular/

@@ -209,13 +209,32 @@
 
   /* ========== 轨③ sprite 适配器（碎片转台 · 10-24 回退机制实装） ==========
    * shardStage：拾得视图用，12 帧慢速转台（canvas 2D 切 atlas，6fps，离场即停）；
-   * shardStill：图鉴格用，静态首帧。素材缺失/侦测失败 → FRACTURE 剪影 + 「预设图样」角标。
+   * shardStill：图鉴格用，静态首帧。
+   * ★ 2026-10-28 回退链改为「四段」，末段之前一律**仍有 3D 素材**：
+   *   latlong 多向（可自由旋转）→ 12 帧转台（可拖擦洗）→ **内壁静态帧**（含整张画）→ 矢量剪影。
+   *   旧链只有三段，末段是矢量剪影 ⇒ 一旦素材缺失玩家就彻底看不到瓷片，
+   *   与本项目「回退也要能看到内壁图案」的要求冲突，故补第 3 段。
    * 帧时看门狗：30 帧均值 >33ms 喂给 TQA.watchFeed（同类两连退 → 会话内降 vector）。 */
   function drawAtlasFrame(ctx, ent, img, f, w, hgt) {
     var fx = (f % ent.cols) * ent.fw, fy = Math.floor(f / ent.cols) * ent.fh;
     ctx.clearRect(0, 0, w, hgt);
     ctx.drawImage(img, fx, fy, ent.fw, ent.fh, 0, 0, w, hgt);
   }
+
+  /* 设备像素比：canvas 的 backing store 必须按 DPR 放大，否则 160px 图集
+   * 被 CSS 拉到 200px 再乘 3 倍屏 ⇒ 实测约 4.7× 插值，内壁暗纹糊成一片。
+   * 上限 3 是性能与内存的折中（3 倍屏已到收益拐点）。 */
+  function dprOf() {
+    var d = global.devicePixelRatio || 1;
+    return Math.max(1, Math.min(3, d));
+  }
+  function fitCanvas(cv, ent) {
+    var d = dprOf();
+    cv.width = Math.round(ent.fw * d);
+    cv.height = Math.round(ent.fh * d);
+    return d;
+  }
+
   function vecShard(mount, label) {
     mount.innerHTML = '';
     var box = h('div', 'shard-vec');
@@ -223,18 +242,100 @@
     if (label !== false) { box.appendChild(h('div', 'prop-badge', '预设图样')); }
     mount.appendChild(box);
   }
-  TQ.shardStage = function (mount, id) {
-    var key = 'shard-' + id;
+
+  /* 内壁静态帧（回退第 3 段 / 双击细看）：整张画、可缩放平移。
+   * 判据：注册表里的 innerRatio = 可见内壁面积 / 内壁总面积（16 片实测 ≥0.864）。 */
+  TQ.shardInner = function (mount, id) {
+    var key = 'shard-inner-' + id;
     var tqa = global.TQA;
-    if (!tqa || tqa.kindOut('shard')) { vecShard(mount, !!tqa && !!tqa.reg[key]); return; }
+    if (!tqa || !tqa.reg[key]) { vecShard(mount, false); return; }
     tqa.resolve(key, function (stt) {
       if (!mount.isConnected) { return; }
       if (stt !== 'ok') { vecShard(mount, stt === 'fail'); return; }
       var ent = tqa.reg[key], img = tqa.image(key);
       if (!img) { vecShard(mount, false); return; }
       mount.innerHTML = '';
+      var cv = h('canvas', 'shard-ll');
+      var d = dprOf();
+      cv.width = Math.round(img.width * d / 2);   /* 512 源 → 半尺寸 backing，够清且省内存 */
+      cv.height = Math.round(img.height * d / 2);
+      cv.style.touchAction = 'none';
+      cv.setAttribute('role', 'img');
+      cv.setAttribute('aria-label', '瓷片内壁（静态·可缩放）');
+      mount.appendChild(cv);
+      var badge = h('div', 'prop-badge inner-badge',
+        '内壁 ' + Math.round((ent.innerRatio || 0) * 100) + '%');
+      mount.appendChild(badge);
+      var ctx = cv.getContext('2d');
+      var zoom = 1, panX = 0, panY = 0;
+      function clampPan() {
+        var maxX = cv.width * (zoom - 1) / 2, maxY = cv.height * (zoom - 1) / 2;
+        panX = Math.max(-maxX, Math.min(maxX, panX));
+        panY = Math.max(-maxY, Math.min(maxY, panY));
+      }
+      function draw() {
+        ctx.clearRect(0, 0, cv.width, cv.height);
+        var w = cv.width * zoom, hgt = cv.height * zoom;
+        ctx.drawImage(img, 0, 0, img.width, img.height,
+          (cv.width - w) / 2 + panX, (cv.height - hgt) / 2 + panY, w, hgt);
+      }
+      draw();
+      /* 拖动平移 + 双指缩放 + 双击切换 1×/2× */
+      var pts = {}, lastX = 0, lastY = 0, pinch0 = 0, zoom0 = 1, tapT = 0;
+      function nPts() { var k, c = 0; for (k in pts) { if (pts[k]) { c += 1; } } return c; }
+      cv.addEventListener('pointerdown', function (e) {
+        pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+        try { cv.setPointerCapture(e.pointerId); } catch (err) { /* noop */ }
+        lastX = e.clientX; lastY = e.clientY;
+        if (nPts() === 2) { pinch0 = pinchDist(); zoom0 = zoom; }
+        e.preventDefault();
+      });
+      function pinchDist() {
+        var ids = [], k;
+        for (k in pts) { if (pts[k]) { ids.push(pts[k]); } }
+        if (ids.length < 2) { return 0; }
+        return Math.hypot(ids[0].x - ids[1].x, ids[0].y - ids[1].y);
+      }
+      cv.addEventListener('pointermove', function (e) {
+        if (!pts[e.pointerId]) { return; }
+        pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+        if (nPts() >= 2) {
+          var pd = pinchDist();
+          if (pinch0 > 4) { zoom = Math.max(1, Math.min(3, zoom0 * pd / pinch0)); clampPan(); draw(); }
+          return;
+        }
+        panX += e.clientX - lastX; panY += e.clientY - lastY;
+        lastX = e.clientX; lastY = e.clientY;
+        clampPan(); draw();
+      });
+      function up(e) {
+        var wasOne = nPts() === 1;
+        delete pts[e.pointerId];
+        if (wasOne) {
+          var now = Date.now();
+          if (now - tapT < 320) {
+            zoom = zoom > 1.2 ? 1 : 2; panX = 0; panY = 0; draw();
+            tapT = 0;
+          } else { tapT = now; }
+        }
+      }
+      cv.addEventListener('pointerup', up);
+      cv.addEventListener('pointercancel', up);
+    });
+  };
+
+  TQ.shardStage = function (mount, id) {
+    var key = 'shard-' + id;
+    var tqa = global.TQA;
+    if (!tqa || tqa.kindOut('shard')) { TQ.shardInner(mount, id); return; }
+    tqa.resolve(key, function (stt) {
+      if (!mount.isConnected) { return; }
+      if (stt !== 'ok') { TQ.shardInner(mount, id); return; }
+      var ent = tqa.reg[key], img = tqa.image(key);
+      if (!img) { TQ.shardInner(mount, id); return; }
+      mount.innerHTML = '';
       var cv = h('canvas', 'shard-sprite');
-      cv.width = ent.fw; cv.height = ent.fh;
+      fitCanvas(cv, ent);
       cv.setAttribute('role', 'img');
       cv.setAttribute('aria-label', '瓷片转台');
       mount.appendChild(cv);
@@ -264,7 +365,7 @@
       var ent = tqa.reg[key], img = tqa.image(key);
       mount.innerHTML = '';
       var cv = h('canvas', 'shard-still');
-      cv.width = ent.fw; cv.height = ent.fh;
+      fitCanvas(cv, ent);
       mount.appendChild(cv);
       drawAtlasFrame(cv.getContext('2d'), ent, img, 0, cv.width, cv.height);
     });
@@ -275,15 +376,15 @@
   TQ.shardViewer = function (mount, id) {
     var key = 'shard-' + id;
     var tqa = global.TQA;
-    if (!tqa || tqa.kindOut('shard')) { vecShard(mount, !tqa || !!tqa.reg[key]); return; }
+    if (!tqa || tqa.kindOut('shard')) { TQ.shardInner(mount, id); return; }
     tqa.resolve(key, function (stt) {
       if (!mount.isConnected) { return; }
-      if (stt !== 'ok') { vecShard(mount, stt === 'fail'); return; }
+      if (stt !== 'ok') { TQ.shardInner(mount, id); return; }
       var ent = tqa.reg[key], img = tqa.image(key);
-      if (!img) { vecShard(mount, false); return; }
+      if (!img) { TQ.shardInner(mount, id); return; }
       mount.innerHTML = '';
       var cv = h('canvas', 'shard-sprite');
-      cv.width = ent.fw; cv.height = ent.fh;
+      fitCanvas(cv, ent);
       cv.style.touchAction = 'none';
       mount.appendChild(cv);
       var ctx = cv.getContext('2d');
@@ -329,7 +430,7 @@
         return;
       }
       if (tqa && tqa.reg['shard-' + id]) { TQ.shardViewer(mount, id); }
-      else { vecShard(mount, !tqa || !!tqa.reg['shard-' + id]); }
+      else { TQ.shardInner(mount, id); }
     }
     /* 未注册多向图集 → 诚实回退 */
     if (!tqa || !tqa.reg[key] || tqa.kindOut('shard-LL')) { fallback(); return; }
@@ -340,7 +441,7 @@
       if (!img) { fallback(); return; }
       mount.innerHTML = '';
       var cv = h('canvas', 'shard-ll');
-      cv.width = ent.fw; cv.height = ent.fh;
+      fitCanvas(cv, ent);
       cv.style.touchAction = 'none';
       cv.setAttribute('role', 'img');
       cv.setAttribute('aria-label', (isVessel ? '纸槌瓶' : '瓷片') + '全方位旋转');
@@ -355,6 +456,7 @@
       var pitch = pitchOfIndex(anchor.pitch, PIT, pmax);
       var vy = 0, vp = 0;            /* 惯性角速度（度/帧） */
       var auto = true, drag = false, lx = 0, ly = 0;
+      var zoom = 1, panX = 0, panY = 0;   /* 缩放/平移（双指捏合、双击 1↔2×） */
       var last = 0, prev = 0, n = 0, sum = 0;
 
       function pitchOfIndex(q, pit, m) { /* 索引0=+m（俯视）… 末位=-m（仰视） */
@@ -372,12 +474,23 @@
         return Math.max(0, Math.min(PIT - 1, q));
       }
       function draw() {
-        /* 多向布局（pack_latlong）：列 = yaw、行 = pitch。行内 12 yaw 连续，跨行换 pitch。 */
+        /* 多向布局（pack_latlong）：列 = yaw、行 = pitch。行内 12 yaw 连续，跨行换 pitch。
+         * 缩放直接改目标矩形（不重采样源），保持切帧语义不变。 */
         var p = idxYaw(), q = idxPitch();
         var fx = p * ent.fw, fy = q * ent.fh;
+        var maxX = cv.width * (zoom - 1) / 2, maxY = cv.height * (zoom - 1) / 2;
+        panX = Math.max(-maxX, Math.min(maxX, panX));
+        panY = Math.max(-maxY, Math.min(maxY, panY));
+        var w = cv.width * zoom, hgt = cv.height * zoom;
         ctx.clearRect(0, 0, cv.width, cv.height);
-        ctx.drawImage(img, fx, fy, ent.fw, ent.fh, 0, 0, cv.width, cv.height);
+        ctx.drawImage(img, fx, fy, ent.fw, ent.fh,
+          (cv.width - w) / 2 + panX, (cv.height - hgt) / 2 + panY, w, hgt);
       }
+      /* 供自动化测试读取的只读状态（不参与逻辑，不改变任何行为） */
+      mount.__tq = function () {
+        return { kind: 'latlong', yaw: yaw, pitch: pitch, zoom: zoom,
+          yawIdx: idxYaw(), pitchIdx: idxPitch(), rows: PIT, cols: YAW };
+      };
       function tick(now) {
         if (!cv.isConnected) { return; }
         if (prev) { sum += (now - prev); n += 1; if (n === 30) { tqa.watchFeed('shard-LL', sum / n); } }
@@ -395,22 +508,62 @@
       }
       draw(); requestAnimationFrame(tick);
 
+      var pts = {}, pinch0 = 0, zoom0 = 1, tapT = 0, downX = 0, downY = 0, lastMoveT = 0;
+      function nPts() { var k, c = 0; for (k in pts) { if (pts[k]) { c += 1; } } return c; }
+      function pinchDist() {
+        var ids = [], k;
+        for (k in pts) { if (pts[k]) { ids.push(pts[k]); } }
+        if (ids.length < 2) { return 0; }
+        return Math.hypot(ids[0].x - ids[1].x, ids[0].y - ids[1].y);
+      }
       cv.addEventListener('pointerdown', function (e) {
-        drag = true; auto = false; vy = 0; vp = 0; lx = e.clientX; ly = e.clientY;
+        pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+        drag = true; auto = false; vy = 0; vp = 0;
+        lx = e.clientX; ly = e.clientY; downX = e.clientX; downY = e.clientY;
         try { cv.setPointerCapture(e.pointerId); } catch (err) { /* noop */ }
+        if (nPts() === 2) { pinch0 = pinchDist(); zoom0 = zoom; }
         e.preventDefault();
       });
       cv.addEventListener('pointermove', function (e) {
+        if (!pts[e.pointerId]) { return; }
+        pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+        if (nPts() >= 2) {                      /* 双指 = 缩放，不做旋转 */
+          var pd = pinchDist();
+          if (pinch0 > 4) { zoom = Math.max(1, Math.min(2.5, zoom0 * pd / pinch0)); draw(); }
+          return;
+        }
         if (!drag) { return; }
         var dx = e.clientX - lx, dy = e.clientY - ly;
         var k = 0.6;                              /* 拖动手感系数（度/px） */
         yaw = (yaw + dx * k) % 360; if (yaw < 0) { yaw += 360; }
         pitch = Math.max(-pmax, Math.min(pmax, pitch - dy * k));
         vy = dx * k; vp = -dy * k;                 /* 记末速 → 松手惯性 */
+        lastMoveT = Date.now();
         if (Math.abs(dx) > 1 || Math.abs(dy) > 1) { lx = e.clientX; ly = e.clientY; }
         draw();
       });
-      function endDrag() { if (drag) { drag = false; } }
+      function endDrag(e) {
+        var was = nPts();
+        if (e && e.pointerId !== undefined) { delete pts[e.pointerId]; }
+        if (nPts() === 0) {
+          drag = false;
+          /* ★ 2026-10-28：抬手前若已**停手 >80ms**，就不给惯性。
+           *   旧行为是「无论停多久都把最后一次位移当末速甩出去」——
+           *   玩家想停在一个角度看内壁时，画面总会多转 15~20°，
+           *   既违反直觉，也让「停在指定角度」不可能。
+           *   甩手（连续移动中抬手）仍然保留惯性。 */
+          if (Date.now() - lastMoveT > 80) { vy = 0; vp = 0; }
+        }
+        /* 双击（两次抬起间隔 <320ms 且位移 <14px）⇒ 1× / 2× 切换 */
+        if (was === 1 && e) {
+          var moved = Math.abs(e.clientX - downX) + Math.abs(e.clientY - downY);
+          if (moved < 14) {
+            var now = Date.now();
+            if (now - tapT < 320) { zoom = zoom > 1.2 ? 1 : 2; panX = 0; panY = 0; draw(); tapT = 0; }
+            else { tapT = now; }
+          }
+        }
+      }
       cv.addEventListener('pointerup', endDrag);
       cv.addEventListener('pointercancel', endDrag);
       cv.addEventListener('keydown', function (e) { /* 方向键可达：微调 + 即时切格 */
@@ -538,6 +691,11 @@
    * 手势与等价按钮双轨并存；进度只增不清；「应节而动」切应节轨（外部回调）。
    */
   TQ.iv = function (main, cfg, cb, onJie) {
+    /* ★rich：这三个小游戏（tang / proof / touhu）不从这套"进度累加器"里走，
+       判定依据是"形状变没变"（面坯档位／切开的片数／矢的落点），
+       交给 js/minigame.js 自己画、自己判；这里只保留步骤条与文案。 */
+    var RICH = !!(cfg.rich && global.TQM && global.TQM.has(cfg.rich));
+    var mg = null;
     var wrap = h('div', 'iv');
     var stage = h('div', 'iv-stage');
     var zone = h('div', 'zone-tag', cfg.zone || '第一视角');
@@ -697,7 +855,13 @@
       var st = steps[si];
       stepTag.textContent = (si + 1) + ' / ' + steps.length + ' · ' + st.label;
       pct = 0;
-      renderSteps(); renderBar(); renderProp();
+      renderSteps();
+      if (RICH && mg) {
+        mg.next(si);
+        hint.innerHTML = '<b>' + st.label + '</b>：' + (st.tip || cfg.hint || '');
+        return;
+      }
+      renderBar(); renderProp();
       probeSprite();
       hint.innerHTML = '<b>' + st.label + '</b>：' + (st.tip || cfg.hint || '');
       gest.style.cssText = 'position:absolute;right:12%;top:16%;width:34%;height:44%;opacity:.9';
@@ -720,6 +884,7 @@
       si += 1;
       if (si >= steps.length) {
         over = true;
+        if (mg) { try { mg.destroy(); } catch (e) { /* noop */ } mg = null; }
         stepTag.textContent = '毕';
         if (cfg.decoName) {
           var t = h('div', 'shard-toast');
@@ -743,7 +908,7 @@
     /* ---- 手势绑定（pointer 双端通用；离场即停） ---- */
     var dragging = false, lastX = 0, lastY = 0, sweepDir = 0, holdTimer = 0, holdTick = 0, lastDX = 0, lastDY = 0;
     stage.addEventListener('pointerdown', function (e) {
-      if (over) { return; }
+      if (over || RICH) { return; }
       var st = steps[si];
       dragging = true; lastX = e.clientX; lastY = e.clientY;
       try { stage.setPointerCapture(e.pointerId); } catch (err) { /* noop */ }
@@ -757,7 +922,7 @@
       }
     });
     stage.addEventListener('pointermove', function (e) {
-      if (!dragging || over) { return; }
+      if (!dragging || over || RICH) { return; }
       var st = steps[si];
       if (st.gest === 'toss') {
         if (tossStart) {
@@ -779,6 +944,7 @@
       }
     });
     function endDrag() {
+      if (RICH) { return; }
       dragging = false;
       if (holdTimer) { clearInterval(holdTimer); holdTimer = 0; }
       if (tossStart) {
@@ -808,9 +974,33 @@
       if (over) { return; }
       if (onJie) { onJie(); }
     });
+    if (RICH) {
+      wrap.classList.add('rich');
+      bar.style.display = 'none';
+      ctrl.style.display = 'none';
+      propBox.style.display = 'none';
+      gest.style.display = 'none';
+      target.style.display = 'none';
+      if (shadow) { shadow.style.display = 'none'; }
+      mg = global.TQM.play(cfg.rich, stage, cfg, {
+        step: function (p, label) {
+          pct = Math.max(0, Math.min(100, p * 100));
+          fill.style.width = pct + '%';
+          if (label) { val.textContent = label; }
+        },
+        tip: function (t) { val.textContent = t || ''; },
+        done: function (missed) { if (!over) { finishStep(!!missed); } }
+      });
+    }
     enterStep();
     return wrap;
   };
 
   global.TQF = TQ;
+  /* ★ 2026-10-28 修：app.js 里所有精灵渲染都被 `if (window.F) {...}` 守着，
+   *   但本文件过去只暴露 TQF（`var F = global.TQF` 在 app.js 内是闭包变量，
+   *   不是 window.F）⇒ 守卫恒为假，**详情页的旋转区一直是空的**，
+   *   玩家点开瓷片只看得到文字，看不到任何 3D 素材（也就看不到内壁）。
+   *   这里补上 window.F 别名；TQF 保留以兼容既有调用。 */
+  global.F = TQ;
 })(window);

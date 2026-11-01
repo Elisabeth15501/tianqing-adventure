@@ -12,6 +12,16 @@
 
   var TA = { reg: {}, status: {}, imgs: {}, env: null, slowKinds: {}, _pending: {} };
 
+  /* ---------- 内壁静态帧的姿态与保证（由 pick_inner_pose.py + pack_inner_still.py 产出） ----------
+   * innerRatio = 「该姿态下可见内壁面积 / 该片内壁总面积」。
+   * 16 片实测最低 0.864（#01），其余均 ≥0.94，其中 14 片 = 1.000
+   * ⇒ 静态兜底图里是**整张画**，不是残片。
+   * 索引 0 占位不用（瓷片 id 从 1 起）。 */
+  var SHARD_INNER_RATIO = [0.0000, 0.8635, 1.0000, 0.9429, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000, 1.0000];
+  var SHARD_INNER_YAW = [0, 210, 30, 210, 30, 180, 300, 30, 210, 0, 0, 60, 210, 180, 150, 0, 60];
+  var SHARD_INNER_PITCH = [0, 0, 0, -45, 0, -45, -45, -45, 0, 0, 0, 0, 45, 45, 45, 45, 45];
+  TA.INNER_RATIO = SHARD_INNER_RATIO;
+
   /* ---------- 注册表：16 碎片转台 atlas（P0 已产，4×3 · 12 帧 · 160px） ----------
    * prop 帧组（汤饼碗/金觞/承露囊/旧灯等）待 3D 渲染交付后由 manifest 构建期追加条目；
    * 未注册的 key 一律即时返回 'none'（纯 vector，不发网络探测）。 */
@@ -20,11 +30,22 @@
       var n = (i < 10 ? '0' + i : String(i));
       TA.reg['shard-' + i] = { kind: 'atlas', src: './assets/shards/shard_' + n + '.webp',
         cols: 4, rows: 3, frames: 12, fw: 160, fh: 160, fps: 12 };
-      /* S8 近看单枚 · lat-long 多向图集（12yaw×pitch，拖拽自由旋转 + 惯性）。
-       * 文件缺失时 resolve 'fail' → spin3d 自动回退 12 帧转台 shardViewer（永不白屏）。 */
+      /* S8 近看单枚 · lat-long 多向图集（12yaw×3pitch，拖拽自由旋转 + 惯性）。
+       * 文件缺失时 resolve 'fail' → spin3d 自动回退 12 帧转台 shardViewer（永不白屏）。
+       * ★ 2026-10-28：单元从 128 提到 **160**（P1 重出时的实际格宽），
+       *   不改这里会导致 drawImage 采样错位（相邻档互相串格）。
+       *   pitchMax 45 ⇒ 三行正好是「俯视 +45° / 平视 0° / 仰视 −45°」，
+       *   即用户点名的俯视、仰视、45° 倾斜各自有确切档位。 */
       TA.reg['shard-LL-' + i] = { kind: 'latlong', src: './assets/shards/shard_' + n + '_ll.webp',
-        yaw: 12, pitch: 3, pitchMax: 45, cols: 12, rows: 3, fw: 128, fh: 128,
-        cw: 128, ch: 128, anchor: { yaw: 0, pitch: 1 } };
+        yaw: 12, pitch: 3, pitchMax: 45, cols: 12, rows: 3, fw: 160, fh: 160,
+        cw: 160, ch: 160, anchor: { yaw: 0, pitch: 1 } };
+      /* ★ 2026-10-28 内壁静态帧（回退兜底 + 双击细看）。
+       *   按「可见内壁 / 内壁总面积」最优姿态渲染（pick_inner_pose.py），
+       *   实测 16 片全部 ≥86%（14 片 = 100%），即**整张画**都在画面里。
+       *   innerRatio 写进注册表 = 这份保证可被运行时读取（也供自动化测试断言），
+       *   不需要再 fetch 任何 json（容器禁用 fetch/XHR）。 */
+      TA.reg['shard-inner-' + i] = { kind: 'image', src: './assets/shards/shard_' + n + '_inner.webp',
+        innerRatio: SHARD_INNER_RATIO[i], poseYaw: SHARD_INNER_YAW[i], posePitch: SHARD_INNER_PITCH[i] };
     }
     /* 纸槌瓶 · lat-long 多向（近看全方位；旋转对称 ⇒ yaw 视觉弱，俯仰为主反馈） */
     TA.reg['vessel-LL'] = { kind: 'latlong', src: './assets/shards/vessel_ll.webp',
