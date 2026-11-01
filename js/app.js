@@ -223,8 +223,16 @@
     if (!box || !sp) { return; }
     var sr = stage.getBoundingClientRect();
     var br = box.getBoundingClientRect();
+    var zp = sp.getBoundingClientRect();
     var lift = Math.max(0, Math.round(sr.bottom - br.top)); /* 舞台底 → 对话框顶 */
-    stage.style.setProperty('--fig-dock-lift', lift + 'px');
+    /* ★双栏判定（2026-11-01 实机定位）：宽屏横版把「立绘列」和「对话栏」并排放，
+     * 对话框在立绘列的**右边**而不是下边。此时「舞台底→对话框顶」量出来的
+     * 是整列高度（实测 617px），dock-top 槽的 bottom:calc(lift+gap) 会变成
+     * 相对上移 617px —— 半身像整块飞出画面顶、height 被算成十几像素。
+     * 判定：对话框左缘 ≥ 立绘列右缘 −2 ⇒ 并排 ⇒ 不需要「避让下沿」，lift 归零。 */
+    var beside = br.left >= zp.right - 2;
+    stage.style.setProperty('--fig-dock-lift', (beside ? 0 : lift) + 'px');
+    sp.setAttribute('data-layout', beside ? 'beside' : 'stack');
     var act = D.acts[CUR_ACT];
     var forced = (act && act.figAnchor) ? act.figAnchor : null; /* 每幕可强指定构图 */
     /* 双人时两个槽可能一个是全身（踩底）、一个是半身（浮框上沿）——
@@ -697,7 +705,10 @@
         dockBox(st.speaker || '', st.text, null, st.slot, st.pair, st.pairSlot);
       } else if (st.type === 'iv') {
         var ivCfg = D.iv[st.cfg] || D.iv.tang;
-        if (window.TQA && TQA.tifaJie()) { /* §10.5 L2：设置「应节」——本节直接走节奏条，判定奖励同躬行 */
+        /* ★单轨闸门（11-01）：动手小节一律走小游戏，不再按「体法」在两套系统间切换。
+           应节轨保留在下面这一支里：GSYS.jie.on 置真 + gameSystem() 改回读 tq_tifa 即恢复。
+           第四参 onJie（小节内「应节而动」入口）传 null —— 入口本身由 frag.js 按闸门决定挂不挂。 */
+        if (window.TQA && TQA.gameSystem() === 'jie') {
           runJie(main, ivCfg, function () {
             if (st.deco && st.decoName) { awardDeco(st.deco, st.decoName, main); }
             busy = false;
@@ -708,14 +719,14 @@
           if (st.deco && st.decoName) { awardDeco(st.deco, st.decoName, main); }
           busy = false;
           after();
-        }, function () {
+        }, (window.TQA && TQA.modeOpen('jie')) ? function () {
           retract();
           runJie(main, ivCfg, function () {
             if (st.deco && st.decoName) { awardDeco(st.deco, st.decoName, main); }
             busy = false;
             after();
           });
-        });
+        } : null);
         occupyNode(ivWrap);
         }
       } else if (st.type === 'shard') {
@@ -752,7 +763,7 @@
             dockBox(s2.speaker || '', s2.text, nextSub, s2.slot, s2.pair, s2.pairSlot);
           } else if (s2.type === 'iv') {
             var ivCfg2 = D.iv[s2.cfg] || D.iv.tang;
-            if (window.TQA && TQA.tifaJie()) { /* §10.5 L2：应节直入 */
+            if (window.TQA && TQA.gameSystem() === 'jie') { /* 应节轨保留（第一版不进这里） */
               runJie(main, ivCfg2, function () {
                 if (s2.deco && s2.decoName) { awardDeco(s2.deco, s2.decoName, main); }
                 nextSub();
@@ -761,13 +772,13 @@
             var ivWrap2 = F.iv(main, ivCfg2, function (hits2) {
               if (s2.deco && s2.decoName) { awardDeco(s2.deco, s2.decoName, main); }
               nextSub();
-            }, function () {
+            }, (window.TQA && TQA.modeOpen('jie')) ? function () {
               retract();
               runJie(main, ivCfg2, function () {
                 if (s2.deco && s2.decoName) { awardDeco(s2.deco, s2.decoName, main); }
                 nextSub();
               });
-            });
+            } : null);
             occupyNode(ivWrap2);
             }
           } else if (s2.type === 'rhythm') {
@@ -1016,7 +1027,9 @@
 
   /* ---------- 应节轨（回退兜底 · 更漏/礼乐节拍器皮，10-20 增订） ----------
    * 与 runRhythm 同引擎同判定，仅换皮：十二刻线（应时辰十二刻）+ 漏箭游标 + 受箭区；
-   * 由 direct2d 的「应节而动」入口切入，或设置项手动选择。 */
+   * 由 direct2d 的「应节而动」入口切入，或设置项手动选择。
+   * ★11-01：第一版不进此轨（动手小节单轨走小游戏）。**整段原样保留**，
+   *   恢复方式见 js/assets.js 的 GSYS 注释，不需要改这个函数。 */
   function runJie(main, cfg, cb) {
     var panel = el('div', 'panel mode-jie');
     panel.appendChild(el('div', 'memo-head', cfg.title || '习礼'));
@@ -1190,6 +1203,151 @@
     D.acts.forEach(function (a) { walk(a.steps, a.id); });
     return SHARD_ACT;
   }
+  /* ---------- 手札 · 瓷片全屏查看器（2026-11-01） ----------
+   * 手札上的瓷片只有指甲盖大：点开 → 覆盖式弹层，可拖动旋转 / 放大 / 切俯仰 / 看内壁。
+   * 3D 语义全部由 2D 精灵承担（lat-long 12yaw×3pitch 由 spin3d 驱动），
+   * 不引入 WebGL、不发任何外部请求（小工具沙箱红线）。
+   * 退出三条路：✕ / 点遮罩 / Esc，退出后手札滚动位置不变。 */
+  function openShardViewer(id) {
+    var key = String(id);
+    var sh = D.shards[key] || {};
+    if (sfx) { sfx('tap'); }
+
+    var ov = el('div', 'shv');
+    var mask = el('div', 'shv-mask');
+    var sheet = el('div', 'shv-sheet');
+    ov.appendChild(mask);
+    ov.appendChild(sheet);
+
+    var head = el('div', 'shv-head');
+    var nm = el('div', 'shv-name', '瓷片 · ' + (sh.name || key));
+    if (sh.prov) { nm.appendChild(el('span', 'shv-prov', sh.prov)); }
+    head.appendChild(nm);
+    var x = el('button', 'shv-x', '✕');
+    x.setAttribute('aria-label', '返回手札');
+    x.addEventListener('click', close);
+    head.appendChild(x);
+    sheet.appendChild(head);
+
+    var stage = el('div', 'shv-stage');
+    stage.setAttribute('data-mode', 'rot');
+    sheet.appendChild(stage);
+
+    var hud = el('div', 'shv-hud');
+    var hudView = el('span', 'shv-hud-i', '视角 —');
+    var hudZoom = el('span', 'shv-hud-i', '1.0×');
+    var hudMode = el('span', 'shv-hud-i', '拖动旋转');
+    hud.appendChild(hudView); hud.appendChild(hudZoom); hud.appendChild(hudMode);
+    sheet.appendChild(hud);
+
+    var bar = el('div', 'shv-bar');
+    function mk(label, fn, extra) {
+      var b = el('button', 'shv-b' + (extra ? ' ' + extra : ''), label);
+      b.addEventListener('click', function (e) {
+        e.stopPropagation();
+        if (sfx) { sfx('tap'); }
+        fn(b);
+        sync();
+      });
+      bar.appendChild(b);
+      return b;
+    }
+    var bTop = mk('俯视', function () { cmd({ pitchAbs: pmax() }); });
+    var bFlat = mk('平视', function () { cmd({ pitchAbs: 0 }); });
+    var bLow = mk('仰视', function () { cmd({ pitchAbs: -pmax() }); });
+    var bIn = mk('放大', function () { cmd({ zoom: zoomNow() * 1.5 }); });
+    var bOut = mk('缩小', function () { cmd({ zoom: zoomNow() / 1.5 }); });
+    var bInner = mk('内壁', function () { toggleInner(); }, 'shv-b-wide');
+    var bAuto = mk('自动旋转', function () { cmd({ auto: !autoNow() }); });
+    var bReset = mk('复位', function () { cmd({ reset: true }); });
+    sheet.appendChild(bar);
+
+    var tip = el('div', 'shv-tip', '拖动旋转 · 双指或双击放大 · 点「内壁」看釉下笔触');
+    sheet.appendChild(tip);
+    if (sh.text) { sheet.appendChild(el('div', 'shv-quote', sh.text)); }
+    if (sh.source) { sheet.appendChild(el('div', 'shv-src', '——' + sh.source)); }
+
+    function st() { return (stage && stage.__tq) ? stage.__tq() : null; }
+    function pmax() { var s = st(); return s ? s.pitchMax : 45; }
+    function zoomNow() { var s = st(); return s ? s.zoom : 1; }
+    function autoNow() { var s = st(); return !!(s && s.auto); }
+    function cmd(c) { if (stage && stage.__cmd) { stage.__cmd(c); } }
+
+    var onInner = false;
+    function toggleInner() {
+      if (!window.F) { return; }
+      onInner = !onInner;
+      if (onInner) {
+        /* 换掉旋转实例时必须清掉旧钩子，否则 HUD 还在读上一个实例的 yaw/zoom */
+        try { delete stage.__tq; delete stage.__cmd; } catch (e0) { stage.__tq = null; stage.__cmd = null; }
+        stage.setAttribute('data-mode', 'inner');
+        F.shardInner(stage, key);
+        bInner.textContent = '旋转';
+        bInner.setAttribute('data-on', '1');
+        tip.textContent = '静态内壁 · 双指缩放 / 拖动平移 · 点「旋转」换角度';
+      } else {
+        stage.setAttribute('data-mode', 'rot');
+        F.spin3d(stage, key);
+        bInner.textContent = '内壁';
+        bInner.removeAttribute('data-on');
+        tip.textContent = '拖动旋转 · 双指或双击放大 · 点「内壁」看釉下笔触';
+      }
+    }
+
+    var HUD_PITCH = ['俯视', '平视', '仰视'];
+    function sync() {
+      if (!ov.parentNode) { return; }
+      if (!st()) {
+        hudView.textContent = '静态内壁';
+        hudZoom.textContent = '双指缩放';
+        hudMode.textContent = onInner ? '内壁细看' : '加载中';
+        return;
+      }
+      var s = st();
+      var total = s.cols || 12;
+      var pName = (s.rows === 3) ? (HUD_PITCH[Math.max(0, Math.min(2, s.pitchIdx))] || '平视') : '';
+      hudView.textContent = '视角 ' + (s.yawIdx + 1) + '/' + total + (pName ? ' · ' + pName : '');
+      hudZoom.textContent = s.zoom.toFixed(1) + '×';
+      hudMode.textContent = s.auto ? '自动旋转中' : '拖动旋转';
+      bAuto.setAttribute('data-on', s.auto ? '1' : '0');
+      bTop.setAttribute('data-on', s.pitchIdx === 0 ? '1' : '0');
+      bFlat.setAttribute('data-on', s.pitchIdx === 1 ? '1' : '0');
+      bLow.setAttribute('data-on', s.pitchIdx === 2 ? '1' : '0');
+      if (s.zoom <= 1.001) { bOut.setAttribute('data-off', '1'); } else { bOut.removeAttribute('data-off'); }
+    }
+    var hudTimer = setInterval(sync, 200);
+
+    function close() {
+      if (hudTimer) { clearInterval(hudTimer); hudTimer = 0; }
+      document.removeEventListener('keydown', escHandler);
+      if (ov.parentNode) { ov.parentNode.removeChild(ov); }
+      document.body.classList.remove('shv-open');
+    }
+    function escHandler(e) {
+      var k = e.key || e.keyCode;
+      if (k === 'Escape' || k === 'Esc' || k === 27) { close(); }
+    }
+    mask.addEventListener('click', close);
+    document.addEventListener('keydown', escHandler);
+
+    document.body.appendChild(ov);
+    document.body.classList.add('shv-open');
+    if (window.F) { F.spin3d(stage, key); }
+    /* 开场转到「内壁朝外」那一档并停在静止态：默认 yaw=0 正对外壁只见纯釉 */
+    var openYaw = (window.TQA && TQA.INNER_YAW && TQA.INNER_YAW[id]) || 180;
+    setTimeout(function () {
+      if (!stage.isConnected) { return; }
+      cmd({ yawAbs: openYaw, auto: false });
+      /* 默认落在「内壁」档：旋转帧只有 160px/格，铺满必糊；
+       * 内壁静态帧是 464px 级别的整张画，才是「看细节」的那一层。
+       * 想转视角点「回到旋转」即可，两种状态随时互切。 */
+      if (!onInner) { toggleInner(); }
+      sync();
+    }, 30);
+    setTimeout(sync, 60);
+    setTimeout(sync, 500);
+  }
+
   function appendMemoCards(host, sid) {
     var actId = shardActMap()[sid];
     if (!actId) { return; }
@@ -1385,6 +1543,51 @@
     }
   }
 
+  /* ---------- 幕毕结算卡片（2026-11-01 排版重构） ----------
+   * ★为什么不能再用 .memo-sub 直接塞进 main：
+   *   finishAct 收到的 main 实参其实是**对话文档容器 .vn-doc**
+   *   （实测 DOM 链：div.memo-sub < div.vn-doc < div.vn-main < div.main.act-vn）。
+   *   而 .vn-doc 在竖版是 `margin-top:auto / max-height:46% / min-height:120px`
+   *   的贴底对话区，立绘 .sp-zone 又是绝对定位 inset:0 铺满舞台 ⇒ 结算文字
+   *   必然落在人物胸口上（实测 390×844：文字 y601~618，立绘 y208~717，完全重叠）；
+   *   宽屏 .vn-doc 是 row 分栏，同一行字又会漂到舞台左上（实测 y=73）。
+   *   即位置由「对话布局」决定，与「本章结束」这一状态毫无关系，且 12px 灰字
+   *   没有任何层级，玩家看不出这一幕已经结束。
+   * ★现在：结算层挂到舞台（.main.act-vn）上，绝对定位铺满、纸卡居中。
+   *   位置与层级固定，排版规则与对话彻底解耦；断点只调字号与内边距。 */
+  function showActSettle(host, idx, act) {
+    var T = D.actEndCopy || {};
+    var fill = function (fmt, o) {
+      return String(fmt == null ? '' : fmt).replace(/\{(\w+)\}/g, function (m, k) {
+        return (o && o[k] != null) ? String(o[k]) : '';
+      });
+    };
+    var ov = el('div', 'act-settle');
+    var card = el('div', 'as-card');
+    card.appendChild(el('div', 'as-kicker', T.kicker || '时辰礼毕'));
+    card.appendChild(el('div', 'as-title', fill(T.titleFmt || '{act}', { act: act.name })));
+    card.appendChild(el('div', 'as-rule'));
+    var body = el('div', 'as-body', fill(T.body || '', { act: act.name }));
+    card.appendChild(body);
+    var next = D.acts[idx + 1];
+    if (next) { card.appendChild(el('div', 'as-next', fill(T.nextFmt || '下一时辰 · {next}', { next: next.name }))); }
+    ov.appendChild(card);
+    host.appendChild(ov);
+    /* 多语言自适应：正文按实际渲染行数判定——超过 3 行改左对齐（居中长段难读），
+     * 字号行距由 CSS 断点决定；卡片自身 max-height:100% + overflow-y:auto，
+     * 极长译文滚动查看，不会被截断或顶出屏幕。 */
+    (function () {
+      var raf = global.requestAnimationFrame || function (f) { return setTimeout(f, 16); };
+      raf(function () {
+        var cs = global.getComputedStyle(body);
+        var lh = parseFloat(cs.lineHeight) || 20;
+        var lines = Math.round(body.getBoundingClientRect().height / lh);
+        if (lines >= 3) { body.classList.add('is-long'); }
+      });
+    }());
+    return ov;
+  }
+
   /* ---------- 幕毕 ---------- */
   function finishAct(idx, main) {
     if (ACT_KEY_HANDLER) { document.removeEventListener('keydown', ACT_KEY_HANDLER); ACT_KEY_HANDLER = null; }
@@ -1401,14 +1604,14 @@
     persist();
     if (global.TQCloud) { global.TQCloud.checkpoint(save); } /* 云镜像检查点：幕毕立即推 */
     if (idx === D.acts.length - 1) { showEnding(); return; } // 终幕 → 合瓮结算
-    var note = el('div', 'memo-sub', act.name + '礼毕，手札已记下进度。');
-    main.appendChild(note);
+    /* 结算层挂在舞台上（.main.act-vn），不放 .vn-doc —— 后者与立绘重叠，见 showActSettle 注释 */
+    var host = (main && main.closest && main.closest('.main.act-vn')) || null;
+    showActSettle(host || app, idx, act);
     app.classList.add('with-foot');
     var foot = el('footer', 'footbar fb-act');
     foot.appendChild(btn('翻阅手札', '', function () { showMemo(false); }));
     foot.appendChild(btn('继续值守', 'ghost', function () { enterAct(save.actIndex); }));
     app.appendChild(foot);
-    main.scrollTop = main.scrollHeight;
   }
 
   /* ---------- 手札（存档中心 + 瓷片图鉴；按钮组钉底） ---------- */
@@ -1508,9 +1711,15 @@
       }
       if (got && D.shards[key]) {
         cell.setAttribute('role', 'button');
-        (function (k) {
-          cell.addEventListener('click', function () { showDetail(k); });
-        })(key);
+        (function (k, c) {
+          /* 点瓷片 → 全屏查看器（可放大/拖动/切视角，✕ 返回手札）；引文与出处搬进了查看器 */
+          c.addEventListener('click', function () { openShardViewer(k); });
+          c.setAttribute('tabindex', '0');
+          c.addEventListener('keydown', function (e) {
+            var kk = e.key || e.keyCode;
+            if (kk === 'Enter' || kk === ' ' || kk === 13 || kk === 32) { e.preventDefault(); openShardViewer(k); }
+          });
+        })(key, cell);
       }
       grid.appendChild(cell);
     }
@@ -1648,9 +1857,15 @@
       if (got) { F.shardStill(cell, key); } else { cell.textContent = String(id); }
       if (got && D.shards[key]) {
         cell.setAttribute('role', 'button');
-        (function (k) {
-          cell.addEventListener('click', function () { showDetail(k); });
-        })(key);
+        (function (k, c) {
+          /* 点瓷片 → 全屏查看器（可放大/拖动/切视角，✕ 返回手札）；引文与出处搬进了查看器 */
+          c.addEventListener('click', function () { openShardViewer(k); });
+          c.setAttribute('tabindex', '0');
+          c.addEventListener('keydown', function (e) {
+            var kk = e.key || e.keyCode;
+            if (kk === 'Enter' || kk === ' ' || kk === 13 || kk === 32) { e.preventDefault(); openShardViewer(k); }
+          });
+        })(key, cell);
       }
       grid.appendChild(cell);
     }
@@ -1682,10 +1897,12 @@
         paint();
         return b;
       }
-      setRow.appendChild(mkChip('应节体法',
-        function () { return TQA.tifaJie(); },
-        function (v) { TQA.setSetting('tq_tifa', v ? 'jie' : 'gongxing'); },
-        '应节', '躬行'));
+      /* 游戏系统：第一版单轨（动手），这里只显示状态、不给切换开关 ——
+         「动手小节不切换任何游戏系统模式」。★应节轨保留：见 js/assets.js GSYS 注释。 */
+      var gsA = el('span', 'memo-set-chip on kept', '游戏系统 · ' + (window.TQA.modeOpen('jie') ? '应节' : '动手'));
+      gsA.title = TQA.modeNote('jie');
+      gsA.setAttribute('data-kept', '1');
+      setRow.appendChild(gsA);
       setRow.appendChild(mkChip('恒用预设图样',
         function () { return TQA.assetsMode() === 'vector'; },
         function (v) { TQA.setSetting('tq_assets_mode', v ? 'vector' : 'auto'); },
@@ -1694,7 +1911,7 @@
         function () { return global.TQSFX && global.TQSFX.isEnabled(); },
         function (v) { if (global.TQSFX) { global.TQSFX.setEnabled(v); } TQA.setSetting('tq_sfx', v ? 'on' : 'off'); },
         '开', '关'));
-      setRow.appendChild(el('span', 'memo-set-tip', '对新开小节生效'));
+      setRow.appendChild(el('span', 'memo-set-tip', '游戏系统单轨·对新开小节生效'));
       list.appendChild(setRow);
     }
     var fbtn = buildFollowButton(); /* 手札次入口：网格版同时服务浮层与整页 */
@@ -1745,13 +1962,17 @@
           b.addEventListener('click', function () { setV(!getV()); paint(); });
           paint(); return b;
         }
-        setRow.appendChild(mkChip('应节体法', function () { return TQA.tifaJie(); }, function (v) { TQA.setSetting('tq_tifa', v ? 'jie' : 'gongxing'); }, '应节', '躬行'));
+        /* 同上：状态位，不可切换（单轨）。 */
+        var gsB = el('span', 'memo-set-chip on kept', '游戏系统 · ' + (window.TQA.modeOpen('jie') ? '应节' : '动手'));
+        gsB.title = TQA.modeNote('jie');
+        gsB.setAttribute('data-kept', '1');
+        setRow.appendChild(gsB);
         setRow.appendChild(mkChip('恒用预设图样', function () { return TQA.assetsMode() === 'vector'; }, function (v) { TQA.setSetting('tq_assets_mode', v ? 'vector' : 'auto'); }, '开', '关'));
         setRow.appendChild(mkChip('音效',
           function () { return global.TQSFX && global.TQSFX.isEnabled(); },
           function (v) { if (global.TQSFX) { global.TQSFX.setEnabled(v); } TQA.setSetting('tq_sfx', v ? 'on' : 'off'); },
           '开', '关'));
-        setRow.appendChild(el('span', 'memo-set-tip', '对新开小节生效'));
+        setRow.appendChild(el('span', 'memo-set-tip', '游戏系统单轨·对新开小节生效'));
         body.appendChild(setRow);
       }
       var fbtn = buildFollowButton(); /* 长卷版同样带关注次入口 */
@@ -1854,4 +2075,11 @@
       });
     }
   });
+  /* 自动化验收钩子（只读入口，不改变状态机）：headless 脚本要直接进手札，
+   * 不必「玩到拿到瓷片」。与 frag.js 的 mount.__tq() 同一思路。 */
+  global.TQApp = {
+    memo: function () { showMemo(false); },
+    memoOverlay: function () { showMemoOverlay(); },
+    viewer: openShardViewer
+  };
 })(window);

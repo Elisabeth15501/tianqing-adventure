@@ -612,11 +612,11 @@ window.TQ_DATA = {
       retry: '针脚松了，绕紧些。',
       done: '囊成。桥头的孩子得了它，一路笑着跑远了。',
       steps: [
-        { label: '择丝', gest: 'tap', tip: '架上十二束丝，挑三束——要三个不同的色', done: '丝择好了。' },
-        { label: '选囊', gest: 'tap', tip: '素绢 / 锦缎 / 缂丝，挑一个囊体', done: '囊选定了。' },
-        { label: '绕丝', gest: 'circle', tip: '捏住丝头绕囊口三圈——一圈一道色', done: '绕紧了。' },
-        { label: '放香药', gest: 'drag', tip: '把香药倒进囊口', done: '香药入囊。' },
-        { label: '结绳', gest: 'tap', tip: '在囊口连点两下：先收口，再打结', done: '双结系牢。' }
+        { label: '择丝', gest: 'tap', tip: '架上十二束、六色各二——先挑三色，后头绕丝就用这三色', done: '丝择好了。' },
+        { label: '选囊', gest: 'tap', tip: '三色定了，再定囊体：素绢 / 锦缎 / 缂丝', done: '囊选定了。' },
+        { label: '绕丝', gest: 'circle', tip: '囊体定了，把三色丝一圈一色绕上囊口——绕满三圈', done: '绕紧了。' },
+        { label: '放香药', gest: 'drag', tip: '丝绕住了囊口才兜得住香药——倒进囊里', done: '香药入囊。' },
+        { label: '结绳', gest: 'tap', tip: '香药入囊，收口打结：连点两下', done: '双结系牢。' }
       ]
     },
     lamp: {
@@ -657,7 +657,23 @@ window.TQ_DATA = {
         { label: '观俗', gest: 'drag', tip: '捏住桥市左右拖——把三段市面都看一遍', done: '看仔细了。' },
         { label: '问俗', gest: 'tap', tip: '找到三位摊主，各问一句乡俗', done: '问明白了。' },
         { label: '落笔', gest: 'tap', tip: '把三条俗记按到便条上·连点三下', done: '记毕。' }
-      ]
+      ],
+      /* ★S4 全景素材接口（占位 → 正式素材只改这一块，交互/判定/俗记文案都不动）
+       *   pano    : 正式全景 URL；null = 代码占位（水面/勾栏/拱桥/幌子/行人/三摊）
+       *   screens : 全景等于几屏宽（默认 3，与占位一致；素材可拖范围变了就调这里）
+       *   fit     : 纵向取景，原样下发给 <image preserveAspectRatio>
+       *   vend[].fx : 摊主在全景宽度上的比例位置（0~1），与素材分辨率无关
+       * 加载失败自动退回占位，不白屏；换素材时请同步核对三个 fx。 */
+      s4: {
+        pano: null,
+        screens: 3,
+        fit: 'xMidYMid slice',
+        vend: [
+          { fx: 0.17, name: '卖囊妇人', note: '士庶以丝结承露囊，更相遗问。' },
+          { fx: 0.50, name: '茶摊老板娘', note: '桥头茶摊卖江陵粗茶，市人聚饮。' },
+          { fx: 0.83, name: '南来客商', note: '占城贡香在礼部库，桥市所售非贡余。' }
+        ]
+      }
     },
     shi_proof: {
       rich: 'proof',
@@ -825,6 +841,17 @@ window.TQ_DATA = {
     restart: '从头再来',
     saveNow: '现在就记',
     saved: '手札已记好。'
+  },
+
+  /* ---------- 章节结算（幕毕纸卡）----------
+   * 文案集中此处，占位符 {act} / {next} 由代码代入，译文可自由调整语序
+   * （如英文 "The hour of Yin has concluded." 需把主语提前，不能写死字符串拼接）。
+   * 字数差异由卡片排版自适应：正文超过 3 行自动转左对齐，卡片内部滚动而非截断。 */
+  actEndCopy: {
+    kicker: '时辰礼毕',
+    titleFmt: '{act}',
+    body: '礼毕，手札已记下进度。',
+    nextFmt: '下一时辰：{next}'
   },
 
   /* ---------- 史实出处（首屏角落「鸣谢」入口；瓷片/瓷心出处由 shards/memories 运行时派生） ---------- */

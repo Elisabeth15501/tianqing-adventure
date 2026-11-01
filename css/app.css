@@ -146,7 +146,15 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
    舞台原本 flex:1 撑满竖屏，横图会被缩成一条、上下留大片空白；
    rich 模式下舞台按画幅比收住，整块交互在剩余高度里垂直居中。 */
 .iv.rich{justify-content:center}
-.iv.rich .iv-stage{flex:0 0 auto;width:100%;aspect-ratio:300/210;max-height:58vh;min-height:0}
+/* ★max-width：aspect-ratio 在 max-height 生效时会"保高放宽容"，横屏下舞台框比画幅宽出一大截
+   （1024 宽时框 990、画幅只有 633），两侧留着两块空皮。按 58vh×300/210 把宽也收住，框=画幅。
+   不能写 min()——本工程要兼容老 WebView，calc 足矣。 */
+.iv.rich .iv-stage{flex:0 0 auto;width:100%;aspect-ratio:300/210;max-height:58vh;
+  max-width:calc(58vh * 300 / 210);min-height:0;margin:0 auto}
+/* 步骤点/读数/提示跟着舞台一起收窄：否则横屏下三个点在整屏宽度上摊开，与画面脱节 */
+.iv.rich .iv-steps,
+.iv.rich .iv-val,
+.iv.rich .iv-hint{width:100%;max-width:calc(58vh * 300 / 210);margin-left:auto;margin-right:auto}
 .iv-stage{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,#F5F9F7 0%,#DDE9E5 60%,#BFD2CD 100%);border:1px solid var(--qing);border-radius:12px;overflow:hidden}
 .iv-stage.dark{background:radial-gradient(circle at 50% 36%,#3E5B5E 0%,#22383C 80%)}
 .iv-stage .zone-tag{position:absolute;top:8px;left:8px;font-size:10px;letter-spacing:1px;background:rgba(31,59,58,.62);color:var(--yue);border-radius:9px;padding:2px 9px;z-index:4}
@@ -468,6 +476,13 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 /* ===== VN 结构接线（竖版：立绘区 top:5% + dock 贴底 · 纸卡对话框=基规则 .sp-zone/.dlg-dock/.dlg-box（验稿页 act_vn 原样） · act-op 操作态全宽） ===== */
 .main.act-vn{display:flex;flex-direction:column;padding:0;overflow:hidden}
 /* 操作态（iv/rhythm/touhu/shard）：隐立绘、文档流全宽——act-op 类由 runSteps 经 main.parentNode 落在 .vn-main 上 */
+/* ★立绘排布 v2 的 `.main.act-vn .sp-zone{display:block}`（0,3,0）写在后面，把 `display:none`
+   压掉了 ⇒ 动手小节里立绘从卡片四周透出来（2026-11-01 真实剧情流实测：一件尚宫宫装从卡片上下
+   探出来）。act-op 挂在 .vn-main 上（结构：.main.act-vn > .vn-main.act-op > .sp-zone），
+   所以选择器要按这条链写满，才压得过那 3 个类。 */
+.main.act-vn .vn-main.act-op .sp-zone,
+.main.act-vn .act-op .sp-zone,
+.main.act-vn.act-op .sp-zone,
 .vn-main.act-op .sp-zone{display:none}
 .vn-main.act-op .vn-doc{flex:1;min-height:0;max-height:none}
 @media not all and (min-aspect-ratio:6/5) and (min-width:900px){
@@ -524,6 +539,8 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .memo-set-h{font-size:11px;color:var(--muted);letter-spacing:1px;margin-right:8px}
 .memo-set-chip{font-family:inherit;font-size:11.5px;color:var(--deep);background:var(--fen);border:1px solid var(--qing);border-radius:13px;padding:4px 12px;margin-right:8px}
 .memo-set-chip.on{background:var(--deep);color:var(--yue)}
+/* 游戏系统状态位（只读）：虚线边、不可点感 —— 表示「保留未启用 / 单轨」 */
+.memo-set-chip.kept{cursor:default;border-style:dashed}
 .memo-set-tip{font-size:10px;color:var(--muted)}
 .memo-cell canvas{width:36px;height:36px}
 @media (max-height:740px){
@@ -728,13 +745,179 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   .main.act-vn .sp-zone{
     position:relative; left:auto; right:auto; top:auto; bottom:auto;
     width:42%; max-width:520px; min-width:320px; flex-shrink:0;
-    display:flex; align-items:flex-end; justify-content:center;
+    /* ★flex-direction 必须显式写 row（2026-11-01 实机定位）：
+     *   基规则 .sp-zone 是 flex-direction:column，媒体查询只改 align/justify 不改主轴，
+     *   于是 `justify-content:center` 落在**垂直**轴上 = 立绘悬在列中间、上下各留一大块，
+     *   而 `align-items:flex-end` 落在水平轴上 = 立绘被推到列右缘。
+     *   横版要的是「水平居中 + 底对齐」，正是 row 下的这两条。 */
+    display:flex; flex-direction:row; align-items:flex-end; justify-content:center;
     padding:16px 14px 0;
   }
   .main.act-vn .sp-zone .slot.sp-fig{
     position:relative; left:auto; right:auto; bottom:auto; margin:0;
     width:100%; max-width:none; height:86%;
   }
+  /* ★双栏里「对话框在右边，不在下面」——dock-top 那套「浮到对话框上沿、留 dock-gap」
+   *   的前提不成立：基规则的 bottom:calc(lift+gap) 在 position:relative 下会变成
+   *   相对上移（实测 lift 617px ⇒ 半身像整块飞出画面），height 也被 lift 吃掉。
+   *   两条锚地规则在这里一律归位为「贴列底、占满可用高」。
+   *   选择器 (0,6,0) 与基规则同特异性，靠后声明生效。 */
+  .main.act-vn .sp-zone .slot.sp-fig[data-anchor]{ bottom:0; height:100%; }
   .main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-side="l"],
-  .main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-side="r"]{ width:50%; height:86%; }
+  .main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-side="r"]{ width:50%; height:100%; }
+}
+
+/* ===== 手札 · 瓷片全屏查看器（2026-11-01） =====
+ * 覆盖式弹层：进入/退出整体进出，手札列表滚动位置不受影响。
+ * Chrome 61 基线：不用 flex gap / :has() / clamp() / aspect-ratio。 */
+.shv{position:fixed;left:0;right:0;top:0;bottom:0;z-index:80;display:flex;overflow:hidden;
+  align-items:flex-end;justify-content:center}
+.shv-mask{position:absolute;left:0;right:0;top:0;bottom:0;background:rgba(18,26,26,.62);
+  animation:shvFade .18s ease-out both}
+.shv-sheet{position:relative;width:100%;max-width:100%;min-width:0;height:92%;max-height:92%;
+  background:var(--paper);color:var(--ink);overflow-x:hidden;
+  border-radius:16px 16px 0 0;padding:12px 14px calc(14px + env(safe-area-inset-bottom,0px));
+  display:flex;flex-direction:column;overflow-y:hidden;
+  animation:shvRise .22s cubic-bezier(.22,.61,.36,1) both;
+  box-shadow:0 -8px 30px rgba(0,0,0,.28)}
+@keyframes shvFade{from{opacity:0}to{opacity:1}}
+/* 入场只做位移、不做透明度：弹层任何一帧都不透明，避免动画期「透出手札」的闪底 */
+@keyframes shvRise{from{transform:translateY(26px)}to{transform:translateY(0)}}
+
+.shv-head{position:relative;display:flex;align-items:center;flex-shrink:0;
+  padding:0 40px 8px 0;border-bottom:1px solid rgba(94,140,138,.28)}
+.shv-name{font-size:15px;font-weight:600;color:var(--deep)}
+.shv-prov{margin-left:8px;font-size:11px;font-weight:400;color:var(--muted)}
+.shv-x{position:absolute;right:0;top:-4px;flex-shrink:0;width:34px;height:34px;line-height:32px;
+  text-align:center;border-radius:50%;border:1px solid rgba(94,140,138,.45);
+  background:transparent;color:var(--deep);font-size:15px}
+.shv-x:active{background:rgba(94,140,138,.15)}
+
+/* 舞台吃掉剩余高度；canvas 用 contain 在框内等比居中 */
+.shv-stage{position:relative;flex:1 1 auto;min-height:220px;min-width:0;width:100%;
+  margin:10px 0 6px;border-radius:12px;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 50% 42%,#F7F4E9 0%,#E8E4D6 62%,#DCD7C7 100%)}
+.shv-stage svg,.shv-stage canvas{display:block;width:100%;height:100%;object-fit:contain}
+/* 旋转档源帧仅 160px：约束在 250px 内（放大 1.5× 以内），糊感明显降低 */
+.shv-stage[data-mode="rot"] canvas{width:auto;height:auto;max-width:280px;max-height:280px}
+.shv-stage .shard-vec,.shv-stage .vessel-vec{display:flex;align-items:center;justify-content:center;height:100%}
+
+.shv-hud{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;flex-shrink:0;margin:2px 0 8px}
+.shv-hud-i{font-size:11.5px;color:var(--muted);letter-spacing:.4px;
+  padding:2px 9px;margin:0 3px;border-radius:10px;background:rgba(143,181,176,.16)}
+
+.shv-bar{display:flex;flex-wrap:wrap;justify-content:center;flex-shrink:0;max-width:100%;overflow:hidden}
+.shv-b{font-size:12px;color:var(--deep);background:transparent;border:1px solid rgba(94,140,138,.42);
+  border-radius:13px;padding:5px 7px;margin:3px 2px;min-width:42px}
+.shv-b:active{background:rgba(94,140,138,.16);transform:scale(.96)}
+.shv-b[data-on="1"]{background:var(--qing);color:#fff;border-color:var(--qing)}
+.shv-b[data-off="1"]{opacity:.42}
+.shv-b-wide{min-width:64px}
+
+.shv-tip{font-size:11px;color:var(--muted);text-align:center;margin:6px 0 0;line-height:1.6;padding:0 6px}
+.shv-quote{margin-top:10px;font-size:13px;line-height:1.9;color:var(--ink);max-height:24vh;overflow-y:auto;
+  padding:9px 11px;background:rgba(143,181,176,.10);border-left:2px solid var(--qing);border-radius:0 6px 6px 0}
+.shv-src{margin-top:4px;font-size:11px;color:var(--muted);text-align:right}
+
+body.shv-open .main{overflow:hidden}
+
+/* 手札格子按下反馈：给出「可点」的即时回应 */
+.memo-cell[role="button"]{cursor:pointer;transition:transform .12s ease,box-shadow .12s ease}
+.memo-cell[role="button"]:active{transform:scale(.94);box-shadow:inset 0 0 0 2px var(--deep)}
+.memo-cell[role="button"]:focus{outline:2px solid var(--deep);outline-offset:2px}
+
+@media (min-width:700px){
+  .shv{align-items:center}
+  .shv-sheet{max-width:560px;border-radius:16px;height:88%;max-height:88%}
+}
+
+/* ===== 小游戏过渡对话框（tang / folk … 所有动手小节收尾共用）=====
+   钉在舞台下沿：成品留在上方看得见，不压交互画面。
+   高度只由字号+内边距决定、宽度 100%，竖屏/中屏/横屏一套写法都成立。
+   ★这段曾被并发写入冲掉一次（2026-11-01 23:37），改 app.css 前先 grep mg-sheet。 */
+.mg-sheet{position:absolute;left:0;right:0;bottom:0;z-index:5;display:flex;align-items:center;
+  padding:7px 12px 8px;background:rgba(251,246,234,.97);border-top:1px solid #D8CFBA;
+  border-radius:0 0 12px 12px;cursor:pointer;animation:mgSheetIn 180ms ease-out both}
+.mg-sheet-tx{flex:1;min-width:0;padding-right:8px}
+.mg-sheet-t1{font-size:12px;line-height:1.35;color:#3A3A34}
+.mg-sheet-t2{font-size:11px;line-height:1.4;color:#6A6254;margin-top:1px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mg-sheet-go{flex:0 0 auto;font-family:inherit;font-size:12px;color:#FBF7EE;background:#3F6B58;
+  border:0;border-radius:14px;padding:6px 14px;cursor:pointer}
+@keyframes mgSheetIn{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
+@media (max-width:400px){
+  .mg-sheet{padding:6px 10px 7px}
+  .mg-sheet-t1{font-size:11.5px}
+  .mg-sheet-t2{font-size:10.5px}
+  .mg-sheet-go{padding:5px 12px;font-size:11.5px}
+}
+
+
+/* ==================== 章节结算纸卡（2026-11-01 · 竖版排版修复）====================
+ * 定位：绝对铺满舞台（.main.act-vn），与对话布局彻底解耦——
+ *   竖版不再把文字送到人物胸口，横版也不会漂到舞台左上。
+ * 层级：暗场(6) > 立绘(1)/对话(2)，文字永远在最上层，不可能被人物压住。
+ * 排版：kicker(眉题) → title(幕名) → 细线 → body(正文) → next(下一时辰)，四级层次。
+ * Chrome 61 兼容：不使用 min()/max()/clamp()/flex gap，宽度用 % + max-width。 */
+.act-settle{
+  position:absolute; left:0; right:0; top:0; bottom:0; z-index:6;
+  display:flex; align-items:center; justify-content:center;
+  padding:calc(16px + var(--tq-top-inset,0px)) calc(16px + var(--tq-right-inset,0px))
+          calc(16px + var(--tq-bottom-inset,0px)) calc(16px + var(--tq-left-inset,0px));
+  /* 压暗：让立绘退成剪影而非「半个身子露在卡片外」——卡片是主角，人物只留气氛。
+   * backdrop-filter 在 Chrome 61（小红书小工具 WebView）不支持，被忽略后靠这层不透明度兜底。 */
+  background:radial-gradient(circle at 50% 42%, rgba(22,36,40,.80) 0%, rgba(10,17,19,.94) 76%);
+  -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
+  box-sizing:border-box;
+  animation:asFade .32s ease both;
+}
+@keyframes asFade{ from{opacity:0} to{opacity:1} }
+
+.as-card{
+  width:100%; max-width:400px; max-height:100%;
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
+  box-sizing:border-box; text-align:center;
+  background:var(--paper); border:1px solid #C9B79A; border-radius:16px;
+  padding:26px 22px 22px;
+  box-shadow:0 12px 34px rgba(8,18,20,.42);
+  animation:asRise .34s cubic-bezier(.2,.8,.3,1) both;
+}
+@keyframes asRise{ from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none} }
+
+/* 眉题：小字 + 宽字距，承担「仪式感」，不与幕名抢注意力 */
+.as-kicker{font-size:11.5px; line-height:1.7; letter-spacing:4px; text-indent:4px; color:#8A6A32}
+/* 结算标题：幕名。长幕名（如「终幕 · 广德殿与合瓮」）自动换行，不截断 */
+.as-title{margin-top:8px; font-size:22px; line-height:1.45; font-weight:600; letter-spacing:1px;
+  color:var(--ink); overflow-wrap:break-word; word-break:break-word; hyphens:auto}
+.as-rule{width:44px; height:2px; margin:14px auto; border-radius:1px; background:#B08A5C; opacity:.55}
+/* 正文：默认居中（单句最稳）；超过 3 行由 JS 加 .is-long 转左对齐 */
+.as-body{font-size:14px; line-height:1.95; color:#3E4E4C; text-align:center;
+  overflow-wrap:break-word; word-break:break-word; hyphens:auto}
+.as-body.is-long{text-align:left; line-height:1.85}
+.as-next{margin-top:18px; padding-top:14px; border-top:1px dashed rgba(176,138,92,.45);
+  font-size:12px; line-height:1.7; letter-spacing:1px; color:var(--muted);
+  overflow-wrap:break-word; word-break:break-word}
+
+/* —— 矮屏：整体压一档，避免卡片顶到屏幕两端 —— */
+@media (max-height:740px){
+  .as-card{padding:22px 20px 18px}
+  .as-title{font-size:20px; margin-top:6px}
+  .as-rule{margin:12px auto}
+  .as-body{font-size:13.5px; line-height:1.85}
+  .as-next{margin-top:15px; padding-top:12px}
+}
+@media (max-height:668px){
+  .as-card{padding:18px 18px 16px; border-radius:14px}
+  .as-kicker{font-size:11px; letter-spacing:3px; text-indent:3px}
+  .as-title{font-size:18px; line-height:1.4; margin-top:5px}
+  .as-rule{margin:10px auto}
+  .as-body{font-size:13px; line-height:1.75}
+  .as-next{margin-top:12px; padding-top:10px; font-size:11.5px}
+}
+/* —— 宽屏：卡片放宽、字号提一档；位置仍居中，不参与左右分栏 —— */
+@media (min-aspect-ratio:6/5) and (min-width:900px){
+  .as-card{max-width:520px; padding:32px 34px 28px}
+  .as-title{font-size:24px}
+  .as-body{font-size:15px; line-height:2}
 }
