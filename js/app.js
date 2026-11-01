@@ -122,6 +122,23 @@
   var save = null;
   var hasSave = false;
   var VNC = {}; /* VN 对话层通道（dockBox/occupy/retract/lock/stop），runSteps 内接线，小节函数经此占台 */
+  var ACT_KEY_HANDLER = null; /* 当前幕的键盘推进处理器（换幕/幕毕时摘掉，避免叠加） */
+
+  /* ---------- 音效（2026-11-01 v1 · 无 BGM） ----------
+   * 只做「动作反馈」：推进/按钮/确认/浮层/获得/笔触。
+   * TQSFX 未加载或浏览器不支持 AudioContext 时全函数静默 no-op，不影响任何流程。 */
+  function sfx(name) {
+    if (global.TQSFX) { try { global.TQSFX.play(name); } catch (e) {} }
+  }
+  /* 启动即应用上次的音效开关（默认开） */
+  (function initSfx() {
+    if (!global.TQSFX) { return; }
+    try {
+      var v = null;
+      try { v = localStorage.getItem('tq_sfx'); } catch (err) {}
+      global.TQSFX.setEnabled(v !== 'off');
+    } catch (e) {}
+  }());
   var SELF_KEY = 'shiguan'; /* 玩家所扮角色的绘像 key（role=shi 史官 / nv 女官） */
 
   /* ---------- 立绘槽：说话人 → 程序化绘像（portraits.js · 未知 speaker 也有像，杜绝空位） ----------
@@ -418,6 +435,7 @@
 
   /* ---------- 幕流程 ---------- */
   function enterAct(idx) {
+    if (ACT_KEY_HANDLER) { document.removeEventListener('keydown', ACT_KEY_HANDLER); ACT_KEY_HANDLER = null; }
     var act = D.acts[idx];
     if (!act || !act.unlocked || !act.steps.length) { showMemo(false, '此后时辰尚未开启。'); return; }
     if (save.actIndex < idx) { save.actIndex = idx; }
@@ -517,8 +535,10 @@
     }
     function armAuto() {
       if (autoTimer) { clearTimeout(autoTimer); }
+      if (!autoOn || occupied) { return; }   /* 占台（选择/差事帖/动手小节）期间不排自动拍 */
       autoTimer = setTimeout(function () {
         autoTimer = 0;
+        if (!autoOn || occupied) { return; } /* 期间被占台：不推进，等玩家手动完成 */
         if (curBox && busy) { boxGo(); }
       }, AUTO_DELAY);
     }
@@ -543,6 +563,7 @@
         keyMemo = el('span', 'log-key', '手札');
         keyAuto.addEventListener('click', function (e) {
           e.stopPropagation();
+          sfx('tap');
           if (autoOn) { stopAuto(); return; }
           stopSkip();
           autoOn = true; keyAuto.classList.add('on');
@@ -550,6 +571,7 @@
         });
         keySkip.addEventListener('click', function (e) {
           e.stopPropagation();
+          sfx('tap');
           if (skipOn) { stopSkip(); return; }
           stopAuto();
           skipOn = true; keySkip.classList.add('on');
@@ -560,8 +582,8 @@
             boxGo();
           }, SKIP_STEP);
         });
-        keyLog.addEventListener('click', function (e) { e.stopPropagation(); openLog(); });
-        keyMemo.addEventListener('click', function (e) { e.stopPropagation(); showMemoOverlay(); });
+        keyLog.addEventListener('click', function (e) { e.stopPropagation(); sfx('tap'); openLog(); });
+        keyMemo.addEventListener('click', function (e) { e.stopPropagation(); sfx('tap'); showMemoOverlay(); });
         strip.appendChild(keyAuto); strip.appendChild(keySkip);
         strip.appendChild(keyLog); strip.appendChild(keyMemo);
         dock.appendChild(strip);
@@ -578,6 +600,7 @@
       var item = { sp: speaker || '', t: text };
       function onAdv() {
         if (autoTimer) { clearTimeout(autoTimer); autoTimer = 0; }
+        sfx('advance');
         backlog.push(item);
         curBox = null;
         busy = false;
@@ -606,10 +629,16 @@
       if (dock) { dock.style.display = ''; }
       var vnMain = main.parentNode;
       if (vnMain && vnMain.classList) { vnMain.classList.remove('act-op'); }
+      /* 退占台：自动档若仍开启，恢复推进（占台期间是暂停而非关闭） */
+      if (autoOn && curBox && busy && curBox._tqIsFull()) { armAuto(); }
     }
     function occupyNode(node, keepDock) {
       retract();
-      stopAuto(); stopSkip();
+      /* 2026-11-01：占台不再关闭「自动」——自动是玩家设的常开档，
+       * 差事帖/动手小节/选择等需要玩家亲自操作的环节只是「暂停自动推进」，
+       * 完成退场后自动继续（见 retract 末尾的续排）。「跳过」仍然停。 */
+      if (autoTimer) { clearTimeout(autoTimer); autoTimer = 0; }
+      stopSkip();
       occupied = node;
       main.appendChild(node);
       var dock = main.querySelector('.dlg-dock');
@@ -625,6 +654,29 @@
     VNC.backlog = function () { return backlog; };
     VNC.stop = function () { stopAuto(); stopSkip(); };
     VNC.stopModes = function () { stopAuto(); stopSkip(); retract(); dockClear(); };
+
+    /* ---------- 键盘推进（2026-11-01 · 电脑端） ----------
+     * 空格 / 回车 = 点对话框（补完打字 → 下一框，二击合一）。
+     * 三条硬约束：
+     *  ① 占台中（选择/差事帖/动手小节）不响应——这些必须玩家亲手完成；
+     *  ② 焦点在按钮上时 preventDefault，避免「空格触发按钮 click」与推进并存；
+     *  ③ 输入类元素内放行，不抢空格。
+     * 自动档开着时也允许空格手动加速（不关自动）。 */
+    function onKeyAdvance(e) {
+      var k = e.key || e.keyCode;
+      if (!(k === ' ' || k === 'Spacebar' || k === 'Enter' || k === 32 || k === 13)) { return; }
+      var tag = ((e.target && e.target.tagName) || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select') { return; }
+      if (e.repeat) { return; }            /* 长按不连发，避免一路冲过去 */
+      if (occupied) { return; }            /* 占台：交给玩家手动 */
+      if (!busy || !curBox) { return; }
+      e.preventDefault();
+      if (autoTimer) { clearTimeout(autoTimer); autoTimer = 0; }
+      boxGo();
+      if (autoOn) { armAuto(); }           /* 手动推进后仍续排自动拍 */
+    }
+    ACT_KEY_HANDLER = onKeyAdvance;
+    document.addEventListener('keydown', onKeyAdvance);
 
     function next() {
       if (busy) { return; }
@@ -849,6 +901,7 @@
     var stage = el('div', 'shard-stage');
     wrap.appendChild(stage);
     F.shardViewer(stage, id); /* 轨③：可拖动擦洗的转台（P1 后内含暗纹）；失败自动降级到内壁静态帧 */
+    if (first) { sfx('bead'); }  /* 首次拾得：三音上行的获得音 */
     var toast = el('div', 'shard-toast');
     toast.appendChild(el('div', 'got', (first ? '拾得瓷片' : '瓷片在手') + ' · 共 ' + countShards() + '/16'));
     toast.appendChild(el('div', 'name', sh.name));
@@ -881,6 +934,7 @@
       b.addEventListener('click', function () {
         if (picked || box.getAttribute('data-locked')) { return; }
         picked = true;
+        sfx('select');
         box.setAttribute('data-locked', '1');
         b.classList.add('selected');
         b.setAttribute('aria-checked', 'true');
@@ -1333,6 +1387,7 @@
 
   /* ---------- 幕毕 ---------- */
   function finishAct(idx, main) {
+    if (ACT_KEY_HANDLER) { document.removeEventListener('keydown', ACT_KEY_HANDLER); ACT_KEY_HANDLER = null; }
     if (VNC.stopModes) { VNC.stopModes(); } /* 清占台/dock/自动跳过，干净进结算 */
     var act = D.acts[idx];
     if (act.shardAfter && D.shards[act.shardAfter] && !save.shards[act.shardAfter]) {
@@ -1485,7 +1540,8 @@
   function openLog() {
     if (VNC.stop) { VNC.stop(); }
     var old = app.querySelector('.log-ov');
-    if (old) { old.parentNode.removeChild(old); return; }
+    if (old) { old.parentNode.removeChild(old); sfx('close'); return; }
+    sfx('open');
     var ov = el('div', 'log-ov');
     var panel = el('div', 'log-panel');
     var ph = el('div', 'log-ph');
@@ -1634,6 +1690,10 @@
         function () { return TQA.assetsMode() === 'vector'; },
         function (v) { TQA.setSetting('tq_assets_mode', v ? 'vector' : 'auto'); },
         '开', '关'));
+      setRow.appendChild(mkChip('音效',
+        function () { return global.TQSFX && global.TQSFX.isEnabled(); },
+        function (v) { if (global.TQSFX) { global.TQSFX.setEnabled(v); } TQA.setSetting('tq_sfx', v ? 'on' : 'off'); },
+        '开', '关'));
       setRow.appendChild(el('span', 'memo-set-tip', '对新开小节生效'));
       list.appendChild(setRow);
     }
@@ -1687,6 +1747,10 @@
         }
         setRow.appendChild(mkChip('应节体法', function () { return TQA.tifaJie(); }, function (v) { TQA.setSetting('tq_tifa', v ? 'jie' : 'gongxing'); }, '应节', '躬行'));
         setRow.appendChild(mkChip('恒用预设图样', function () { return TQA.assetsMode() === 'vector'; }, function (v) { TQA.setSetting('tq_assets_mode', v ? 'vector' : 'auto'); }, '开', '关'));
+        setRow.appendChild(mkChip('音效',
+          function () { return global.TQSFX && global.TQSFX.isEnabled(); },
+          function (v) { if (global.TQSFX) { global.TQSFX.setEnabled(v); } TQA.setSetting('tq_sfx', v ? 'on' : 'off'); },
+          '开', '关'));
         setRow.appendChild(el('span', 'memo-set-tip', '对新开小节生效'));
         body.appendChild(setRow);
       }
