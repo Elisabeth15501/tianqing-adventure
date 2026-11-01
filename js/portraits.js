@@ -372,7 +372,7 @@
       belt: '#241C2E', buckle: '#9AA79B', prop: 'zhang', title: '历仕四朝十帝 · 追忆'
     },
     shaonian: {
-      k: 'shaonian', label: '少年柴荣', head: 'futou', build: 'c', beard: 'none',
+      k: 'shaonian', label: '少年郭荣', head: 'futou', build: 'c', beard: 'none',
       hair: '#2A2622', headColor: '#2C3335', robe: '#4A6B72', collar: '#EFE7D6',
       belt: '#33403F', buckle: '#A8B0A6', prop: 'zhan', title: '少年茶事 · 追忆'
     },
@@ -474,7 +474,10 @@
     '王朴': 'wangpu', '王溥': 'wangpu2', '张永德': 'zhangyongde', '赵匡胤': 'zhaokuangyin',
     '范质': 'fanzhi', '李谷': 'ligu', '李重进': 'lichongjin', '殷崇义': 'yinchongyi',
     '尚食令': 'shangshiling', '司正': 'sizheng', '黄衣小皇子': 'zongxun',
-    '符后': 'fuhou', '郭威': 'guowei', '冯道': 'fengdao', '郭荣': 'guorong', '柴荣': 'shaonian',
+    '符后': 'fuhou', '郭威': 'guowei', '冯道': 'fengdao', '郭荣': 'guorong',
+    /* 2026-11-01：原此处有 '柴荣': 'shaonian' —— 已删。郭荣随养父郭威改姓郭，
+     * 本作对其一律称「郭荣」；「柴荣」是宋人追称，只出现在史实出处的引文里，
+     * 不作 speaker。少年茶一幕要少年立绘，走 step 的显式 fig:'shaonian'。 */
     /* 10-27 补：回忆内以称谓出场的两位——漏在此表会掉 DEFAULT 通用像。
      * 「官家」＝在世宗本人（guorong）；「皇后」＝宣懿皇后大符氏（fuhou，956 崩）。
      * 注意：小符后（宣慈，959 立）绝不可套进 956 那段回忆——故 fuhou 的 title 已改为大符氏。 */

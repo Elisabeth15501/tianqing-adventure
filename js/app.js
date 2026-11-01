@@ -1138,7 +1138,9 @@
       plate.style.display = nm ? '' : 'none';
       line.textContent = st.t;
       if (nm && global.TP) {
-        var key = global.TP.keyOf(nm, save && save.role === 'shi' ? 'shiguan' : 'nvguan');
+        /* fig 显式立绘键优先于 MAP 映射：用于「同名不同龄」——
+         * 少年茶一幕说话人是「郭荣」，但立绘须取少年档 shaonian（见 data.js 该步注释）。 */
+        var key = st.fig || global.TP.keyOf(nm, save && save.role === 'shi' ? 'shiguan' : 'nvguan');
         slot.innerHTML = global.TP.figure(key);
         slot.style.display = '';
         slot.className = 'mem-fig mem-fig-' + (key === 'DEFAULT' ? 'any' : key);
