@@ -328,11 +328,141 @@
     return n;
   }
 
-  /* ---------- S9 加载页（游戏首屏 · 全构图同心于中轴） ---------- */
+  /* ---------- S9 加载页（游戏首屏 · 全构图同心于中轴） ----------
+   * ★2026-11-02 改成**真素材加载页**：旧版这里是「装饰性首屏」——按钮立刻可点，
+   *   立绘一张都没预载，进幕第一句台词那一帧才发请求（4G 340ms / 慢 3G 1.7s 的占位窗口）。
+   *   现在：
+   *     ① 进度条 = **真实的逐张解码进度**（不是假动画）；
+   *     ② 失败会显示「n 项素材未载入 · 点此重试」，并且把环境问题（WebP 不支持等）
+   *        明说出来——旧版 `TQA.env.webp` 探测完从未被使用，不支持 WebP 的环境里
+   *        33 张图会全部 onerror 静默变成矢量占位，玩家只看到「立绘没出来」；
+   *     ③ 硬上限 10s：宁可带着未完成的预载进幕，也绝不把玩家锁在加载页。 */
   function showLoad() {
     clear(app);
-    if (window.TQA) { TQA.probeEnv(function () {}); } /* §10.5 L0 boot 探针：WebP/2048 纹理，一次性 */
-    app.appendChild(F.buildLoad(function () { showTitle(); }, showCredits));
+    var ld = F.buildLoad(function () { showTitle(); }, showCredits);
+    app.appendChild(ld);
+    if (window.TQA) { TQA.probeEnv(function () { paint(); }); } /* §10.5 L0 boot 探针 */
+
+    /* ---- 进度 UI（插在「入宫当值」按钮上方，跟随 .lt 居中） ---- */
+    var lt = ld.querySelector('.lt');
+    var enterBtn = lt ? lt.querySelector('.btn') : null;
+    var bar = el('div', 'ld-bar');
+    var fill = el('i');
+    bar.appendChild(fill);
+    var note = el('div', 'ld-note', '正在备置素材');
+    /* 排障入口：只有真的失败时才露出来，正常玩家看不到它。
+     * 自检页把 33 个资源键逐张真实加载，一眼能分清「资源没发布」和「渲染层问题」。 */
+    var diag = el('a', 'ld-diag', '素材自检');
+    diag.setAttribute('href', './assets-check.html');
+    diag.style.display = 'none';
+    if (lt && enterBtn) {
+      lt.insertBefore(bar, enterBtn);
+      lt.insertBefore(note, enterBtn);
+      lt.insertBefore(diag, enterBtn);
+      enterBtn.disabled = true;
+    }
+
+    /* ---- 预载清单：玩家绘像 + 辰时前 3 位不同说话人（约 5 张 ≈ 260KB） ----
+     * 为什么不整库预热：33 张 1.72MB，慢网会把加载页拖到几十秒。
+     * 辰时是第一个有 card 的幕（寅时全是叙述＋小游戏），所以预热到它就够首屏无占位。 */
+    var want = [];
+    if (global.TP && TP.keyOf) {
+      var selfKey = (save && save.role === 'nv') ? 'nvguan' : 'shiguan';
+      want.push(selfKey);
+      if (!hasSave) { want.push(selfKey === 'nvguan' ? 'shiguan' : 'nvguan'); }
+      var seen = {};
+      var chenSteps = (D.acts[1] && D.acts[1].steps) || [];
+      for (var si = 0; si < chenSteps.length; si += 1) {
+        if (want.length >= 4) { break; }
+        var stp = chenSteps[si];
+        if (!stp || stp.type !== 'card') { continue; }
+        var sps = [stp.speaker, stp.pair];
+        for (var sj = 0; sj < sps.length; sj += 1) {
+          if (!sps[sj] || want.length >= 4) { continue; }
+          var kk = TP.keyOf(sps[sj], selfKey);
+          if (kk && kk !== 'DEFAULT' && !seen[kk] && want.indexOf(kk) < 0) { seen[kk] = 1; want.push(kk); }
+        }
+      }
+    }
+
+    var total = want.length, settled = 0, missKeys = [], released = false, timer = 0;
+
+    function release(msg) {
+      if (released) { return; }
+      released = true;
+      if (timer) { clearTimeout(timer); }
+      if (enterBtn) {
+        enterBtn.disabled = false;
+        enterBtn.textContent = '入宫当值';
+        if (msg) { note.className = 'ld-note'; note.textContent = msg; }
+      }
+    }
+
+    function paint(done) {
+      var pc = total ? Math.round(settled / total * 100) : 100;
+      fill.style.width = (released && total ? 100 : pc) + '%';
+      bar.className = 'ld-bar' + (missKeys.length ? ' fail' : '');
+      diag.style.display = missKeys.length ? '' : 'none';
+      var env = (window.TQA && TQA.envNote) ? TQA.envNote() : '';
+      if (env) { diag.style.display = ''; note.className = 'ld-note err'; note.textContent = env; return; }
+      if (missKeys.length) {
+        /* 把失败的具体文件名报出来（最多 2 个）——实机上玩家截一张加载页的图，
+         * 就能直接看出是「整包资源缺失」还是「个别文件坏了」，不用再猜。 */
+        var nm = missKeys.slice(0, 2).map(function (k) {
+          var p = (window.TQA && TQA.reg[k] && TQA.reg[k].src) ? TQA.reg[k].src.split('/').pop() : k;
+          return p.replace(/^tq_chars_/, '').replace(/_final\.webp$/, '');
+        });
+        note.className = 'ld-note err';
+        note.textContent = missKeys.length + ' 项素材未载入（' + nm.join('、')
+          + (missKeys.length > 2 ? ' 等' : '') + '）· 点此重试';
+        return;
+      }
+      note.className = 'ld-note';
+      if (done || (total && settled >= total)) {
+        note.textContent = '素材已就绪';
+        release('入宫当值');
+      } else {
+        note.textContent = '正在备置素材 ' + settled + '/' + total;
+      }
+    }
+
+    function run() {
+      if (!global.TP || !TP.prefetch || !total) { release(''); paint(true); return; }
+      if (window.TQA && TQA.env && TQA.env.webp === false) { paint(); release('入宫当值'); return; }
+      note.className = 'ld-note';
+      note.textContent = '正在备置素材 0/' + total;
+      TP.prefetch(want, {
+        conc: 2,
+        tick: function (n, t, key, stt) {
+          settled = n;
+          if (stt === 'fail') { missKeys.push(key); }
+          paint();
+        },
+        done: function () { paint(true); }
+      });
+    }
+
+    /* 重试：清掉失败缓存再拉一次（真 404 重试也没用，但慢网超时的能救回来） */
+    note.addEventListener('click', function () {
+      if (!missKeys.length || !window.TQA) { return; }
+      missKeys.forEach(function (k) { TQA.reset(k); });
+      missKeys = [];
+      settled = 0;
+      fill.style.width = '0%';
+      run();
+      if (enterBtn) { enterBtn.disabled = true; }
+      armTimeout();
+    });
+
+    function armTimeout() {
+      if (timer) { clearTimeout(timer); }
+      /* 硬上限：慢网下宁可先进幕（占位会晚到补图），也不能把人锁在加载页 */
+      timer = setTimeout(function () { release('素材仍在后台载入'); }, 10000);
+    }
+
+    if (enterBtn) { enterBtn.disabled = true; }
+    armTimeout();
+    run();
   }
 
   /* ---------- 首屏（按钮组钉底 footbar；横版归位右侧 .tr） ---------- */
@@ -502,7 +632,31 @@
     vnMain.appendChild(doc);
     main.appendChild(vnMain);
     app.appendChild(main);
-    runSteps(act, idx, doc, fromStep || 0, expandSteps(act.steps, save.role));
+    var seq = expandSteps(act.steps, save.role);
+    runSteps(act, idx, doc, fromStep || 0, seq);
+    /* ★滚动预取（2026-11-02）：立绘是**按需下载**的，旧版只有角色开口那一帧才发请求
+     *   （实测 4G 340~420ms、慢 3G 1.7~3.1s 的占位窗口）。这里只提前拉「接下来 3 个」，
+     *   不整幕预取——整幕 8 人 = 458KB，慢网会反过来把当前这张拖慢（实测 15KB/s 时
+     *   当前图从 6s 拖到 20s+）。后续每一步由 prefetchAhead 继续往前滚。 */
+    setTimeout(function () {
+      if (global.TP && TP.prefetch) {
+        TP.prefetch(castKeysOf(seq.slice(fromStep || 0, (fromStep || 0) + 3)), { conc: 1 });
+      }
+    }, 900);
+  }
+
+  /* 一幕里所有会露脸的说话人（含双人同框的第二人）→ 角色 key 列表（去重、保持出场顺序） */
+  function castKeysOf(steps) {
+    var out = [], seen = {};
+    (steps || []).forEach(function (st) {
+      if (!st || (st.type !== 'card' && st.type !== 'choice' && st.type !== 'role')) { return; }
+      [st.speaker, st.pair].forEach(function (sp) {
+        if (!sp || !global.TP) { return; }
+        var k = TP.keyOf(sp, SELF_KEY);
+        if (k && !seen[k]) { seen[k] = 1; out.push(k); }
+      });
+    });
+    return out;
   }
 
   function runSteps(act, idx, main, fromStep, steps) {
@@ -696,8 +850,20 @@
       handleStep(st);
     }
 
+    var prefT = 0;
+    function prefetchAhead(from, n) {
+      if (!global.TP || !TP.prefetch) { return; }
+      if (prefT) { clearTimeout(prefT); }
+      prefT = setTimeout(function () {
+        prefT = 0;
+        TP.prefetch(castKeysOf(steps.slice(from, from + n)), { conc: 1 });
+      }, 160);
+    }
+
     function handleStep(st) {
       busy = true;
+      /* 只对「会露脸」的步骤滚动预取：narr/交互小节不改变 cast，预取也是白拉 */
+      if (st.type === 'card') { prefetchAhead(i, 4); }
       if (st.type === 'narr') {
         dockBox('', st.text, null);
       } else if (st.type === 'card') {
@@ -924,7 +1090,22 @@
     card.appendChild(el('div', 'quote', sh.text));
     card.appendChild(el('div', 'source', '——' + sh.source));
     wrap.appendChild(card);
-    wrap.appendChild(btn('收下瓷片', '', function () { done(); }));
+    /* 细看入口（P1-6）：拾得时就能拉近看釉下笔触，不必先收下再翻手札。
+     * 两条路都通：显式按钮（可发现性）+ 在转台上轻点一下（手势）。
+     * 判据用位移与时长：转台本身要拖拽擦洗，抬手时刻不能和拖动混淆。 */
+    var acts = el('div', 'shard-acts');
+    acts.appendChild(btn('细看', 'ghost', function () { openShardViewer(id); }));
+    acts.appendChild(btn('收下瓷片', '', function () { done(); }));
+    wrap.appendChild(acts);
+    var px0 = 0, py0 = 0, pt0 = 0;
+    stage.addEventListener('pointerdown', function (e) {
+      px0 = e.clientX; py0 = e.clientY; pt0 = Date.now();
+    });
+    stage.addEventListener('pointerup', function (e) {
+      if (Math.abs(e.clientX - px0) + Math.abs(e.clientY - py0) < 9 && Date.now() - pt0 < 420) {
+        openShardViewer(id);
+      }
+    });
     VNC.occupy(wrap);
   }
 
@@ -1120,16 +1301,48 @@
     head.appendChild(prog);
     ov.appendChild(head);
     var body = el('div', 'mem-stage-body');
-    var slot = el('div', 'mem-fig');
+    /* 双人同场（2026-11-02）：回忆里的对话不再是「每句换一张立绘」——
+     * 两个槽常驻，角色首次开口入场并留在台上，说话方全彩、在听方压暗（主线同款语义）。
+     * 郭威↔郭荣、冯道↔郭荣、符后↔郭荣三段回忆由此获得标准 VN 对话演出。 */
+    var figs = el('div', 'mem-figs');
+    var slotL = el('div', 'mem-fig');
+    var slotR = el('div', 'mem-fig');
+    slotL.setAttribute('data-side', 'l');
+    slotR.setAttribute('data-side', 'r');
+    figs.appendChild(slotL);
+    figs.appendChild(slotR);
     var plate = el('div', 'mem-plate');
     var line = el('div', 'mem-line');
-    body.appendChild(slot);
+    body.appendChild(figs);
     body.appendChild(plate);
     body.appendChild(line);
     ov.appendChild(body);
     var hint = el('div', 'mem-stage-hint', '轻点继续');
     ov.appendChild(hint);
 
+    /* 台上名册：side → {key, slot}。角色不换槽（避免左右乱跳）；同名不同档（郭荣 a3/n1）
+     * 只在档位变化时原位换图。 */
+    var castL = null, castR = null;
+    function slotOf(side) { return side === 'L' ? slotL : slotR; }
+    function castOf(side) { return side === 'L' ? castL : castR; }
+    function setCast(side, v) { if (side === 'L') { castL = v; } else { castR = v; } }
+    function sideOfKey(key) {
+      if (castL && castL.key === key) { return 'L'; }
+      if (castR && castR.key === key) { return 'R'; }
+      return null;
+    }
+    function paintSide(side, key, slotArt) {
+      var ent = castOf(side);
+      var s = slotOf(side);
+      if (!ent || ent.key !== key || ent.slot !== slotArt) {
+        s.innerHTML = global.TP.figure(key);
+        s.className = 'mem-fig mem-fig-' + side.toLowerCase()
+          + (key === 'DEFAULT' ? ' mem-fig-any' : ' mem-fig-' + key);
+        if (global.TP.realInto) { global.TP.realInto(s, key, slotArt); }
+        setCast(side, { key: key, slot: slotArt });
+      }
+      s.style.display = '';
+    }
     function paint() {
       var st = steps[k];
       var nm = st.s || '';
@@ -1141,16 +1354,24 @@
         /* fig 显式立绘键优先于 MAP 映射：用于「同名不同龄」——
          * 少年茶一幕说话人是「郭荣」，但立绘须取少年档 shaonian（见 data.js 该步注释）。 */
         var key = st.fig || global.TP.keyOf(nm, save && save.role === 'shi' ? 'shiguan' : 'nvguan');
-        slot.innerHTML = global.TP.figure(key);
-        slot.style.display = '';
-        slot.className = 'mem-fig mem-fig-' + (key === 'DEFAULT' ? 'any' : key);
-        /* 有真图就换掉矢量占位：st.slot 指定派生档（如郭威 e3「病中跪坐」），
-         * 未出图则 realInto 返回 false，占位保留——回忆段缺图不再是硬伤。 */
-        if (global.TP.realInto) { global.TP.realInto(slot, key, st.slot); }
+        var on = sideOfKey(key);
+        if (!on) {
+          /* 首次开口：先到先占左位；另一人随后入右位。两位都在场而第三人开口
+           * （本作回忆不存在，防御一下）→ 换掉左位。 */
+          on = !castL ? 'L' : (!castR ? 'R' : 'L');
+        }
+        paintSide('L', on === 'L' ? key : castL && castL.key, on === 'L' ? st.slot : castL && castL.slot);
+        if (on === 'R' || castR) {
+          paintSide('R', on === 'R' ? key : castR && castR.key, on === 'R' ? st.slot : castR && castR.slot);
+        }
+        figs.setAttribute('data-n', (castL && castR) ? '2' : '1');
+        slotL.setAttribute('data-st', on === 'L' ? 'on' : 'off');
+        slotR.setAttribute('data-st', on === 'R' ? 'on' : 'off');
       } else {
-        slot._tqTok = (slot._tqTok || 0) + 1; /* 作废在途的异步真图，避免旁白行突然冒出上一句的立绘 */
-        slot.innerHTML = '';
-        slot.style.display = 'none';
+        /* 旁白：台上的人留在原地一起压暗（VN 惯例：旁白不属于任何人），
+         * 不再清空立绘——正是「切换生硬」的来源。在途真图继续放行（cast 未变）。 */
+        slotL.setAttribute('data-st', 'off');
+        slotR.setAttribute('data-st', 'off');
       }
       line.classList.remove('mem-in');
       void line.offsetWidth; /* 强制重排：重放淡入 */
@@ -1205,149 +1426,20 @@
     D.acts.forEach(function (a) { walk(a.steps, a.id); });
     return SHARD_ACT;
   }
-  /* ---------- 手札 · 瓷片全屏查看器（2026-11-01） ----------
-   * 手札上的瓷片只有指甲盖大：点开 → 覆盖式弹层，可拖动旋转 / 放大 / 切俯仰 / 看内壁。
-   * 3D 语义全部由 2D 精灵承担（lat-long 12yaw×3pitch 由 spin3d 驱动），
-   * 不引入 WebGL、不发任何外部请求（小工具沙箱红线）。
-   * 退出三条路：✕ / 点遮罩 / Esc，退出后手札滚动位置不变。 */
+  /* ---------- 手札 · 瓷片查看器（薄壳） ----------
+   * 实现在 js/viewer.js（独立模块，2026-11-02 拆出）：查看器与手札主流程没有共享状态，
+   * 绑在 1900 行的 app.js 里只会让两边改动的冲突面无限大。
+   * 这里只负责把「已拾得清单」喂进去 —— 只有 app.js 知道存档。
+   * viewer.js 放在 index.html 末尾加载，点击时必然已就绪；万一没有则静默降级（不白屏）。
+   */
   function openShardViewer(id) {
-    var key = String(id);
-    var sh = D.shards[key] || {};
-    if (sfx) { sfx('tap'); }
-
-    var ov = el('div', 'shv');
-    var mask = el('div', 'shv-mask');
-    var sheet = el('div', 'shv-sheet');
-    ov.appendChild(mask);
-    ov.appendChild(sheet);
-
-    var head = el('div', 'shv-head');
-    var nm = el('div', 'shv-name', '瓷片 · ' + (sh.name || key));
-    if (sh.prov) { nm.appendChild(el('span', 'shv-prov', sh.prov)); }
-    head.appendChild(nm);
-    var x = el('button', 'shv-x', '✕');
-    x.setAttribute('aria-label', '返回手札');
-    x.addEventListener('click', close);
-    head.appendChild(x);
-    sheet.appendChild(head);
-
-    var stage = el('div', 'shv-stage');
-    stage.setAttribute('data-mode', 'rot');
-    sheet.appendChild(stage);
-
-    var hud = el('div', 'shv-hud');
-    var hudView = el('span', 'shv-hud-i', '视角 —');
-    var hudZoom = el('span', 'shv-hud-i', '1.0×');
-    var hudMode = el('span', 'shv-hud-i', '拖动旋转');
-    hud.appendChild(hudView); hud.appendChild(hudZoom); hud.appendChild(hudMode);
-    sheet.appendChild(hud);
-
-    var bar = el('div', 'shv-bar');
-    function mk(label, fn, extra) {
-      var b = el('button', 'shv-b' + (extra ? ' ' + extra : ''), label);
-      b.addEventListener('click', function (e) {
-        e.stopPropagation();
-        if (sfx) { sfx('tap'); }
-        fn(b);
-        sync();
-      });
-      bar.appendChild(b);
-      return b;
+    if (!window.TQViewer) { return; }
+    var list = [];
+    for (var i = 1; i <= 16; i += 1) {
+      if (save && save.shards && save.shards[String(i)] && D.shards[String(i)]) { list.push(i); }
     }
-    var bTop = mk('俯视', function () { cmd({ pitchAbs: pmax() }); });
-    var bFlat = mk('平视', function () { cmd({ pitchAbs: 0 }); });
-    var bLow = mk('仰视', function () { cmd({ pitchAbs: -pmax() }); });
-    var bIn = mk('放大', function () { cmd({ zoom: zoomNow() * 1.5 }); });
-    var bOut = mk('缩小', function () { cmd({ zoom: zoomNow() / 1.5 }); });
-    var bInner = mk('内壁', function () { toggleInner(); }, 'shv-b-wide');
-    var bAuto = mk('自动旋转', function () { cmd({ auto: !autoNow() }); });
-    var bReset = mk('复位', function () { cmd({ reset: true }); });
-    sheet.appendChild(bar);
-
-    var tip = el('div', 'shv-tip', '拖动旋转 · 双指或双击放大 · 点「内壁」看釉下笔触');
-    sheet.appendChild(tip);
-    if (sh.text) { sheet.appendChild(el('div', 'shv-quote', sh.text)); }
-    if (sh.source) { sheet.appendChild(el('div', 'shv-src', '——' + sh.source)); }
-
-    function st() { return (stage && stage.__tq) ? stage.__tq() : null; }
-    function pmax() { var s = st(); return s ? s.pitchMax : 45; }
-    function zoomNow() { var s = st(); return s ? s.zoom : 1; }
-    function autoNow() { var s = st(); return !!(s && s.auto); }
-    function cmd(c) { if (stage && stage.__cmd) { stage.__cmd(c); } }
-
-    var onInner = false;
-    function toggleInner() {
-      if (!window.F) { return; }
-      onInner = !onInner;
-      if (onInner) {
-        /* 换掉旋转实例时必须清掉旧钩子，否则 HUD 还在读上一个实例的 yaw/zoom */
-        try { delete stage.__tq; delete stage.__cmd; } catch (e0) { stage.__tq = null; stage.__cmd = null; }
-        stage.setAttribute('data-mode', 'inner');
-        F.shardInner(stage, key);
-        bInner.textContent = '旋转';
-        bInner.setAttribute('data-on', '1');
-        tip.textContent = '静态内壁 · 双指缩放 / 拖动平移 · 点「旋转」换角度';
-      } else {
-        stage.setAttribute('data-mode', 'rot');
-        F.spin3d(stage, key);
-        bInner.textContent = '内壁';
-        bInner.removeAttribute('data-on');
-        tip.textContent = '拖动旋转 · 双指或双击放大 · 点「内壁」看釉下笔触';
-      }
-    }
-
-    var HUD_PITCH = ['俯视', '平视', '仰视'];
-    function sync() {
-      if (!ov.parentNode) { return; }
-      if (!st()) {
-        hudView.textContent = '静态内壁';
-        hudZoom.textContent = '双指缩放';
-        hudMode.textContent = onInner ? '内壁细看' : '加载中';
-        return;
-      }
-      var s = st();
-      var total = s.cols || 12;
-      var pName = (s.rows === 3) ? (HUD_PITCH[Math.max(0, Math.min(2, s.pitchIdx))] || '平视') : '';
-      hudView.textContent = '视角 ' + (s.yawIdx + 1) + '/' + total + (pName ? ' · ' + pName : '');
-      hudZoom.textContent = s.zoom.toFixed(1) + '×';
-      hudMode.textContent = s.auto ? '自动旋转中' : '拖动旋转';
-      bAuto.setAttribute('data-on', s.auto ? '1' : '0');
-      bTop.setAttribute('data-on', s.pitchIdx === 0 ? '1' : '0');
-      bFlat.setAttribute('data-on', s.pitchIdx === 1 ? '1' : '0');
-      bLow.setAttribute('data-on', s.pitchIdx === 2 ? '1' : '0');
-      if (s.zoom <= 1.001) { bOut.setAttribute('data-off', '1'); } else { bOut.removeAttribute('data-off'); }
-    }
-    var hudTimer = setInterval(sync, 200);
-
-    function close() {
-      if (hudTimer) { clearInterval(hudTimer); hudTimer = 0; }
-      document.removeEventListener('keydown', escHandler);
-      if (ov.parentNode) { ov.parentNode.removeChild(ov); }
-      document.body.classList.remove('shv-open');
-    }
-    function escHandler(e) {
-      var k = e.key || e.keyCode;
-      if (k === 'Escape' || k === 'Esc' || k === 27) { close(); }
-    }
-    mask.addEventListener('click', close);
-    document.addEventListener('keydown', escHandler);
-
-    document.body.appendChild(ov);
-    document.body.classList.add('shv-open');
-    if (window.F) { F.spin3d(stage, key); }
-    /* 开场转到「内壁朝外」那一档并停在静止态：默认 yaw=0 正对外壁只见纯釉 */
-    var openYaw = (window.TQA && TQA.INNER_YAW && TQA.INNER_YAW[id]) || 180;
-    setTimeout(function () {
-      if (!stage.isConnected) { return; }
-      cmd({ yawAbs: openYaw, auto: false });
-      /* 默认落在「内壁」档：旋转帧只有 160px/格，铺满必糊；
-       * 内壁静态帧是 464px 级别的整张画，才是「看细节」的那一层。
-       * 想转视角点「回到旋转」即可，两种状态随时互切。 */
-      if (!onInner) { toggleInner(); }
-      sync();
-    }, 30);
-    setTimeout(sync, 60);
-    setTimeout(sync, 500);
+    if (!list.length) { list = [Number(id)]; }
+    window.TQViewer.open({ id: Number(id), list: list, shards: D.shards, sfx: sfx });
   }
 
   function appendMemoCards(host, sid) {
@@ -1374,49 +1466,21 @@
     });
   }
 
-  /* ---------- 玉津园 · 投壶（终幕）：对白走对话框链，投壶占台，结果回对话框 ---------- */
+  /* ---------- 玉津园 · 投壶（终幕）：整局都在台上 ----------
+   * 2026-11-02 起，投壶不再"对话框里报结果、台上只投两矢"：
+   *   群臣四人各二矢 → 礼官两矢 → 官家压轴两矢 → 结算，全部在 minigame 的台上演完，
+   *   台词走画内提示条（同演示页：一句台词与一矢进程交替推进）。
+   * 这里只做三件事：注入台词表、占台、收尾发金矢。
+   * ★台词表用 cfg.story 注入（幂等，只注一次）——D.iv.touhu 与 D.touhu 在 data.js 里同级，
+   *   字面量内没法互相引用，故在运行时挂上，避免把台词抄进 minigame.js。 */
   function runTouhu(main, done) {
-    var cfg = D.touhu;
-    var q = [];
-    // 群臣轮番（各自两矢，命中数运行时随机，一卡带过）
-    cfg.ministers.forEach(function (mst) {
-      var mh = (Math.random() < 0.75 ? 1 : 0) + (Math.random() < 0.55 ? 1 : 0); // 加权 0–2 矢
-      q.push({ sp: mst.speaker, t: mst.line + cfg.minResult[mh], slot: mst.slot });
-    });
-    q.push({ sp: '司正', t: '礼官请矢——两矢，中者为胜。' });
-    (function playQ() {
-      if (q.length) {
-        var it = q.shift();
-        VNC.dockBox(it.sp, it.t, playQ, it.slot);
-        return;
-      }
-      // 玩家两矢（回退版 · 拉弓式拖拽投壶）：落空也推进，计命中数；占台演出
-      var ivWrap = F.iv(main, D.iv.touhu, function (hits) {
-        playRong(hits);
-      }, null);
-      VNC.occupy(ivWrap);
-    })();
-    function playRong(hits) {
-      // 压轴：官家对投（两矢各五成命中，运行时随机——与玩家 hits 比较）
-      var q2 = [{ sp: '官家', t: cfg.rongIntro, slot: 't' }]; /* 压轴＝投壶执矢档 */
-      var rongHits = 0;
-      for (var r = 0; r < 2; r++) {
-        var rh = Math.random() < 0.5;
-        if (rh) { rongHits += 1; }
-        q2.push({ sp: '', t: cfg.rongThrow[rh ? 'hit' : 'miss'][r] });
-      }
-      var verdict = hits > rongHits ? cfg.verdictWin : (hits === rongHits ? cfg.verdictDraw : cfg.verdictLose);
-      q2.push({ sp: '园中', t: verdict });
-      (function play2() {
-        if (q2.length) {
-          var it2 = q2.shift();
-          VNC.dockBox(it2.sp, it2.t, play2, it2.slot);
-          return;
-        }
-        awardDeco('jinzhi', '金矢', main); // 胜负零惩罚，参与即纪念
-        done();
-      })();
-    }
+    var ivc = D.iv.touhu;
+    if (!ivc.story) { ivc.story = D.touhu; }
+    var ivWrap = F.iv(main, ivc, function () {
+      awardDeco('jinzhi', '金矢', main); // 胜负零惩罚，参与即纪念
+      done();
+    }, null);
+    VNC.occupy(ivWrap);
   }
 
   /* ---------- 关注作者（官方 §3.15：9.51+，无需白名单；API 缺失整组不渲染） ----------
@@ -1493,16 +1557,25 @@
     var inner = el('div', 'ending-wrap');
     inner.appendChild(el('div', 'ending-title', E.title));
     var svgBox = el('div', 'ending-vessel');
-    svgBox.innerHTML = '<svg viewBox="0 0 220 320">'
-      + '<defs><radialGradient id="eGlow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#E9C98F" stop-opacity=".4"/><stop offset="1" stop-color="#E9C98F" stop-opacity="0"/></radialGradient>'
-      + '<linearGradient id="eGlz" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8CAAA6"/><stop offset=".3" stop-color="#AFC7C1"/><stop offset=".6" stop-color="#9DB9B3"/><stop offset="1" stop-color="#77948F"/></linearGradient></defs>'
-      + '<circle cx="110" cy="160" r="120" fill="url(#eGlow)"/>'
-      + '<path d="M92 42 L91 108 Q90 116 78 120 L54 126 Q26 138 24 190 L24 222 Q24 272 46 300 Q58 314 74 318 L86 321 L134 321 L146 318 Q162 314 174 300 Q196 272 196 222 L196 190 Q194 138 166 126 L142 120 Q130 116 129 108 L128 42 Z" fill="url(#eGlz)"/>'
-      + '<rect x="88" y="30" width="44" height="12" rx="3" fill="#B98F4E"/>'
-      + '<ellipse cx="110" cy="35" rx="17" ry="4" fill="#2E4240"/>'
-      + '<rect x="82" y="321" width="56" height="12" fill="#8A6B4A"/>'
-      + '<ellipse cx="96" cy="200" rx="9" ry="46" fill="#F4F8F4" opacity=".35" transform="rotate(-8 96 200)"/>'
-      + '</svg>';
+    if (window.F) {
+      /* 终幕合瓮：用 3D 纸槌瓶（vessel-LL 多向图集）替代 2D 矢量瓶 ——
+       * 贴合「合瓮」这一动作，且给出可拖动 / 自转的实体感。
+       * 不做合瓷动画，仅以 3D 实瓶作为合瓮完成后的「成品」呈现。 */
+      var v3d = el('div', 'ending-vessel-3d');
+      svgBox.appendChild(v3d);
+      F.spin3d(v3d, 'vessel');
+    } else {
+      svgBox.innerHTML = '<svg viewBox="0 0 220 320">'
+        + '<defs><radialGradient id="eGlow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#E9C98F" stop-opacity=".4"/><stop offset="1" stop-color="#E9C98F" stop-opacity="0"/></radialGradient>'
+        + '<linearGradient id="eGlz" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8CAAA6"/><stop offset=".3" stop-color="#AFC7C1"/><stop offset=".6" stop-color="#9DB9B3"/><stop offset="1" stop-color="#77948F"/></linearGradient></defs>'
+        + '<circle cx="110" cy="160" r="120" fill="url(#eGlow)"/>'
+        + '<path d="M92 42 L91 108 Q90 116 78 120 L54 126 Q26 138 24 190 L24 222 Q24 272 46 300 Q58 314 74 318 L86 321 L134 321 L146 318 Q162 314 174 300 Q196 272 196 222 L196 190 Q194 138 166 126 L142 120 Q130 116 129 108 L128 42 Z" fill="url(#eGlz)"/>'
+        + '<rect x="88" y="30" width="44" height="12" rx="3" fill="#B98F4E"/>'
+        + '<ellipse cx="110" cy="35" rx="17" ry="4" fill="#2E4240"/>'
+        + '<rect x="82" y="321" width="56" height="12" fill="#8A6B4A"/>'
+        + '<ellipse cx="96" cy="200" rx="9" ry="46" fill="#F4F8F4" opacity=".35" transform="rotate(-8 96 200)"/>'
+        + '</svg>';
+    }
     wrap.appendChild(svgBox);
     E.lines.forEach(function (t) { inner.appendChild(el('div', 'memory-line', t)); });
     if (E.roleLine && save.role && E.roleLine[save.role]) {
@@ -1659,9 +1732,55 @@
   }
 
   /* 现行网格版（手札主屏保底路径 = 今日版面，s8_scroll 未就位时渲染；视觉零变化） */
+  /* ---------- 合瓷归位图（手札拼合进度盘） ----------
+   * 瓶形轮廓 = 合瓮的「目标态」；16 枚碎片按位置标在瓶身上，
+   * 已拾得的发光实填、未拾得的虚线幽灵；瓶内按已归位比例从底填起「水位」。
+   * 与「位置图」区别：位置图标的是「在哪捡」，归位图标的是「拼回瓶上第几片」——
+   * 直接对应终幕「合瓮」这一动作。 */
+  function buildMergerMap() {
+    var got = 0, i;
+    for (i = 1; i <= 16; i++) { if (save && save.shards && save.shards[String(i)]) { got += 1; } }
+    var BOTTLE = 'M92 42 L91 108 Q90 116 78 120 L54 126 Q26 138 24 190 L24 222 '
+      + 'Q24 272 46 300 Q58 314 74 318 L86 321 L134 321 L146 318 Q162 314 174 300 '
+      + 'Q196 272 196 222 L196 190 Q194 138 166 126 L142 120 Q130 116 129 108 L128 42 Z';
+    var svg = '<svg viewBox="0 0 220 320" class="merger-svg" aria-label="合瓷归位图，已归位 ' + got + ' 枚">'
+      + '<defs><linearGradient id="mMlz" x1="0" y1="0" x2="0" y2="1">'
+      + '<stop offset="0" stop-color="#8CAAA6"/><stop offset=".5" stop-color="#AFC7C1"/>'
+      + '<stop offset="1" stop-color="#77948F"/></linearGradient>'
+      + '<clipPath id="mClip"><path d="' + BOTTLE + '"/></clipPath></defs>';
+    svg += '<path d="' + BOTTLE + '" fill="none" stroke="rgba(94,140,138,.5)" stroke-width="2"/>';
+    /* 归位水位：已拾得比例从瓶底填起 */
+    var lvl = got / 16, top = 321 - 300 * lvl;
+    if (lvl > 0) {
+      svg += '<g clip-path="url(#mClip)"><rect x="20" y="' + top.toFixed(1)
+        + '" width="180" height="' + (321 - top).toFixed(1) + '" fill="url(#mMlz)" opacity=".5"/></g>';
+    }
+    /* 16 枚碎片归位点（瓶身 4×4 散布） */
+    var pos = [[65,150],[95,150],[125,150],[155,150],[65,200],[95,200],[125,200],[155,200],
+              [65,250],[95,250],[125,250],[155,250],[65,295],[95,295],[125,295],[155,295]];
+    for (i = 0; i < 16; i++) {
+      var on = save && save.shards && save.shards[String(i + 1)];
+      svg += '<circle cx="' + pos[i][0] + '" cy="' + pos[i][1] + '" r="9" '
+        + (on ? 'fill="#E4EFEB" stroke="#2E5E58" stroke-width="2"'
+              : 'fill="rgba(255,255,255,.22)" stroke="rgba(94,140,138,.6)" stroke-width="1.5" stroke-dasharray="3 3"')
+        + '/>';
+      svg += '<text x="' + pos[i][0] + '" y="' + (pos[i][1] + 3.2).toFixed(1)
+        + '" text-anchor="middle" font-size="9" '
+        + 'fill="' + (on ? '#2E5E58' : 'rgba(46,59,56,.5)') + '">' + (i + 1) + '</text>';
+    }
+    svg += '</svg>';
+    var wrap = el('div', 'merger-map');
+    var box = el('div', 'merger-svgbox');
+    box.innerHTML = svg;
+    wrap.appendChild(box);
+    wrap.appendChild(el('div', 'merger-cap', '合瓮归位图 · 已归位 ' + got + ' / 16'));
+    return wrap;
+  }
+
   function renderMemoGridMain(main, notice, count, cur, canContinue) {
     main.appendChild(el('div', 'memo-head', D.memoCopy.title));
     main.appendChild(el('div', 'memo-sub', notice || D.memoCopy.sub));
+    main.appendChild(buildMergerMap());
     var grid = el('div', 'memo-grid');
     var detail = el('div', 'shiliao shard-detail');
     function showDetail(key) {
@@ -1706,6 +1825,7 @@
       var key = String(id);
       var got = save && save.shards && save.shards[key];
       var cell = el('div', 'memo-cell' + (got ? ' got' : ''));
+      cell.setAttribute('data-sid', key); /* 供验收/调试脚本精确定位（不影响样式与交互） */
       if (got) {
         cell.innerHTML = F.FRACTURE; /* 已拾得：瓷片剪影（复刻验稿页 §6） */
       } else {
@@ -1856,6 +1976,7 @@
       var key = String(id);
       var got = save && save.shards && save.shards[key];
       var cell = el('div', 'memo-cell' + (got ? ' got' : ''));
+      cell.setAttribute('data-sid', key); /* 供验收/调试脚本精确定位（不影响样式与交互） */
       if (got) { F.shardStill(cell, key); } else { cell.textContent = String(id); }
       if (got && D.shards[key]) {
         cell.setAttribute('role', 'button');
@@ -2052,6 +2173,12 @@
 
   /* ---------- 启动：先读档，再走 S9 加载页 ---------- */
   S.loadGame(function (obj) {
+    /* 排障短入口（2026-11-02）：`index.html?assets=1` 直接进素材自检页。
+     * 手机上不必手输长地址；实机出问题时截一张自检页即可定位是资源还是渲染层。 */
+    if (/[?&]assets=1/.test(location.search)) {
+      location.replace('./assets-check.html');
+      return;
+    }
     if (obj && obj.v === 1 && obj.role) {
       save = obj; hasSave = true;
       if (!save.choices) { save.choices = {}; }
@@ -2082,6 +2209,18 @@
   global.TQApp = {
     memo: function () { showMemo(false); },
     memoOverlay: function () { showMemoOverlay(); },
-    viewer: openShardViewer
+    viewer: openShardViewer,
+    /* 终幕验收钩子（只读入口，便于 headless 直达合瓮结算画面，无需玩到最后一幕）。
+     * 若存档未就绪则就地构造一个最小全量档，保证 showEnding 不报错。 */
+    ending: function () {
+      if (!save) {
+        try { save = JSON.parse(localStorage.getItem('tianqing_save_v1')) || null; } catch (e) { save = null; }
+      }
+      if (!save) { save = S.newSave('nv'); }
+      if (!save.memories) { save.memories = {}; }
+      if (!save.deco) { save.deco = {}; }
+      if (!save.choices) { save.choices = {}; }
+      showEnding();
+    }
   };
 })(window);

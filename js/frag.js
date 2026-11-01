@@ -257,8 +257,15 @@
       mount.innerHTML = '';
       var cv = h('canvas', 'shard-ll');
       var d = dprOf();
-      cv.width = Math.round(img.width * d / 2);   /* 512 源 → 半尺寸 backing，够清且省内存 */
-      cv.height = Math.round(img.height * d / 2);
+      /* ★ 清晰度修复（2026-11-02）：旧 backing = img.width*d/2 ≈146px 且固定，
+       *   zoom 只是把这块 146px 拉伸到 ~320px 显示 ⇒ 放大永远只有 ~146px 有效像素（糊）。
+       *   现 backing 一次开到「显示区尺寸 × dpr」（z=1 满分辨率）。draw() 仍用
+       *   cv.width*zoom 作目标矩形 —— dest 超出 backing 即被画布裁切，等价于「放大看局部」，
+       *   而源图始终按真实分辨率绘制 ⇒ 任意倍率都见真实像素，不再凭空拉伸。
+       *   配合 1024px 高分辨率内壁帧（旧 292px），放大细节提升约 3.5×。 */
+      var dispW = mount.clientWidth || 320, dispH = mount.clientHeight || 420;
+      cv.width = Math.round(dispW * d);
+      cv.height = Math.round(dispH * d);
       cv.style.touchAction = 'none';
       cv.setAttribute('role', 'img');
       cv.setAttribute('aria-label', '瓷片内壁（静态·可缩放）');
@@ -267,17 +274,20 @@
         '内壁 ' + Math.round((ent.innerRatio || 0) * 100) + '%');
       mount.appendChild(badge);
       var ctx = cv.getContext('2d');
+      if ('imageSmoothingQuality' in ctx) { ctx.imageSmoothingQuality = 'high'; }
       var zoom = 1, panX = 0, panY = 0;
+      /* 正方形源按 contain 居中（不拉伸）：以较短边为缩放基准，pan 夹紧到画布内 */
+      function scNow() { return Math.min(cv.width, cv.height) * zoom; }
       function clampPan() {
-        var maxX = cv.width * (zoom - 1) / 2, maxY = cv.height * (zoom - 1) / 2;
-        panX = Math.max(-maxX, Math.min(maxX, panX));
-        panY = Math.max(-maxY, Math.min(maxY, panY));
+        var w = scNow();
+        panX = Math.max(-(cv.width - w) / 2, Math.min((cv.width - w) / 2, panX));
+        panY = Math.max(-(cv.height - w) / 2, Math.min((cv.height - w) / 2, panY));
       }
       function draw() {
         ctx.clearRect(0, 0, cv.width, cv.height);
-        var w = cv.width * zoom, hgt = cv.height * zoom;
+        var w = scNow();
         ctx.drawImage(img, 0, 0, img.width, img.height,
-          (cv.width - w) / 2 + panX, (cv.height - hgt) / 2 + panY, w, hgt);
+          (cv.width - w) / 2 + panX, (cv.height - w) / 2 + panY, w, w);
       }
       draw();
       /* 拖动平移 + 双指缩放 + 双击切换 1×/2× */
@@ -448,6 +458,7 @@
       cv.tabIndex = 0;
       mount.appendChild(cv);
       var ctx = cv.getContext('2d');
+      if ('imageSmoothingQuality' in ctx) { ctx.imageSmoothingQuality = 'high'; }
       var YAW = ent.yaw, PIT = ent.pitch, COLS = ent.cols || YAW, ROWS = ent.rows || PIT;
       var anchor = ent.anchor || { yaw: 0, pitch: Math.floor(PIT / 2) };
       /* 连续角度态（度）：yaw∈[0,360)、pitch∈[-pitchMax,+pitchMax] */
@@ -1056,6 +1067,9 @@
       global.addEventListener('orientationchange', onResizeIv);
     }
     enterStep();
+    /* 开发/QA 用具：直接把当前拍判过（截"第 N 拍的画面"用；玩法本身不走这里）。
+       只影响这一份 wrap，不可达玩家路径。 */
+    wrap._tqForce = function () { if (!over) { finishStep(false); } };
     return wrap;
   };
 
