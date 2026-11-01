@@ -111,6 +111,14 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .load .lt .m{font-size:34px;font-weight:500;letter-spacing:8px;color:var(--yue)}
 .load .lt .s{font-size:14px;color:var(--yue);opacity:.85;margin-top:10px;letter-spacing:3px}
 .load .lt .btn{width:200px;margin:26px auto 0;background:transparent;border:1px solid var(--yue);color:var(--yue);border-radius:22px}
+/* 素材加载：真进度条 + 失败可见（11-02）。失败态是**可点的**，点一下重试。 */
+.load .ld-bar{width:200px;height:2px;margin:20px auto 0;background:rgba(239,245,243,.16);border-radius:2px;overflow:hidden}
+.load .ld-bar i{display:block;height:100%;width:0;background:var(--yue);opacity:.85;transition:width .3s ease}
+.load .ld-note{margin-top:9px;font-size:12px;letter-spacing:1.5px;color:var(--yue);opacity:.6;min-height:17px}
+.load .ld-note.err{opacity:.95;color:#E9C083;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.load .ld-diag{display:inline-block;margin-top:7px;font-size:11px;letter-spacing:1px;color:var(--yue);opacity:.5;
+  text-decoration:underline;text-underline-offset:3px}
+.load .lt .btn[disabled]{opacity:.42}
 .credits-btn{position:absolute;left:calc(14px + var(--tq-left-inset));top:calc(10px + var(--tq-top-inset));bottom:auto;z-index:6;font-size:12px;letter-spacing:2px;color:var(--muted);background:var(--yue);border:1px solid var(--qing);border-radius:12px;padding:5px 12px;opacity:.88}
 .credits-btn:active{transform:translateY(1px)}
 .load .credits-btn{color:rgba(239,245,243,.8);background:rgba(239,245,243,.07);border-color:rgba(239,245,243,.4);
@@ -562,7 +570,9 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 /* ===== S8 手札长卷版（s8_scroll 就位后激活；默认回退现行网格版，零变化） ===== */
 .memo-s8{position:relative;display:flex;flex-direction:column}
 .memo-s8 .s8-scroll{position:relative;flex:1;min-height:220px;margin:6px 0;background:linear-gradient(#F7F3E6,#F2EDDC);border:1px solid var(--qing);border-radius:8px;overflow:hidden}
-.memo-s8 .s8-bg{position:absolute;inset:0;background-size:contain;background-repeat:no-repeat;background-position:center;opacity:.92}
+/* ★2026-11-02：`inset:0` 是 Chrome 87+ 语法，宿主 WebView（Chrome 61）不认 ⇒ 绝对定位元素
+ * 四边全 auto、宽高塌成 0，整幅近看图不显示。改为老写法 left/right/top/bottom。 */
+.memo-s8 .s8-bg{position:absolute;left:0;right:0;top:0;bottom:0;background-size:contain;background-repeat:no-repeat;background-position:center;opacity:.92}
 .memo-s8 .s8-rod{position:absolute;left:6px;right:6px;height:12px;background:linear-gradient(#3E4E4B,#232D2B);border-radius:6px;z-index:3;pointer-events:none}
 .memo-s8 .s8-rod-top{top:5px}.memo-s8 .s8-rod-bot{bottom:5px}
 .memo-s8 .s8-jian{position:absolute;top:8px;right:8px;width:22px;height:84px;background:var(--paper);border:1px solid var(--qing);font-family:"KaiTi","STKaiti",serif;font-size:13px;letter-spacing:4px;color:var(--deep);display:flex;align-items:center;justify-content:center;z-index:4;pointer-events:none;writing-mode:vertical-rl}
@@ -571,7 +581,7 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .memo-s8 .s8-slot{position:absolute;width:28px;height:28px;border:1.5px dashed #C4BCA4;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:9px;color:#B0A88C;z-index:2;pointer-events:none}
 .memo-s8 .s8-slot.got{border-style:solid;border-color:#B08D46;color:#B08D46;font-weight:bold}
 .memo-s8 .s8-slot.tl{left:6px;top:6px}.memo-s8 .s8-slot.tr{right:6px;top:6px}.memo-s8 .s8-slot.bl{left:6px;bottom:6px}.memo-s8 .s8-slot.br{right:6px;bottom:6px}
-.memo-s8 .s8-stage{position:absolute;inset:0}
+.memo-s8 .s8-stage{position:absolute;left:0;right:0;top:0;bottom:0}
 .memo-s8 .s8-title{position:absolute;left:0;right:0;top:4px;text-align:center;font-family:"KaiTi","STKaiti",serif;font-size:16px;letter-spacing:6px;color:var(--deep);z-index:5;pointer-events:none}
 .memo-s8 .s8-count{position:absolute;left:0;right:0;bottom:4px;text-align:center;font-size:12px;color:#7A756A;z-index:5;pointer-events:none}
 .memo-s8 .s8-node{position:absolute;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;color:#B8B09A;cursor:default;z-index:6}
