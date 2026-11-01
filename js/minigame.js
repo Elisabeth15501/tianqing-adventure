@@ -118,10 +118,98 @@
   function guardDown(st, beat) { st._downBeat = beat; }
   function guardUp(st, beat) { var ok = st._downBeat === beat; st._downBeat = -1; return ok; }
 
-  function playTang(cv, hooks) {
-    var st = { beat: 0, tier: 0, pressing: false, prT0: 0, pressN: 0, passes: 0, lastY: 0, dir: 0,
-      pieces: [{ x0: SLAB.x0, x1: SLAB.x1 }], cutN: 0, dragging: false, sx: 0, sy: 0, ex: 0, ey: 0, dev: 0, endReach: false };
+  /* ---------- 场内提示条（各小节共用） ----------
+     左一句"现在做什么"，右一句"做到几了"。画在画布里，因为 `.iv-hint` 在舞台下方，
+     横屏时离画面两百多像素，第一次玩的人不会低头看。 */
+  function hudBar(text, count, tone) {
+    var tc = tone === 'warn' ? '#8A5A3A' : (tone === 'ok' ? '#3F6B58' : '#3A3A34');
+    return '<g id="hud" pointer-events="none">' +
+      '<rect x="14" y="178" width="272" height="24" rx="7" fill="rgba(255,253,246,.92)" stroke="#D8CFBA" stroke-width="1"/>' +
+      '<text x="24" y="194" font-size="9.5" fill="' + tc + '">' + text + '</text>' +
+      (count ? '<text x="276" y="194" font-size="9.5" text-anchor="end" fill="#3F6B58">' + count + '</text>' : '') +
+      '</g>';
+  }
+
+  /* ---------- 过渡对话框（所有小游戏收尾共用） ----------
+     ★钉在舞台下沿：不再画在画面中间压住成品。宽度/字号都是相对量，
+       横屏（舞台更宽）、中屏、竖屏只靠 CSS 适配，不改坐标。
+     整条都可点（手机上不必瞄准按钮），点完先 close 再回调，避免重复触发。 */
+  function makeSheet(stage) {
+    var box = null, fn = null;
+    function close() {
+      if (box && box.parentNode) { box.parentNode.removeChild(box); }
+      box = null; fn = null;
+    }
+    function fire() {
+      if (!fn) { return; }
+      var f = fn; close(); f();
+    }
+    function show(o, cb) {
+      close();
+      o = o || {};
+      box = document.createElement('div');
+      box.className = 'mg-sheet';
+      var tx = document.createElement('div'); tx.className = 'mg-sheet-tx';
+      var t1 = document.createElement('div'); t1.className = 'mg-sheet-t1'; t1.textContent = o.title || '';
+      var t2 = document.createElement('div'); t2.className = 'mg-sheet-t2'; t2.textContent = o.body || '';
+      tx.appendChild(t1); tx.appendChild(t2);
+      var go = document.createElement('button'); go.className = 'mg-sheet-go'; go.type = 'button';
+      go.textContent = o.go || '继续';
+      box.appendChild(tx); box.appendChild(go);
+      box.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+      box.addEventListener('pointerup', function (e) { e.stopPropagation(); });
+      box.addEventListener('click', function (e) { e.stopPropagation(); fire(); });
+      stage.appendChild(box);
+      fn = cb || null;
+    }
+    return { show: show, close: close };
+  }
+
+  function playTang(cv, hooks, cfg, ui) {
+    var st = {
+      beat: 0, tier: 0, pressing: false, prT0: 0, pressN: 0,
+      passes: 0, edge: -1, ry: 0,
+      pieces: [{ x0: SLAB.x0, x1: SLAB.x1 }], used: [false, false], cutN: 0,
+      dragging: false, sx: 0, sy: 0, dev: 0, gi: -1, endReach: false,
+      gate: false, sent: false
+    };
     var DUR = 700;
+
+    /* ---- 场内提示条 ----
+       为什么画进画布里：`.iv-hint` 在舞台下方、字号 11，横屏时离画面两百多像素，
+       第一次玩的人根本不会低头看——「擀面不会推」「切面不知道从哪下手」多半是这个原因。
+       左边一句"现在做什么"，右边一句"做到几了"，跟着状态换。 */
+    function hud(text, count, tone) {
+      var tc = tone === 'warn' ? '#8A5A3A' : (tone === 'ok' ? '#3F6B58' : '#3A3A34');
+      return '<g id="hud" pointer-events="none">' +
+        '<rect x="14" y="178" width="272" height="24" rx="7" fill="rgba(255,253,246,.92)" stroke="#D8CFBA" stroke-width="1"/>' +
+        '<text x="24" y="194" font-size="9.5" fill="' + tc + '">' + text + '</text>' +
+        (count ? '<text x="276" y="194" font-size="9.5" text-anchor="end" fill="#3F6B58">' + count + '</text>' : '') +
+        '</g>';
+    }
+
+    /* ---- 擀面：面皮尺寸与行程端点 ---- */
+    function sheet() {
+      var t = clamp(st.passes / 3, 0, 1);
+      return {
+        w: ROLL_FROM.w + (ROLL_TO.w - ROLL_FROM.w) * t,
+        h: ROLL_FROM.h + (ROLL_TO.h - ROLL_FROM.h) * t
+      };
+    }
+    function reach() { return sheet().h / 2 + 5; }      /* 杖心能到的最远处 */
+    function topY() { return ROLL_CY - reach(); }
+    function botY() { return ROLL_CY + reach(); }
+
+    /* ---- 擀面杖：杖身 + 两只木柄 + 接触影（影画在面皮之上，压在杖下） ---- */
+    function rollerAt(y) {
+      return '<g id="roller" transform="translate(150,' + n1(y) + ')">' +
+        '<ellipse cy="4.2" rx="86" ry="4.4" fill="#7A5C2E" opacity=".2"/>' +
+        '<rect x="-84" y="-7" width="168" height="9" rx="4.5" fill="#C9B48A" stroke="#8A6E33" stroke-width="1.1"/>' +
+        '<path d="M-70 -4.4 h140" stroke="#FFFDF6" stroke-width="1.6" opacity=".45"/>' +
+        '<rect x="-92" y="-9" width="10" height="13" rx="4" fill="#A8895A" stroke="#8A6E33" stroke-width="1"/>' +
+        '<rect x="82" y="-9" width="10" height="13" rx="4" fill="#A8895A" stroke="#8A6E33" stroke-width="1"/>' +
+        '</g>';
+    }
 
     function scene() {
       if (st.beat === 0) {
@@ -135,35 +223,44 @@
           '<circle id="prarc" r="15" fill="none" stroke="#7FA9A1" stroke-width="2.8" stroke-linecap="round" ' +
           'transform="rotate(-90)" stroke-dasharray="' + n1(2 * Math.PI * 15) + '" stroke-dashoffset="' + n1(2 * Math.PI * 15) + '"/></g>' +
           '<g id="hand" opacity="0"><circle r="7" fill="rgba(214,190,158,.45)" stroke="#A8896C" stroke-width="1.5"/>' +
-          '<path d="M-3.2 0 h6.4 M0 -3.2 v6.4" stroke="#8A6A4A" stroke-width="1.3" stroke-linecap="round"/></g>';
+          '<path d="M-3.2 0 h6.4 M0 -3.2 v6.4" stroke="#8A6A4A" stroke-width="1.3" stroke-linecap="round"/></g>' +
+          hud('按住面团，等圈走满再松', st.pressN + '/3 下', st.pressN >= 3 ? 'ok' : null);
       }
       if (st.beat === 1) {
-        var t = clamp(st.passes / 3, 0, 1);
-        var w = ROLL_FROM.w + (ROLL_TO.w - ROLL_FROM.w) * t;
-        var h = ROLL_FROM.h + (ROLL_TO.h - ROLL_FROM.h) * t;
+        var S = sheet(), w = S.w, h = S.h, tp = topY(), bt = botY();
+        var ry = st.ry || tp;
         return '<ellipse cx="150" cy="150" rx="112" ry="17" fill="#DFD0AE" opacity=".7"/>' +
           '<ellipse cx="150" cy="' + ROLL_CY + '" rx="' + n1(w / 2 + 22) + '" ry="16" fill="#8A6A3A" opacity=".10"/>' +
           '<rect id="sheet" x="' + n1(150 - w / 2) + '" y="' + n1(ROLL_CY - h / 2) + '" width="' + n1(w) + '" height="' + n1(h) +
           '" rx="' + n1(h / 2) + '" fill="#F2E8D2" stroke="#C9B48A" stroke-width="1.6"/>' +
           '<path d="M' + n1(150 - w / 2 + 12) + ' ' + n1(ROLL_CY - 2) + ' h' + n1(w - 24) + '" stroke="#E6D6B4" stroke-width="1.2" opacity=".7"/>' +
-          '<g id="roller" transform="translate(0,-6)"><rect x="-84" y="-7" width="168" height="9" rx="4.5" fill="#C9B48A" stroke="#8A6E33" stroke-width="1.1"/>' +
-          '<rect x="-92" y="-9" width="10" height="13" rx="4" fill="#A8895A" stroke="#8A6E33" stroke-width="1"/>' +
-          '<rect x="82" y="-9" width="10" height="13" rx="4" fill="#A8895A" stroke="#8A6E33" stroke-width="1"/></g>';
+          /* 行程条：杖能走到哪、现在走到哪，一眼看清（放在面皮右侧，不与杖打架） */
+          '<path d="M272 ' + n1(tp) + ' V' + n1(bt) + '" stroke="#D8CFBA" stroke-width="3" stroke-linecap="round"/>' +
+          '<path d="M267 ' + n1(tp) + ' h10 M267 ' + n1(bt) + ' h10" stroke="#8FB5B0" stroke-width="1.4" opacity=".9"/>' +
+          '<circle id="rtrack" cx="272" cy="' + n1(ry) + '" r="3.8" fill="#527E79"/>' +
+          rollerAt(ry) +
+          hud(st.edge > 0 ? '推回上沿，再推下去' : '按住面皮，从上往下推到底',
+              st.passes + '/3 趟', st.passes >= 3 ? 'ok' : null);
       }
       var out = '<ellipse cx="150" cy="150" rx="118" ry="16" fill="#DFD0AE" opacity=".6"/>' + slabHTML(st.pieces);
-      out += '<text x="270" y="112" font-size="9" text-anchor="end" fill="' + (st.cutN >= 2 ? '#3F6B58' : '#527E79') + '">面 ' + st.pieces.length + ' 条</text>';
+      if (!st.gate) {   /* 完成卡会把这一行压掉，卡上已经写了"三条面" */
+        out += '<text x="268" y="112" font-size="9" text-anchor="end" fill="' + (st.cutN >= 2 ? '#3F6B58' : '#527E79') + '">面 ' + st.pieces.length + ' 条</text>';
+      }
       for (var i = 0; i < GUIDES.length; i++) {
-        if (st.cutN > i) { continue; }
+        if (st.used[i]) { continue; }                     /* ★按"这一刀切过没有"藏线，不按切了几刀 */
         out += '<path d="M' + GUIDES[i] + ' ' + (SLAB.y0 - 10) + ' v' + (SLAB.y1 - SLAB.y0 + 18) + '" stroke="#8FB5B0" stroke-width="1.2" stroke-dasharray="4 4" opacity=".7"/>' +
           '<path d="M' + (GUIDES[i] - 3) + ' ' + (SLAB.y0 - 10) + ' l6 0 M' + GUIDES[i] + ' ' + (SLAB.y0 - 10) + ' l0 5" stroke="#527E79" stroke-width="1.2" fill="none"/>';
       }
       out += '<g id="knife" opacity="0"><path d="M0 0 l0 -26" stroke="#8A8378" stroke-width="3.4" stroke-linecap="round"/>' +
         '<path d="M-2 -26 h4 l1 8 h-6 Z" fill="#B08A56" stroke="#7E5E32" stroke-width=".9"/></g>';
+      /* 收尾时不画提示条：那块位置留给 DOM 的过渡对话框（钉在舞台下沿） */
+      if (!st.gate) { out += hud('对着虚线，从上划到底', '还剩 ' + (2 - st.cutN) + ' 刀'); }
       return out;
     }
     function paint() { cv.html(scene()); }
 
     function progress() {
+      if (st.gate) { return 1; }
       if (st.beat === 0) { return st.pressN / 3; }
       if (st.beat === 1) { return st.passes / 3; }
       return st.cutN / 2;
@@ -175,35 +272,60 @@
     }
 
     function down(p) {
+      if (st.gate) { return; }                       /* 收尾态：交给底部的过渡对话框，画布不再接手势 */
       guardDown(st, st.beat);
       if (st.beat === 0) {
         st.pressing = true; st.prT0 = now();
         var hd = cv.q('#hand'); if (hd) { hd.setAttribute('transform', 'translate(' + p.x + ',' + p.y + ')'); hd.setAttribute('opacity', '1'); }
         return;
       }
-      if (st.beat === 1) { st.dragging = true; st.lastY = p.y; return; }
-      st.dragging = true; st.sx = p.x; st.sy = p.y; st.ex = p.x; st.ey = p.y; st.dev = 0; st.endReach = false;
+      if (st.beat === 1) {
+        st.dragging = true;
+        st.ry = clamp(p.y, topY(), botY());
+        var rr = cv.q('#roller'); if (rr) { rr.setAttribute('transform', 'translate(150,' + n1(st.ry) + ')'); }
+        var rd = cv.q('#rtrack'); if (rd) { rd.setAttribute('cy', n1(st.ry)); }
+        return;
+      }
+      st.dragging = true; st.sx = p.x; st.sy = p.y; st.dev = 0; st.endReach = false;
+      /* 落刀时就把刀口锁死：之后不论往哪偏，都按这一条算，不再"就近挑一条没切过的" */
+      st.gi = -1;
+      var best = 20;
+      for (var i = 0; i < GUIDES.length; i++) {
+        if (st.used[i]) { continue; }
+        var d = Math.abs(p.x - GUIDES[i]);
+        if (d < best) { best = d; st.gi = i; }
+      }
     }
 
     function move(p) {
+      /* ★拍已换、手势还没抬手：这一串 move 属于上一拍，直接丢掉。
+         （实测症状：第三趟擀完立刻换成"切面"，手指还按着，刀就跟着手指亮在提示条上） */
+      if (st._downBeat !== st.beat) { return; }
       if (st.beat === 0) { return; }
       if (st.beat === 1) {
         if (!st.dragging) { return; }
-        var dy = p.y - st.lastY;
-        if (Math.abs(dy) > 8) {
-          if (st.dir * dy <= 0) { st.passes = Math.min(3, st.passes + 1); st.dir = dy > 0 ? 1 : -1; paint(); hooks.step(progress(), label()); }
+        st.ry = clamp(p.y, topY(), botY());
+        var rr = cv.q('#roller'); if (rr) { rr.setAttribute('transform', 'translate(150,' + n1(st.ry) + ')'); }
+        var rd = cv.q('#rtrack'); if (rd) { rd.setAttribute('cy', n1(st.ry)); }
+        /* 一趟 = 从一端真推到另一端（±9 的端点带内），不是"抖两下就算一趟" */
+        var tp = topY(), bt = botY(), band = 9;
+        var e = (Math.abs(st.ry - bt) <= band) ? 1 : ((Math.abs(st.ry - tp) <= band) ? -1 : 0);
+        if (e && e !== st.edge) {
+          if (st.edge && e === -st.edge) {
+            st.passes = Math.min(3, st.passes + 1);
+            st.edge = e;
+            paint(); hooks.step(progress(), label());
+            if (st.passes >= 3) { hooks.done(false); }
+            return;
+          }
+          st.edge = e;
         }
-        st.lastY = p.y;
         return;
       }
       var kn = cv.q('#knife');
       if (kn) { kn.setAttribute('opacity', '1'); kn.setAttribute('transform', 'translate(' + p.x + ',' + p.y + ')'); }
-      st.ex = p.x; st.ey = p.y;
-      if (p.y > SLAB.y1) { st.endReach = true; }
-      for (var i = 0; i < GUIDES.length; i++) {
-        if (st.cutN > i && Math.abs(GUIDES[i] - st.sx) < 6) { continue; }
-      }
-      st.dev = Math.max(st.dev, Math.min(Math.abs(p.x - GUIDES[0]), Math.abs(p.x - GUIDES[1])));
+      if (st.gi >= 0) { st.dev = Math.max(st.dev, Math.abs(p.x - GUIDES[st.gi])); }
+      if (p.y >= SLAB.y1 - 1) { st.endReach = true; }
     }
 
     function up(p) {
@@ -220,30 +342,35 @@
         if (st.pressN >= 3) { hooks.done(false); }
         return;
       }
-      if (st.beat === 1) { st.dragging = false; if (st.passes >= 3) { hooks.done(false); } return; }
+      if (st.beat === 1) { st.dragging = false; return; }   /* 趟数在 move 里判，抬手不再判 */
 
       st.dragging = false;
       var kn = cv.q('#knife'); if (kn) { kn.setAttribute('opacity', '0'); }
-      /* 就近锁刀口 */
-      var target = -1, best = 1e9;
-      for (var i = 0; i < GUIDES.length; i++) {
-        if (st.cutN > i) { continue; }
-        var d = Math.abs(st.sx - GUIDES[i]);
-        if (d < best) { best = d; target = i; }
-      }
-      if (target < 0) { hooks.tip('两条虚线都用过了。'); return; }
-      if (best > 16) { hooks.tip('从虚线上缘往下划——刀要落在那条竖线上。'); return; }
+      if (st.gi < 0) { hooks.tip('刀要落在一条竖虚线上——对着虚线往下划。'); return; }
       if (st.sy > SLAB.y0 + 14) { hooks.tip('落刀点要在面片上缘，别从半截起手。'); return; }
       if (!st.endReach) { hooks.tip('一刀要划到面片下缘——中途松手，面就断在半截。'); return; }
       if (st.dev > 16) { hooks.tip('切歪了——刀要直上直下。'); return; }
-      var xc = GUIDES[target], P0 = st.pieces, hit = -1;
-      for (var k = 0; k < P0.length; k++) { if (xc > P0[k].x0 + 4 && xc < P0[k].x1 - 4) { hit = k; break; } }
+      var xc = GUIDES[st.gi], P0 = st.pieces, hit = -1, k;
+      for (k = 0; k < P0.length; k++) { if (xc > P0[k].x0 + 4 && xc < P0[k].x1 - 4) { hit = k; break; } }
       if (hit < 0) { hooks.tip('这一刀落在缝里了。'); return; }
       P0.splice(hit, 1, { x0: P0[hit].x0, x1: xc }, { x0: xc, x1: P0[hit].x1 });
-      st.cutN = (st.cutN || 0) + (target === 0 && st.cutN === 0 ? 1 : 1);
-      st.cutN = Math.min(2, st.cutN);
+      st.used[st.gi] = true;
+      st.cutN = st.cutN + 1;
+      if (st.cutN >= 2) {
+        st.gate = true;
+        paint(); hooks.step(1, '已切 2 / 2 刀');
+        /* 先停一下：成品（三条面）留在画面上方，对话框贴在舞台下沿，玩家点过才交棒 */
+        ui.sheet({
+          title: (cfg && cfg.steps && cfg.steps[2] && cfg.steps[2].done) || '这一步做完了。',
+          body: (cfg && cfg.done) || '下一步。',
+          go: '继续'
+        }, function () {
+          st.gate = false;
+          hooks.done(false);
+        });
+        return;
+      }
       paint(); hooks.step(progress(), label());
-      if (st.cutN >= 2) { hooks.done(false); }
     }
 
     var raf = 0;
@@ -269,11 +396,21 @@
     }
 
     return {
-      beat: function (i) { st.beat = i; paint(); hooks.step(progress(), label()); },
+      beat: function (i) {
+        st.beat = i; st.dragging = false; st.gi = -1; st.dev = 0; st.endReach = false; st.gate = false;
+        st._downBeat = -1;                                  /* 换拍即作废上一手势的"配对码" */
+        if (i === 1) { st.edge = -1; st.ry = 0; }
+        if (i === 2) { st.used = [false, false]; st.cutN = 0; st.pieces = [{ x0: SLAB.x0, x1: SLAB.x1 }]; }
+        paint(); hooks.step(progress(), label());
+      },
       down: down, move: move, up: up,
       start: function () { st.live = true; if (!raf) { raf = requestAnimationFrame(loop); } },
       stop: function () { st.live = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } },
-      progress: progress, label: label
+      progress: progress, label: label,
+      state: function () {
+        return { beat: st.beat, passes: st.passes, ry: Math.round(st.ry), pieces: st.pieces.length,
+                 used: st.used.slice(), cutN: st.cutN, gate: st.gate };
+      }
     };
   }
 
@@ -295,8 +432,9 @@
   ];
   var P_X0 = 86, P_ADV = 13.0, P_LH = 28, P_Y0 = 104;
 
-  function playProof(cv, hooks) {
-    var lines = PROOF_BASE.slice(), bad = {}, cells = [], cellsByLine = [[], []];
+  function playProof(cv, hooks, cfg, ui) {
+    /* ---- 本局三处讹字：第一行 1 处 + 第二行 2 处（两行都得看） ---- */
+    var lines = PROOF_BASE.slice(), bad = {}, cells = [];
     (function roll() {
       var L0 = [], L1 = [], q;
       for (q = 0; q < PROOF_POOL.length; q++) { (PROOF_POOL[q].l === 0 ? L0 : L1).push(PROOF_POOL[q]); }
@@ -307,62 +445,116 @@
       for (q = 0; q < picked.length; q++) {
         var c = picked[q];
         lines[c.l] = lines[c.l].slice(0, c.i) + c.bad + lines[c.l].slice(c.i + 1);
-        (bad[c.l] = bad[c.l] || []).push(c.i);
+        (bad[c.l] = bad[c.l] || []).push({ i: c.i, note: c.n });
       }
       for (var l = 0; l < 2; l++) {
         for (var i = 0; i < 12; i++) {
-          var cell = { l: l, i: i, ch: lines[l].charAt(i), bad: (bad[l] || []).indexOf(i) >= 0,
-            x: P_X0 + i * P_ADV, y: P_Y0 + l * P_LH, marked: false };
-          cells.push(cell); cellsByLine[l].push(cell);
+          cells.push({ l: l, i: i, ch: lines[l].charAt(i),
+            x: P_X0 + (i + 0.5) * P_ADV, y: P_Y0 + l * P_LH,
+            bad: (bad[l] || []).some(function (b) { return b.i === i; }), note: null, marked: false });
+        }
+      }
+      /* 每处讹字配一句校记（点对了才出） */
+      for (var l2 = 0; l2 < 2; l2++) {
+        for (var k = 0; k < (bad[l2] || []).length; k++) {
+          var b2 = bad[l2][k];
+          for (var m = 0; m < cells.length; m++) {
+            if (cells[m].l === l2 && cells[m].i === b2.i) { cells[m].note = b2.note; }
+          }
         }
       }
     })();
 
-    var st = { beat: 0, pulled: 0, hits: 0, wrong: 0, sx: 0, sy: 0, dragging: false, patch: { x: 150, y: 96 }, placed: false };
+    /* ---- 版式（★2026-11-02 重排：这一段是"UI 元素重叠"的根因） ----
+       旧版：纸 72..190（118 高）＋ 说明文字基线 y=200 ＋ 补纸 52×30 压在正文行上
+         ⇒ 说明字贴着舞台下沿被圆角切、补纸横跨正文两行。
+       新版：纸 78..174（96 高，只包住两行正文与一块空白纸脚）；
+         说明文字一律不进画布（走 .iv-hint 与「原文对照」按钮）；补阙的缺口挪到纸脚空白处。 */
+    var PAPER = { x0: 72, y0: 78, x1: 248, y1: 174 };
+    var GAP = { x: 150, y: 156 };                 /* 补阙缺口（纸脚空白，不压字） */
+    var PATCH_K = .82;                            /* 补纸多边形缩放：±23→±19，够不到第二行 */
+
+    var st = { beat: 0, pulled: 0, hits: 0, wrong: 0, sx: 0, dragging: false,
+      patch: { x: 58, y: 186 }, placed: false, src: false };
+
+    /* ---------- 补纸/缺口共用一组顶点（画缺口与画补纸都调它，形状天然一致） ---------- */
+    var PATCH_PTS = [[-23, -16], [-11, -14], [-4, -17], [6, -12], [14, -16], [21, -10], [18, -3], [23, 4],
+      [16, 8], [20, 15], [8, 13], [2, 17], [-6, 13], [-13, 16], [-19, 10], [-14, 3], [-21, -3], [-15, -9]];
+    function polyPath(cx, cy, k) {
+      var s = '', i, p;
+      for (i = 0; i < PATCH_PTS.length; i++) {
+        p = PATCH_PTS[i];
+        s += (i ? 'L' : 'M') + n1(cx + p[0] * k) + ' ' + n1(cy + p[1] * k);
+      }
+      return s + 'Z';
+    }
 
     function paper() {
-      var s = '<rect x="54" y="72" width="192" height="118" rx="3" fill="#FBF6EA" stroke="#DED7C9" stroke-width="1.2"/>';
-      s += '<path d="M54 96 h192 M54 168 h192" stroke="#EFE7D5" stroke-width=".8" opacity=".7"/>';
-      if (st.beat === 2) {
-        s += '<rect x="' + (150 - 26) + '" y="' + (96 - 15) + '" width="52" height="30" rx="2" fill="#E7DFCC" stroke="#A8926A" stroke-width="1.2"/>';
-        s += '<g id="patch"><path d="M-26 -15 h52 v30 h-52 Z" fill="#F3EBD8" stroke="#B9A67C" stroke-width="1.4"/>' +
-          '<path d="M-18 -6 h12 M-20 2 h14" stroke="#CBBE9C" stroke-width="1" opacity=".9"/></g>';
-      }
-      if (st.beat === 1) {
-        for (var i = 0; i < cells.length; i++) {
-          var c = cells[i];
-          s += '<circle class="hitarea" data-i="' + i + '" cx="' + n1(c.x) + '" cy="' + n1(c.y - 4) + '" r="7" fill="transparent"/>';
-          s += '<text class="gtxt" data-i="' + i + '" x="' + n1(c.x) + '" y="' + n1(c.y) + '" font-size="12.6" text-anchor="middle" fill="#3A3A34">' + c.ch + '</text>';
-        }
-        for (var k = 0; k < cells.length; k++) {
-          if (cells[k].marked) {
-            s += '<ellipse cx="' + n1(cells[k].x) + '" cy="' + n1(cells[k].y - 4) + '" rx="9.4" ry="11" fill="none" stroke="' +
-              (cells[k].bad ? '#B5503F' : '#9A9788') + '" stroke-width="1.6" stroke-dasharray="' + (cells[k].bad ? '0' : '3 3') + '"/>';
-          }
-        }
-      } else {
-        for (var m = 0; m < cells.length; m++) {
-          /* 补阙这一拍：缺口覆盖的那几个字不画（缺口得真是空的） */
-          if (st.beat === 2 && Math.abs(cells[m].x - 150) < 26 && Math.abs(cells[m].y - 96) < 16) { continue; }
-          s += '<text class="gtxt" x="' + n1(cells[m].x) + '" y="' + n1(cells[m].y) + '" font-size="12.6" text-anchor="middle" fill="#3A3A34">' + cells[m].ch + '</text>';
-        }
-      }
+      var s = '';
+      s += '<rect x="' + PAPER.x0 + '" y="' + PAPER.y0 + '" width="' + (PAPER.x1 - PAPER.x0) +
+        '" height="' + (PAPER.y1 - PAPER.y0) + '" rx="2" fill="#FBF6EA" stroke="#DED7C9" stroke-width="1.2"/>';
+      /* 纸面的两道纤维横线：给"残页"一点纸感，不压字 */
+      s += '<path d="M' + (PAPER.x0 + 8) + ' ' + (PAPER.y0 + 44) + ' h' + (PAPER.x1 - PAPER.x0 - 16) +
+        '" stroke="#EFE7D5" stroke-width=".8" opacity=".55"/>';
+      s += '<path d="M' + (PAPER.x0 + 8) + ' ' + (PAPER.y0 + 45.4) + ' h' + (PAPER.x1 - PAPER.x0 - 16) +
+        '" stroke="#EFE7D5" stroke-width=".8" opacity=".35"/>';
       return s;
     }
 
     function scene() {
+      var s = '', i;
       if (st.beat === 0) {
+        /* 展卷：纸从左侧抽出，卷轴跟手；拉到底停住 */
         var open = st.pulled;
-        return '<g clip-path="url(#pp)"><defs><clipPath id="pp"><rect x="54" y="70" width="192" height="122" rx="3"/></clipPath></defs>' +
-          '<rect x="54" y="70" width="192" height="122" rx="3" fill="#FBF6EA" stroke="#DED7C9" stroke-width="1.2"/>' +
-          '<g transform="translate(' + n1(-120 + 120 * open) + ',0)">' + paper() + '</g></g>' +
-          '<rect x="54" y="70" width="192" height="122" rx="3" fill="none" stroke="#A8926A" stroke-width="1.6"/>' +
-          '<g transform="translate(' + n1(60 + 180 * open) + ',0)"><rect x="-6" y="60" width="12" height="142" rx="5" fill="#C9B48A" stroke="#8A6E33" stroke-width="1.2"/>' +
-          '<rect x="-9" y="60" width="18" height="9" rx="4" fill="#A8895A"/><rect x="-9" y="193" width="18" height="9" rx="4" fill="#A8895A"/></g>' +
-          '<path d="M66 200 h' + n1(168 * open) + '" stroke="#DED7C9" stroke-width="2"/>';
+        s += '<defs><clipPath id="pp"><rect x="72" y="78" width="176" height="96" rx="2"/></clipPath></defs>';
+        s += '<g clip-path="url(#pp)"><g transform="translate(' + n1(-132 + 132 * open) + ',0)">' + paper() +
+          '<text x="' + P_X0 + '" y="' + P_Y0 + '" font-size="12.6" text-anchor="start" fill="#3A3A34"></text></g></g>';
+        s += '<rect x="72" y="78" width="176" height="96" rx="2" fill="none" stroke="#A8926A" stroke-width="1.6"/>';
+        /* 卷轴：随拉动水平移，到底停在纸的右沿 */
+        s += '<g transform="translate(' + n1(54 + 176 * open) + ',0)">' +
+          '<rect x="-6" y="70" width="12" height="112" rx="5" fill="#C9B48A" stroke="#8A6E33" stroke-width="1.2"/>' +
+          '<rect x="-9" y="66" width="18" height="9" rx="4" fill="#A8895A"/>' +
+          '<rect x="-9" y="176" width="18" height="9" rx="4" fill="#A8895A"/></g>';
+        s += '<path d="M66 188 h' + n1(168 * open) + '" stroke="#DED7C9" stroke-width="2"/>';
+        return s;
       }
-      if (st.beat === 1) { return paper() + '<text x="150" y="200" font-size="9.5" text-anchor="middle" fill="#8A8378">点出错字 · 一下一个</text>'; }
-      return paper() + '<text x="150" y="200" font-size="9.5" text-anchor="middle" fill="#8A8378">把补纸拖到缺口上</text>';
+
+      s += paper();
+      /* 残页题签：右上角一小行，不占正文 */
+      if (st.beat === 1) {
+        s += '<text x="242" y="' + (PAPER.y0 + 11) + '" font-size="7.6" text-anchor="end" fill="#B3A98E" opacity=".9">残页 · 卷一百二十一</text>';
+      }
+
+      if (st.beat === 1) {
+        /* 核字：每个字都画，讹字与正字外观完全一致 —— 位置是读出来的，不是画出来的 */
+        for (i = 0; i < cells.length; i++) {
+          var c = cells[i];
+          s += '<circle cx="' + n1(c.x) + '" cy="' + n1(c.y - 4) + '" r="7" fill="transparent"/>';
+          s += '<text x="' + n1(c.x) + '" y="' + n1(c.y + 4.4) + '" font-size="12.6" text-anchor="middle" fill="#3A3A34">' + c.ch + '</text>';
+        }
+        /* 朱圈：点对了实线朱红，点错了灰虚线圈（都不遮字：圈径 9.4/11 由字框决定） */
+        for (i = 0; i < cells.length; i++) {
+          if (!cells[i].marked) { continue; }
+          s += '<ellipse cx="' + n1(cells[i].x) + '" cy="' + n1(cells[i].y) + '" rx="7.2" ry="8.8" fill="none" stroke="' +
+            (cells[i].bad ? '#B5503F' : '#9A9788') + '" stroke-width="' + (cells[i].bad ? '1.8' : '1.4') +
+            '"' + (cells[i].bad ? '' : ' stroke-dasharray="3 3"') + '/>';
+        }
+        return s;
+      }
+
+      /* 补阙这一拍：正文照旧在（★2026-11-02 修：上一版漏画了，补阙变成"一张白纸"） */
+      for (i = 0; i < cells.length; i++) {
+        s += '<text x="' + n1(cells[i].x) + '" y="' + n1(cells[i].y + 4.4) + '" font-size="12.6" text-anchor="middle" fill="#3A3A34">' + cells[i].ch + '</text>';
+      }
+      s += '<text x="242" y="' + (PAPER.y0 + 11) + '" font-size="7.6" text-anchor="end" fill="#B3A98E" opacity=".9">残页 · 卷一百二十一</text>';
+      /* 补阙：缺口是纸脚上的一块破口（不在字上），补纸用同一组顶点 */
+      s += '<path d="' + polyPath(GAP.x, GAP.y, PATCH_K) + '" fill="#EFE7D5" stroke="#CBBE9C" stroke-width="1" opacity=".9"/>';
+      s += '<path d="' + polyPath(GAP.x, GAP.y, PATCH_K * .62) + '" fill="#F7F1E2" opacity=".65"/>';
+      s += '<g id="patch" transform="translate(' + n1(st.patch.x) + ',' + n1(st.patch.y) + ')">' +
+        '<path d="' + polyPath(0, 0, PATCH_K) + '" fill="#F3EBD8" stroke="#B9A67C" stroke-width="1.3"/>' +
+        '<path d="M-14 -5 q7 -3 13 1 M-13 4 q8 -2 15 1" fill="none" stroke="#CBBE9C" stroke-width=".9" opacity=".9"/>' +
+        '</g>';
+      return s;
     }
     function paint() {
       cv.html(scene());
@@ -382,26 +574,99 @@
       return st.placed ? '已补' : '待补';
     }
 
+    /* ---------- 「原文对照」抽屉（DOM 浮层，挂在 .iv-stage 里） ----------
+       ★只给正字、不并排残页：逐字比对就是"核字"这一拍的玩法，把残页也排上来
+         等于替玩家把比对做完了。行内 12 列均分，行断与原页一致，才对得上字位。 */
+    var btn = null, panel = null;
+    function srcRows() {
+      var h = '', l, i, ch, maxLen = 12;
+      for (l = 0; l < PROOF_BASE.length; l++) {
+        h += '<div class="iv-src-row">';
+        for (i = 0; i < maxLen; i++) {
+          ch = PROOF_BASE[l].charAt(i) || '';
+          h += '<span>' + (ch || '　') + '</span>';
+        }
+        h += '</div>';
+      }
+      return h;
+    }
+    function ensureSrc() {
+      if (btn) { return; }
+      btn = document.createElement('button');
+      btn.className = 'iv-src-btn'; btn.type = 'button'; btn.textContent = '原文对照';
+      /* ★关键定位写内联：这个抽屉的"整幅覆盖"是功能性的（同屏会替玩家比完），
+         css/app.css 一旦被别的会话整体写回丢掉 .iv-src-btn，只剩一个裸按钮会把舞台挤乱。 */
+      btn.style.cssText = 'position:absolute;right:8px;bottom:8px;z-index:6;' +
+        'font:inherit;font-size:10px;line-height:1;padding:5px 9px;border-radius:11px;' +
+        'background:rgba(255,253,246,.94);border:1px solid #E6DFCE;color:#6B6560;letter-spacing:.02em';
+      btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+      btn.addEventListener('pointerup', function (e) { e.stopPropagation(); });
+      btn.addEventListener('click', function (e) { e.stopPropagation(); toggleSrc(); });
+      cv.stage.appendChild(btn);
+
+      panel = document.createElement('div');
+      panel.className = 'iv-src';
+      panel.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;z-index:6;' +
+        'background:#F7F5EE;border-radius:11px;padding:14px 16px;display:flex;flex-direction:column;' +
+        'opacity:0;pointer-events:none;transition:opacity .16s ease;overflow:auto';
+      panel.innerHTML =
+        '<div class="iv-src-h"><b>原文对照</b><em>《旧五代史》卷一百二十一</em>' +
+          '<button class="iv-src-x" type="button">收起</button></div>' +
+        '<div class="iv-src-sub">只有正字——残页上错了哪三个字，得你自己逐字比</div>' +
+        '<div class="iv-src-tbl">' + srcRows() + '</div>' +
+        '<div class="iv-src-f">对不上字的地方，就是誊录抄错的那一处 ·（宋）薛居正等撰</div>';
+      panel.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+      panel.addEventListener('pointerup', function (e) { e.stopPropagation(); });
+      panel.querySelector('.iv-src-x').addEventListener('click', function (e) { e.stopPropagation(); toggleSrc(false); });
+      cv.stage.appendChild(panel);
+    }
+    function toggleSrc(on) {
+      if (!panel) { return; }
+      st.src = (on == null) ? !st.src : !!on;
+      panel.classList.toggle('on', st.src);
+      panel.style.opacity = st.src ? '1' : '0';                 /* 内联与类双写，防 CSS 被冲掉 */
+      panel.style.pointerEvents = st.src ? 'auto' : 'none';
+      if (btn) { btn.textContent = st.src ? '收起对照' : '原文对照'; }
+    }
+    function killSrc() {
+      if (btn && btn.parentNode) { btn.parentNode.removeChild(btn); }
+      if (panel && panel.parentNode) { panel.parentNode.removeChild(panel); }
+      btn = null; panel = null; st.src = false;
+    }
+
     function down(p) {
       guardDown(st, st.beat);
       if (st.beat === 0) { st.dragging = true; st.sx = p.x; return; }
       if (st.beat === 2) { st.dragging = true; return; }
-      /* 核字：点选 */
-      var hit = null;
-      for (var i = 0; i < cells.length; i++) {
-        if (Math.abs(p.y - (cells[i].y - 4)) <= 15 && (!hit || Math.abs(p.x - cells[i].x) < Math.abs(p.x - hit.x))) { hit = cells[i]; }
+      /* 核字：点选。纵向必须落在同一行（±15），横向取最近的字（字距 13，各 6.5 容错） */
+      if (st._done) { return; }
+      var hit = null, i2, dd, bd = 1e9;
+      for (i2 = 0; i2 < cells.length; i2++) {
+        if (Math.abs(p.y - cells[i2].y) > 15) { continue; }
+        dd = Math.abs(p.x - cells[i2].x);
+        if (dd < bd) { bd = dd; hit = cells[i2]; }
       }
-      if (!hit) { return; }
-      if (hit.marked) { return; }
+      if (!hit || hit.marked) { return; }
       hit.marked = true;
-      if (hit.bad) { st.hits++; hooks.tip('错字：「' + PROOF_BASE[hit.l].charAt(hit.i) + '」误作「' + hit.ch + '」'); }
-      else { st.wrong++; hooks.tip('无讹'); }
+      if (hit.bad) {
+        st.hits++;
+        hooks.tip('错字：「' + PROOF_BASE[hit.l].charAt(hit.i) + '」误作「' + hit.ch + '」');
+        sfx('select');
+      } else {
+        st.wrong++;
+        hooks.tip('无讹——这一字本传如此。');
+        sfx('tap');
+      }
       paint(); hooks.step(progress(), label());
-      if (st.hits >= 3 && !st._done) { st._done = true; hooks.done(false); }
+      if (st.hits >= 3 && !st._done) {
+        st._done = true;
+        /* 停 420ms 再交棒：让最后一道朱圈先被看见（这一拍不插过渡条，末尾才插） */
+        setTimeout(function () { if (cv.svg.isConnected) { hooks.done(false); } }, 420);
+      }
     }
     function move(p) {
       if (st.beat === 0 && st.dragging) {
-        st.pulled = clamp((p.x - 92) / (250 - 92), 0, 1);
+        st.pulled = clamp((p.x - 70) / (250 - 70), 0, 1);
         paint(); hooks.step(progress(), label());
         return;
       }
@@ -417,146 +682,698 @@
       }
       if (st.beat === 2) {
         st.dragging = false;
-        if (dist(st.patch, { x: 150, y: 96 }) < 20) {
-          st.placed = true; st.patch = { x: 150, y: 96 }; paint(); hooks.step(1, label()); hooks.done(false);
-        } else { hooks.tip('补纸要对上缺口。'); }
+        if (dist(st.patch, GAP) < 24) {
+          st.placed = true; st.patch = { x: GAP.x, y: GAP.y };
+          paint(); hooks.step(1, label());
+          if (ui && ui.sheet) {
+            ui.sheet({ title: '阙已补', body: (cfg && cfg.done) || '校毕。', go: '收卷' }, function () {
+              hooks.done(false);
+            });
+          } else { hooks.done(false); }
+        } else if (st.patch.y < 140) {
+          hooks.tip('离缺口还差一点——对上那道破口。');
+        }
       }
     }
 
     return {
-      beat: function (i) { st.beat = i; paint(); hooks.step(progress(), label()); },
+      beat: function (i) {
+        st.beat = i; st.dragging = false;
+        if (i === 1) { ensureSrc(); } else { toggleSrc(false); }
+        if (i === 2) { killSrc(); }
+        paint(); hooks.step(progress(), label());
+      },
       down: down, move: move, up: up,
-      start: function () {}, stop: function () {},
-      progress: progress, label: label
+      start: function () { }, stop: function () { killSrc(); },
+      progress: progress, label: label,
+      /* 只读调试口（QA/探针）：bad 是本局讹字位置，玩家路径读不到 */
+      state: function () {
+        var bd = [];
+        for (var i = 0; i < cells.length; i++) { if (cells[i].bad) { bd.push(cells[i].l + ':' + cells[i].i); } }
+        return { beat: st.beat, pulled: Math.round(st.pulled * 100), hits: st.hits, wrong: st.wrong,
+                 placed: st.placed, src: st.src, bad: bd };
+      }
     };
   }
 
   /* ============================================================
-     投壶对投：拖矢拉弓 → 抛物线 → 中或不中；与「客」轮流投，三矢定胜负
+     投壶对投（终幕 · 玉津园）—— 按演示页「投壶对投与动画」还原
+     ------------------------------------------------------------
+     两件事按演示页做到位：
+     ① 他人的每一矢都有**过程**：执矢 → 后引 → 脱手 → 沿真实弹道飞 → 落定。
+        顺序照剧情（群臣四人各二矢 → 礼官两矢 → 官家压轴两矢）；每一矢独立掷定，
+        打偏时看得见它怎么歪出去；中／不中各有当场结果，不是事后一句总结。
+     ② 玩家瞄准＝演示页那套「虚线就是这一矢真实的去向」：拖多远力道多大、
+        拖多陡弧多高；虚线末端那个小圈套进壶口环里才算进——所见即所得，不用猜。
+     降低难度的三处（都在演示页口径内，不改判定）：
+       · 舞台任意处按下即起手，不必精确按在矢上（原来要按住那支小矢）；
+       · 拖动时实时给「力/抛」读数与判定理由（力轻·力重·弧太平·弧太高），松手前就知道；
+       · 拖不够 24 单位只提示、不算一次投（不扣次数，也不误记成失手）。
+     ★一致性铁律：预览与飞行共用同一份点集（pathOf），否则"看到≠飞到"，判定就不讲理。
+     ★台词、人名单、结果句全部从 cfg.story（data.js 的 D.touhu）取，不在本文件手抄。
      ============================================================ */
-  function playTouhu(cv, hooks) {
-    var POTS = { x: 232, y: 128 };
-    var st = { beat: 0, me: 0, ai: 0, phase: 'aim', dragging: false, sx: 0, sy: 0, dx: 0, dy: 0, log: '', flight: '' };
+  function playTouhu(cv, hooks, cfg, ui) {
+    var S = cfg.story || {};
+    var POT = { x: 232, my: 106, rx: 13, ry: 6, half: 20, base: 167 };
+    var HAND = { x: 88, y: 172 };          /* 玩家执矢的手（近处） */
+    var FLOOR = 184;                       /* 未进时顺着切线落到这条地坪线 */
+    /* 判定窗口：与演示页 THROW 逐字同源（46–78 力 / 0.58–0.93 上抛），
+       只把长度单位从屏幕 px 换成画布单位（画布 300 宽）。 */
+    var TH = { powMin: 46, powMax: 78, upMin: .58, upMax: .93, full: 150, min: 24 };
+    TH.powMid = (TH.powMin + TH.powMax) / 2; TH.powHalf = (TH.powMax - TH.powMin) / 2;
+    TH.upMid = (TH.upMin + TH.upMax) / 2; TH.upHalf = (TH.upMax - TH.upMin) / 2;
 
-    function scene() {
-      var s = '';
-      s += '<path d="M0 150 h300" stroke="#D8CFBA" stroke-width="1"/>';
-      s += '<ellipse cx="150" cy="196" rx="150" ry="18" fill="#E6DECB" opacity=".55"/>';
-      /* 壶：颈细腹鼓，双耳 */
-      s += '<path d="M' + (POTS.x - 15) + ' 132 q-2 30 5 38 h20 q7 -8 5 -38 Z" fill="#A8B4AC" stroke="#5E6B64" stroke-width="1.6"/>';
-      s += '<ellipse cx="' + POTS.x + '" cy="132" rx="15" ry="5" fill="#DDE4DE" stroke="#5E6B64" stroke-width="1.4"/>';
-      s += '<ellipse cx="' + POTS.x + '" cy="132" rx="8" ry="2.6" fill="#3E4A44"/>';
-      s += '<path d="M' + (POTS.x - 13) + ' 152 q13 6 26 0" stroke="#8FA79E" stroke-width="1.2" fill="none" opacity=".8"/>';
-      s += '<path d="M' + (POTS.x - 17) + ' 138 q-6 6 0 10 M' + (POTS.x + 17) + ' 138 q6 6 0 10" fill="none" stroke="#8FA79E" stroke-width="2"/>';
-      /* 矢架：三矢，投过一支就淡一支 */
-      s += '<path d="M40 190 h48" stroke="#8A7B5E" stroke-width="2"/>';
-      for (var i = 0; i < 3; i++) {
-        s += '<g opacity="' + (i < (3 - st.me - (st.phase === 'aim' ? 1 : 0)) ? '1' : '.18') + '">' +
-          '<path d="M' + (48 + i * 12) + ' 190 l0 -34" stroke="#C9B48A" stroke-width="2.2"/>' +
-          '<path d="M' + (48 + i * 12) + ' 156 l4 6 -4 3 -4 -3 Z" fill="#8FA79E"/></g>';
+    var st = {
+      beat: 0, stepMax: Math.max(1, (cfg.steps || []).length || 2),
+      ph: 'idle', dead: false, armed: false,
+      me: 0, rong: 0, pre: 0,
+      ai: null, fig: null, arrows: [],
+      potFx: 0, potT: 0, slowT: 0, dim: 0,
+      fly: null, flash: null, aim: null,
+      cap: { sp: '', tx: '' }, tag: '',
+      drag: false, sx: 0, sy: 0, dx: 0, dy: 0,
+      skip: null
+    };
+
+    /* ---------- 定时器 / 动画循环（单一 rAF，避免三套循环各自 paint） ---------- */
+    var raf = 0, tms = [], gen = 0;
+    /* ★定时器必须自带"这一节还在不在台上"的检查：
+       整局投壶是**定时驱动**的（台词—投矢—落定—结算），玩家中途退台后，
+       残留的定时器会把 hooks.done 打进下一段剧情 —— 等于替玩家把剧情点过去了。 */
+    function after(ms, fn) {
+      var g = gen;
+      tms.push(setTimeout(function () {
+        if (g !== gen || st.dead) { return; }
+        if (!cv.svg.isConnected) { st.dead = true; clearTimers(); return; }
+        fn();
+      }, ms));
+    }
+    function clearTimers() { for (var i = 0; i < tms.length; i++) { clearTimeout(tms[i]); } tms.length = 0; gen += 1; }
+    /* ★排帧 + 兜底：rAF 在某些环境（无头/后台/省电模式）会被吞掉一帧，
+       一旦吞掉，回调就再也不来了 —— 动画会永久卡在中间。这里同时挂一根 140ms 的
+       保险丝：帧没到点就手动推一帧。掉帧时退化成 ~7fps，画面仍然走完；
+       正常环境里保险丝永远抢不到（帧在 16ms 就把它清了）。 */
+    var gt = 0;
+    function schedule() {
+      raf = requestAnimationFrame(tick);
+      if (gt) { clearTimeout(gt); }
+      gt = setTimeout(function () {
+        gt = 0;
+        if (!raf) { return; }
+        cancelAnimationFrame(raf); raf = 0;
+        tick();
+      }, 140);
+    }
+    function anim() { if (!raf && !gt && !st.dead) { schedule(); } }
+    var FR = 0;                       /* 帧计数（只给探针看 rAF 有没有在跑） */
+    function tick() {
+      raf = 0; FR += 1;
+      if (gt) { clearTimeout(gt); gt = 0; }
+      var t = now(), live = false, cb = null;
+      if (st.fly) {
+        var k = clamp((t - st.fly.t0) / st.fly.dur, 0, 1);
+        var want = st.fly.total * k, seg = st.fly.seg, i = 1;
+        while (i < seg.length - 1 && seg[i] < want) { i += 1; }
+        var s0 = seg[i - 1], s1 = seg[i];
+        var u = (s1 - s0) > .001 ? (want - s0) / (s1 - s0) : 0;
+        var p0 = st.fly.pts[i - 1], p1 = st.fly.pts[i];
+        st.fly.pos = { x: p0.x + (p1.x - p0.x) * u, y: p0.y + (p1.y - p0.y) * u,
+                       a: Math.atan2(p1.y - p0.y, p1.x - p0.x) * 180 / Math.PI + 90 };
+        if (k >= 1) { cb = st.fly.cb; st.fly = null; } else { live = true; }
       }
-      if (st.phase === 'aim') {
-        s += '<g transform="translate(96,166)"><path d="M0 0 l0 -40" stroke="#C9B48A" stroke-width="2.6"/>' +
-          '<path d="M0 -46 l5 8 -5 4 -5 -4 Z" fill="#8FA79E"/><path d="M-4 0 h8" stroke="#B5503F" stroke-width="2"/></g>';
-        s += '<path id="aim" d="" fill="none" stroke="#D9B36C" stroke-width="1.6" stroke-dasharray="4 4" opacity=".85"/>';
-        s += '<text x="96" y="196" font-size="8.5" text-anchor="middle" fill="#8A8378">向右上拖：拖多远＝力多大</text>';
-      }
-      /* 比分别压在矢架上：右上角一栏，和"我/客"对齐读 */
-      s += '<text x="286" y="196" font-size="10" text-anchor="end" fill="#527E79">我 ' + st.me + ' · 客 ' + st.ai + '</text>';
-      if (st.log) { s += '<text x="150" y="36" font-size="10.5" text-anchor="middle" fill="#5A5750">' + st.log + '</text>'; }
-      s += st.flight;
+      if (st.potFx && t - st.potT > 320) { st.potFx = 0; } else if (st.potFx) { live = true; }
+      if (st.slowT && t - st.slowT > 640) { st.slowT = 0; } else if (st.slowT) { live = true; }
+      if (st.flash && t - st.flash.t0 > 760) { st.flash = null; } else if (st.flash) { live = true; }
+      if (!cv.svg.isConnected) { st.dead = true; }       /* 小节被退台：停手，别去画不在树上的节点 */
+      paint();
+      if (cb) { cb(); }
+      if ((live || st.fly) && !st.dead) { schedule(); }
+    }
+
+    function paint() { if (st.dead) { return; } cv.html(render()); }
+    function esc(t) {
+      return String(t == null ? '' : t).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+    function poly(pts) {
+      var s = '', i;
+      for (i = 0; i < pts.length; i++) { s += (i ? ' ' : '') + n1(pts[i].x) + ',' + n1(pts[i].y); }
       return s;
     }
-    function paint() { cv.html(scene()); }
-    function progress() { return st.phase === 'aim' ? 0 : (st.phase === 'fly' ? 0.5 : 1); }
-    function label() { return '第 ' + (st.beat + 1) + ' / 2 矢 · 我 ' + st.me + ' : ' + st.ai + ' 客'; }
 
-    function aimVec() {
-      var d = Math.sqrt(st.dx * st.dx + st.dy * st.dy);
-      var pow = Math.min(1, d / 140);
-      var up = d > 2 ? clamp(-st.dy / d, -1, 1) : 0;   /* 往上带得越多，弧越高 */
-      return { pow: pow, up: up, d: d };
+    /* ---------- 服色：与 js/portraits.js 的 FIG 同源，不另抄一套 ---------- */
+    var FIGKEY = { '王朴': 'wangpu', '张永德': 'zhangyongde', '赵匡胤': 'zhaokuangyin',
+                   '殷崇义': 'yinchongyi', '官家': 'guorong' };
+    function toneOf(who) {
+      var F = global.TP && global.TP.FIG, f = F && F[FIGKEY[who] || ''];
+      return f ? { robe: f.robe, collar: f.collar || '#EFE7D6' }
+               : { robe: '#4B4E6B', collar: '#EFE7D6' };
     }
-    function updateAim() {
-      var a = cv.q('#aim');
-      if (!a) { return; }
-      var A = aimVec();
-      var vx = 150 + A.pow * 130, vy = -34 - Math.max(0, A.up) * 120 * A.pow;
-      var pts = [];
-      for (var t = 0; t < 50; t++) {
-        var tt = t * 0.1;
-        var px = 96 + vx * tt, py = 166 + vy * tt + 0.5 * 230 * tt * tt;
-        if (py > 198 || px > 300) { break; }
-        pts.push(n1(px) + ' ' + n1(py));
+
+    /* ============================================================
+       场景（300×210）：远墙与树冠 → 地坪 → 壶 → 掷者 → 手 → 预判层
+       ============================================================ */
+    function bg() {
+      var s = '';
+      s += '<rect x="0" y="0" width="300" height="128" fill="#EEF2EA"/>';
+      s += '<g fill="#CBD8C4">' +
+             '<ellipse cx="26" cy="98" rx="36" ry="28"/><ellipse cx="92" cy="107" rx="34" ry="21"/>' +
+             '<ellipse cx="158" cy="105" rx="25" ry="16"/><ellipse cx="284" cy="96" rx="42" ry="30"/>' +
+           '</g>';
+      s += '<rect x="0" y="104" width="300" height="24" fill="#E2DDCB"/>';
+      s += '<path d="M0 104 h300" stroke="#CBC4AE" stroke-width="1.2"/>';
+      s += '<path d="M0 128 h300" stroke="#C9C3AC" stroke-width="1"/>';
+      /* 幌子：园中设壶的记号（青底金线；不用朱色——帝袍绛红的红线在这儿没有道理） */
+      s += '<path d="M86 104 v-32" stroke="#8A7B5E" stroke-width="1.4"/>' +
+           '<path d="M86 72 h16 v22 h-16 Z" fill="#8FB5B0" opacity=".42" stroke="#527E79" stroke-width=".8"/>' +
+           '<path d="M88 91 l3 4 3-4 3 4 3-4" fill="none" stroke="#527E79" stroke-width=".8" opacity=".7"/>';
+      s += '<rect x="0" y="128" width="300" height="82" fill="#E4E3D2"/>';
+      s += '<rect x="0" y="166" width="300" height="44" fill="#DCDBC7" opacity=".75"/>';
+      /* 投壶线：虚线，告诉你站在哪儿 */
+      s += '<path d="M8 ' + FLOOR + ' h284" stroke="#B9B49C" stroke-width="1" stroke-dasharray="5 5" opacity=".6"/>';
+      return s;
+    }
+
+    /* 壶：颈细腹鼓双耳。受击时以**壶底**为支点压一下（不是整块平移，不然像贴纸在抖） */
+    function potGroup() {
+      var sx = 1, sy = 1, k;
+      if (st.potFx) {
+        k = clamp((now() - st.potT) / 320, 0, 1);
+        if (k < .18) { sx = 1 + .06 * (k / .18); sy = 1 - .11 * (k / .18); }
+        else if (k < .52) { sx = 1.06 - .16 * ((k - .18) / .34); sy = .89 + .17 * ((k - .18) / .34); }
+        else { sx = .90 + .10 * ((k - .52) / .48); sy = 1.06 - .06 * ((k - .52) / .48); }
       }
-      a.setAttribute('d', pts.length ? 'M' + pts.join(' L') : '');
-      hooks.step(0.05, '力 ' + Math.round(A.pow * 100) + ' · 弧 ' + Math.round(Math.max(0, A.up) * 100));
+      var s = '<g transform="translate(' + POT.x + ',' + POT.base + ') scale(' + n1(sx) + ',' + n1(sy) +
+              ') translate(' + (-POT.x) + ',' + (-POT.base) + ')">';
+      /* 投壶不是杯子：口小、颈细、腹鼓、底收 —— 这是"壶"，也是壶口判定环（rx13）比壶口略大的原因 */
+      s += '<ellipse cx="232" cy="168" rx="19" ry="4" fill="#7C8A6E" opacity=".2"/>';
+      s += '<path d="M221 110 H243 V120 C250 126 252 134 252 142 C252 150 249 157 244 161 L246 166 H218 L220 161 ' +
+           'C215 157 212 150 212 142 C212 134 214 126 221 120 Z" fill="#A8B4AC" stroke="#5E6B64" stroke-width="1.5" stroke-linejoin="round"/>';
+      /* 双耳（贯耳）：贴颈的两个小环 */
+      s += '<path d="M220 121 q-8 1 -8 8 q0 7 8 7 M244 121 q8 1 8 8 q0 7 -8 7" fill="none" stroke="#5E6B64" stroke-width="2" stroke-linecap="round"/>';
+      s += '<ellipse cx="232" cy="110" rx="11.4" ry="4" fill="#DDE4DE" stroke="#5E6B64" stroke-width="1.4"/>';
+      s += '<ellipse cx="232" cy="110" rx="7.2" ry="2.4" fill="#3E4A44"/>';
+      /* 颈上一道弦纹、腹上一道暗影：给曲面一点体积 */
+      s += '<path d="M223 124 h18" stroke="#8A968E" stroke-width=".9" opacity=".55"/>';
+      s += '<path d="M216 143 c4 8 28 8 32 0" fill="none" stroke="#8A968E" stroke-width=".9" opacity=".35"/>';
+      s += '</g>';
+      return s;
     }
 
-    /* 一矢：抛物飞出去，落点由中/不中决定 */
-    function flyArc(from, to, hi, dur, ink, cb) {
-      var t0 = now();
-      (function step() {
-        var k = Math.min(1, (now() - t0) / dur);
-        var x = from.x + (to.x - from.x) * k;
-        var y = from.y + (to.y - from.y) * k - Math.sin(k * Math.PI) * hi;
-        st.flight = '<g transform="translate(' + n1(x) + ',' + n1(y) + ') rotate(' + n1(k * 210) + ')">' +
-          '<path d="M0 0 l0 -26" stroke="' + ink + '" stroke-width="2.6"/>' +
-          '<path d="M0 -32 l5 8 -5 4 -5 -4 Z" fill="' + (ink === '#C9B48A' ? '#8FA79E' : '#C9A34E') + '"/></g>';
+    /* 掷者：半身侧影（幞头圆顶 + 左后软脚 / 交领 / 圆领袍），袍色取该角色 FIG.robe */
+    function figure() {
+      var f = st.fig;
+      if (!f) { return ''; }
+      var k = f.k, t = f.tone;
+      var g = '<g transform="translate(' + n1(f.x) + ',178) scale(' + k + ')" opacity="' + n1(f.op) + '">';
+      g += '<ellipse cx="0" cy="0" rx="17" ry="4.2" fill="#7C8A6E" opacity=".18"/>';
+      g += '<path d="M-15 0 C-16 -30 -14 -58 -11 -74 L11 -74 C14 -58 16 -30 15 0 Z" fill="' + t.robe +
+           '" stroke="' + shadeHex(t.robe, .62) + '" stroke-width="1.1"/>';
+      g += '<path d="M-11 -73 L0 -62 L11 -73" fill="none" stroke="' + t.collar + '" stroke-width="2.6"/>';
+      g += '<rect x="-3" y="-81" width="6" height="9" rx="2" fill="#C6A385"/>';
+      g += '<ellipse cx="0" cy="-89" rx="7.4" ry="8.2" fill="#C6A385" stroke="#A8856A" stroke-width=".7"/>';
+      g += '<path d="M-8.4 -91 a8.4 8.4 0 0 1 16.8 0 l0 2.8 h-16.8 Z" fill="#2A2622"/>';
+      g += '<path d="M-8.4 -90 q-7 3 -11 11" fill="none" stroke="#2A2622" stroke-width="2.6" stroke-linecap="round"/>';
+      g += '<g transform="rotate(' + n1(f.a) + ' 6 -72)">' +
+             '<path d="M6 -72 q13 5 16 13" fill="none" stroke="' + t.robe + '" stroke-width="8.2" stroke-linecap="round"/>' +
+             '<ellipse cx="24" cy="-58" rx="4.2" ry="3.6" fill="#C6A385"/>' +
+             (f.sent ? '' :
+               '<path d="M24 -58 L41 -77" stroke="#C9B48A" stroke-width="1.8" stroke-linecap="round"/>' +
+               '<path d="M41 -77 l-1.6 5.2 5 -2 Z" fill="#8FA79E"/>' +
+               '<path d="M26 -60 l-3.4 1 1 4 Z" fill="#B5503F"/>') +
+           '</g>';
+      g += '</g>';
+      return g;
+    }
+    /* 脱手瞬间手的真实位置（手臂绕肩旋转后的坐标）——飞行起点必须与画面对得上 */
+    function figHand() {
+      var f = st.fig;
+      if (!f) { return HAND; }
+      var a = f.a * Math.PI / 180, px = 6, py = -72, x = 24, y = -58;
+      var rx = px + (x - px) * Math.cos(a) - (y - py) * Math.sin(a);
+      var ry = py + (x - px) * Math.sin(a) + (y - py) * Math.cos(a);
+      return { x: f.x + rx * f.k, y: 178 + ry * f.k };
+    }
+
+    /* 玩家执矢的手：从右下伸进来，矢头朝壶 */
+    function handSVG() {
+      if (st.ph !== 'aim' || !st.armed) { return ''; }
+      return '<g transform="translate(' + HAND.x + ',' + HAND.y + ')">' +
+        /* 袖：一截布管从画面下沿斜插进来（第一视角的"我的手"），内衬露一道青缘 */
+        '<path d="M-1 2 C-7 10 -14 18 -22 24" fill="none" stroke="#EFE8D8" stroke-width="13" stroke-linecap="round"/>' +
+        '<path d="M-1 2 C-7 10 -14 18 -22 24" fill="none" stroke="#D6CBB2" stroke-width="13" stroke-linecap="round" opacity=".35"/>' +
+        '<path d="M-5 5 C-9 10 -13 14 -17 17" fill="none" stroke="#527E79" stroke-width="2" stroke-linecap="round" opacity=".55"/>' +
+        /* 握拳：斜握，不是一颗圆纽扣 */
+        '<ellipse cx="0" cy="0" rx="5" ry="4.4" transform="rotate(-24)" fill="#C6A385" stroke="#A8856A" stroke-width=".8"/>' +
+        '<path d="M-2.6 -3.4 q3.4 -1.4 5.6 1.2" fill="none" stroke="#A8856A" stroke-width=".7" opacity=".65"/>' +
+        '<path d="M1.6 2.6 q2.6 -1.4 4.4 -3.6" fill="none" stroke="#A8856A" stroke-width=".8" opacity=".8"/>' +
+        '<path d="M0 0 L5 -30" stroke="#C9B48A" stroke-width="2.2" stroke-linecap="round"/>' +
+        '<path d="M5 -34.5 l2.8 6 -2.8 2.6 -2.8 -2.6 Z" fill="#8FA79E" stroke="#5E6B64" stroke-width=".5"/>' +
+        '<path d="M1 2 l-4.2 -1.4 .8 -4.6 Z" fill="#B5503F"/>' +
+        '</g>';
+    }
+
+    /* 矢：秆、镞、羽三段分色 —— 镞若与秆同色，飞起来就成"红屁股木棍"，看着像倒着飞 */
+    function arrowSVG(p, ink, op) {
+      return '<g transform="translate(' + n1(p.x) + ',' + n1(p.y) + ') rotate(' + n1(p.a) + ')" opacity="' +
+        (op == null ? 1 : op) + '">' +
+        '<path d="M0 7 L0 -10" stroke="' + ink + '" stroke-width="1.9" stroke-linecap="round"/>' +
+        '<path d="M0 -15.5 l3.3 6.2 -3.3 2.9 -3.3 -2.9 Z" fill="#8FA79E" stroke="#5E6B64" stroke-width=".6"/>' +
+        '<path d="M-3 3 l3 5.4 3 -5.4" fill="none" stroke="#B5503F" stroke-width="1.5" stroke-linejoin="round"/>' +
+        '</g>';
+    }
+
+    /* ============================================================
+       弹道：从 (力, 抛) 正向算出真实弧线 —— 预览与飞行共用
+       ============================================================ */
+    function aimOf(dx, dy) {
+      var d = Math.sqrt(dx * dx + dy * dy);
+      return { d: d, pow: Math.min(100, d / TH.full * 100), up: d > 2 ? clamp(-dy / d, -1, 1) : 0 };
+    }
+    function judge(pow, up) {
+      if (pow < TH.powMin) { return { hit: false, why: '轻' }; }
+      if (pow > TH.powMax) { return { hit: false, why: '重' }; }
+      if (up < TH.upMin) { return { hit: false, why: '平' }; }
+      if (up > TH.upMax) { return { hit: false, why: '高' }; }
+      return { hit: true, why: null };
+    }
+    function whyText(w) {
+      return w === '轻' ? '力不够 · 拖远些' : w === '重' ? '手重了 · 收一点'
+        : w === '平' ? '弧太平 · 往上带' : w === '高' ? '弧太高 · 压一点' : '';
+    }
+    /* ★归一化量 ePow/eUp 把 (力, 抛) 映射到壶口口径内的偏移：
+       幂等 —— "落点在口径环内"与 judge() 判进是同一个条件，所以虚线不会骗人。 */
+    function traj(pow, up, from) {
+      var ep = (pow - TH.powMid) / TH.powHalf;
+      var eu = (up - TH.upMid) / TH.upHalf;
+      var cx = POT.x + clamp(ep, -1.95, 1.95) * POT.rx;   /* 力过 → 越过壶（更右）；力轻 → 落在手这侧 */
+      var cy = POT.my - clamp(eu, -1.95, 1.95) * POT.ry;  /* 抛太陡 → 过壶口上方；太平 → 撞壶身 */
+      var lift = 15 + Math.max(0, up) * 66;
+      from = from || HAND;
+      var pts = [], N = 26, i, s;
+      for (i = 0; i <= N; i++) {
+        s = i / N;
+        pts.push({ x: from.x + (cx - from.x) * s, y: from.y + (cy - from.y) * s - lift * 4 * s * (1 - s) });
+      }
+      return { pts: pts, cross: { x: cx, y: cy }, lift: lift,
+               hit: Math.abs(ep) <= 1 && Math.abs(eu) <= 1,
+               onBody: Math.abs(cx - POT.x) <= POT.half && cy > POT.my };
+    }
+    /* 未进时顺切线落到地上：让玩家看见"落在哪"，而不是矢凭空消失 */
+    function extendToGround(t) {
+      var pts = t.pts, n = pts.length, last = pts[n - 1], prev = pts[n - 2];
+      var vx = (last.x - prev.x) / 3, vy = (last.y - prev.y) / 3;
+      var x = last.x, y = last.y, out = [], i;
+      for (i = 0; i < 60; i++) {
+        vy += .42; x += vx; y += vy;
+        if (x < 8 || x > 292) { out.push({ x: clamp(x, 8, 292), y: y }); break; }
+        out.push({ x: x, y: y });
+        if (y >= FLOOR) { break; }
+      }
+      return pts.concat(out);
+    }
+    function pathOf(a, from) {
+      var t = traj(a.pow, a.up, from);
+      return { pts: (t.hit || t.onBody) ? t.pts : extendToGround(t), t: t };
+    }
+    function fly(pts, dur, ink, cb) {
+      var seg = [0], total = 0, i;
+      for (i = 1; i < pts.length; i++) {
+        total += Math.sqrt(Math.pow(pts[i].x - pts[i - 1].x, 2) + Math.pow(pts[i].y - pts[i - 1].y, 2));
+        seg.push(total);
+      }
+      st.fly = { pts: pts, seg: seg, total: total, t0: now(), dur: dur, ink: ink, cb: cb, pos: null };
+      anim();
+    }
+
+    /* ============================================================
+       落定 / 判定浮字 / 慢镜
+       ============================================================ */
+    function flash(txt, tone) { st.flash = { txt: txt, tone: tone, t0: now() }; anim(); }
+    function land(a, f, mine) {
+      if (a.hit) {
+        st.potFx = 1; st.potT = now(); st.slowT = now();
+        flash('中', 'in'); sfx('select');
+      } else {
+        if (f.t.onBody) {
+          st.potFx = 1; st.potT = now();
+          st.arrows.push({ x: POT.x - 27, y: POT.base - 2, a: -34 });
+          flash('撞壶', 'out');
+        } else {
+          var last = f.pts[f.pts.length - 1];
+          st.arrows.push({ x: clamp(last.x, 14, 286), y: Math.min(last.y, FLOOR + 3), a: 54 });
+          flash('偏', 'out');
+        }
+        sfx('tap');
+      }
+      if (mine) { if (a.hit) { st.me += 1; } } else if (st.ai) { st.ai.hits.push(!!a.hit); st.ai.resolved += 1; }
+      if (st.arrows.length > 5) { st.arrows.shift(); }
+      anim();
+    }
+
+    /* ============================================================
+       他人投壶：执矢 → 后引 → 脱手 → 飞 → 落定（两矢一停）
+       ============================================================ */
+    /* 每一矢独立掷定（概率照演示页：群臣 0.75 / 0.55，官家 0.5）。
+       掷定后反算成 (力, 抛) 交给同一套弹道 ⇒ 画面上的偏差就是随机性的证据。 */
+    function rollAI(pHit) {
+      if (Math.random() < pHit) {
+        return { pow: TH.powMin + Math.random() * (TH.powMax - TH.powMin),
+                 up: TH.upMin + Math.random() * (TH.upMax - TH.upMin), hit: true };
+      }
+      var k = Math.floor(Math.random() * 4), pow, up;
+      if (k === 0) { pow = 20 + Math.random() * 22; up = .62 + Math.random() * .18; }        /* 轻 */
+      else if (k === 1) { pow = 82 + Math.random() * 18; up = .62 + Math.random() * .18; }   /* 重 */
+      else if (k === 2) { pow = 50 + Math.random() * 22; up = .24 + Math.random() * .30; }   /* 平 */
+      else { pow = 50 + Math.random() * 22; up = .96 + Math.random() * .16; }                /* 高 */
+      return { pow: pow, up: up, hit: false };
+    }
+    function aiRound(who, isRong, pArr, cb) {
+      st.ph = 'ai'; st.armed = false; st.aim = null; st.drag = false;
+      /* 舞台下方那一行说明此刻不归你投，以及怎么快进（四轮连播约 11 秒，不说就是罚站） */
+      hooks.tip('看' + who + '投 · 轻点画面可快进这一轮');
+      st.fig = { who: who, tone: toneOf(who), a: -6, op: 0,
+                 k: isRong ? .92 : .86, x: isRong ? 32 : 36, sent: false };
+      st.ai = { who: who, isRong: isRong, list: [], ix: 0, hits: [], resolved: 0 };
+      for (var i = 0; i < 2; i++) { st.ai.list.push(rollAI(pArr[i] || .5)); }
+
+      /* 轻点快进：剩下的矢直接落定（结果开轮时就掷定了，快进不改结果） */
+      st.skip = function () {
+        var ai = st.ai, j;
+        clearTimers(); st.fly = null; st.skip = null;
+        for (j = ai.resolved; j < ai.list.length; j++) { ai.hits.push(!!ai.list[j].hit); }
+        ai.resolved = ai.list.length;
+        st.fig = null; paint();
+        if (cb) { cb(ai.hits.slice()); }
+      };
+
+      paint();
+      after(150, function () {
+        st.fig.op = 1; paint();
+        after(200, function () { shoot(0); });
+      });
+
+      function shoot(i) {
+        if (st.dead) { return; }
+        if (i >= st.ai.list.length) { finish(); return; }
+        var a = st.ai.list[i];
+        st.ai.ix = i;
+        st.tag = who + (isRong ? ' · 压轴' : '') + ' · 第' + (i ? '二' : '一') + '矢';
+        st.fig.a = -42; st.fig.sent = false;
         paint();
-        if (k < 1) { requestAnimationFrame(step); }
-        else { st.flight = ''; cb(); }
-      })();
-    }
-
-    function myTurnEnd(hit) {
-      if (hit) { st.me++; }
-      st.log = hit ? '我：中！' : '我：偏了。';
-      st.phase = 'fly'; paint();
-      setTimeout(function () { aiTurn(hit); }, 480);
-    }
-    function aiTurn(myHit) {
-      st.phase = 'ai'; paint();
-      setTimeout(function () {
-        var hit = Math.random() < 0.5;
-        flyArc({ x: 62, y: 170 }, hit ? { x: POTS.x, y: POTS.y } : { x: POTS.x - 30, y: 174 }, hit ? 92 : 66, 540, '#B08A56', function () {
-          if (hit) { st.ai++; }
-          st.log = (myHit ? '我中' : '我失') + ' · 客' + (hit ? '中。' : '失。');
-          st.phase = 'done'; paint();
-          hooks.step(1, label());
-          hooks.done(!myHit);
+        after(170, function () {
+          st.fig.a = 14; st.fig.sent = true;
+          var f = pathOf(a, figHand());
+          paint(); sfx('brush');
+          fly(f.pts, 400, a.hit ? '#C9A34E' : '#B08A56', function () {
+            land(a, f, false);
+            after(240, function () {
+              if (st.dead) { return; }
+              st.fig.a = -6;
+              shoot(i + 1);
+            });
+          });
         });
-      }, 520);
+      }
+      function finish() {
+        st.skip = null;
+        st.fig = null;
+        paint();
+        if (cb) { cb(st.ai.hits.slice()); }
+      }
     }
 
-    function down(p) {
-      if (st.phase !== 'aim') { return; }
-      st.dragging = true; st.sx = p.x; st.sy = p.y; st.dx = 0; st.dy = 0;
-      guardDown(st, st.beat);
+    /* ============================================================
+       台词条（画在画布下沿，与演示页的 .dlg 同位；不挡交互面）
+       ============================================================ */
+    function cap(sp, tx) { st.cap = { sp: sp || '', tx: tx || '' }; }
+    function wrapText(tx, per) {
+      var out = [], i;
+      tx = String(tx || '');
+      for (i = 0; i < tx.length && out.length < 2; i += per) { out.push(tx.slice(i, i + per)); }
+      if (out.length === 2 && tx.length > per * 2) { out[1] = out[1].slice(0, per - 1) + '…'; }
+      return out;
     }
-    function move(p) {
-      if (!st.dragging || st.phase !== 'aim') { return; }
-      st.dx = p.x - st.sx; st.dy = p.y - st.sy;
-      updateAim();
+    function capSVG() {
+      var c = st.cap;
+      if (!c.tx) { return ''; }
+      var head = c.sp ? c.sp + '｜' : '';
+      var L = wrapText(head + c.tx, 32);
+      /* 一条压在画面下沿的浅色台词条：地面花纹/袖口都不会钻到字里 */
+      var s = '<rect x="0" y="186" width="300" height="24" fill="rgba(255,253,246,.9)"/>' +
+              '<path d="M0 186 h300" stroke="#DED7C9" stroke-width="1"/>';
+      s += '<text x="12" y="197" font-size="8.4" fill="#4A4640">';
+      if (c.sp) {
+        s += '<tspan fill="#8A5A3A" font-weight="700">' + esc(c.sp) + '</tspan><tspan fill="#B3A98E">｜</tspan>' +
+             esc(L[0].length > head.length ? L[0].slice(head.length) : '');
+      } else {
+        s += esc(L[0]);
+      }
+      s += '</text>';
+      if (L[1]) { s += '<text x="12" y="206" font-size="8.4" fill="#4A4640">' + esc(L[1]) + '</text>'; }
+      return s;
     }
-    function up() {
-      if (!st.dragging || st.phase !== 'aim') { return; }
-      if (!guardUp(st, st.beat)) { return; }
-      st.dragging = false;
-      var A = aimVec();
-      if (A.pow < 0.25) { hooks.tip('矢要脱手——按住矢拖远一点。'); return; }
-      var hit = A.pow >= 0.42 && A.up >= 0.22 && A.up <= 0.95;
-      st.phase = 'fly';
-      flyArc({ x: 96, y: 166 }, hit ? { x: POTS.x, y: POTS.y } : { x: POTS.x + 28, y: 178 }, hit ? 92 : 58, 600, '#C9B48A', function () {
-        myTurnEnd(hit);
+    function chrome() {
+      var s = '';
+      /* 比分：钉在上沿正中（左上 zone-tag、右上 step-tag 都占着，只有中间是空的） */
+      s += '<g><rect x="100" y="5" width="96" height="17" rx="8" fill="rgba(255,253,246,.92)" stroke="#DED7C9" stroke-width="1"/>' +
+           '<text x="148" y="17" font-size="8.6" text-anchor="middle" fill="#6B6560">礼官 ' +
+           '<tspan fill="#3F6B58" font-weight="700">' + st.me + '</tspan> : ' +
+           '<tspan fill="#8A5A3A" font-weight="700">' + st.rong + '</tspan> 官家</text></g>';
+      if (st.tag) { s += '<text x="10" y="36" font-size="8.6" fill="#4A4640">' + esc(st.tag) + '</text>'; }
+      return s + capSVG();
+    }
+    function flashSVG() {
+      if (!st.flash) { return ''; }
+      var k = clamp((now() - st.flash.t0) / 760, 0, 1);
+      var op = k < .14 ? k / .14 : (k > .7 ? (1 - k) / .3 : 1);
+      if (op <= 0) { return ''; }
+      return '<text x="' + POT.x + '" y="' + n1(80 - 6 * k) + '" font-size="15" font-weight="700" ' +
+        'text-anchor="middle" fill="' + (st.flash.tone === 'in' ? '#3F6B58' : '#8C8478') + '" ' +
+        'opacity="' + n1(op) + '" letter-spacing="2">' + esc(st.flash.txt) + '</text>';
+    }
+    function slowSVG() {
+      if (!st.slowT) { return ''; }
+      var k = clamp((now() - st.slowT) / 640, 0, 1);
+      return '<circle cx="' + POT.x + '" cy="' + POT.my + '" r="' + n1(16 + 32 * k) + '" fill="none" ' +
+        'stroke="#C9A34E" stroke-width="' + n1(3 * (1 - k)) + '" opacity="' + n1(.5 * (1 - k)) + '"/>';
+    }
+
+    /* ---------- 预判层：口径环 + 真实虚线 + 末端圈 + 理由 ---------- */
+    function aimSVG() {
+      if (st.ph !== 'aim' || !st.armed) { return ''; }
+      var s = '';
+      /* 壶口口径环：只在瞄准时出现，是"套进去"的对齐基准。
+         先垫一道白（压在壶身上也读得出），再画青虚线。 */
+      s += '<ellipse cx="' + POT.x + '" cy="' + POT.my + '" rx="' + POT.rx + '" ry="' + POT.ry +
+           '" fill="none" stroke="#FFFDF6" stroke-width="2.6" opacity=".55"/>' +
+           '<ellipse cx="' + POT.x + '" cy="' + POT.my + '" rx="' + POT.rx + '" ry="' + POT.ry +
+           '" fill="none" stroke="#527E79" stroke-width="1.3" stroke-dasharray="3 3" opacity=".8"/>';
+      var A = st.aim;
+      if (!A) {
+        /* 未起手：一条很淡的示范弧（中档力度+中档上抛），告诉你该拖出多长、多陡 */
+        var g = traj(TH.powMid, TH.upMid, HAND);
+        s += '<polyline points="' + poly(g.pts) + '" fill="none" stroke="#8C9A8E" stroke-width="1.2" ' +
+             'stroke-dasharray="2 6" stroke-linecap="round" opacity=".45"/>';
+        s += '<text x="292" y="50" font-size="8.2" text-anchor="end" fill="#8A8378" opacity=".9">按住画面 · 向右上拖</text>';
+        return s;
+      }
+      var f = pathOf(A, HAND), i, apex = f.pts[0], tc = f.t.cross;
+      for (i = 1; i < f.pts.length; i++) { if (f.pts[i].y < apex.y) { apex = f.pts[i]; } }
+      var col = A.hit ? '#3F6B58' : '#6B6560';
+      s += '<polyline points="' + poly(f.pts) + '" fill="none" stroke="' + col + '" stroke-width="1.6" ' +
+           'stroke-dasharray="6 5" stroke-linecap="round" opacity=".9"/>';
+      s += '<circle cx="' + n1(apex.x) + '" cy="' + n1(apex.y) + '" r="1.6" fill="' + col + '" opacity=".45"/>';
+      /* 末端圈：小圈套进环里＝进；进了就填实，不用玩家自己去比 */
+      s += '<circle cx="' + n1(tc.x) + '" cy="' + n1(tc.y) + '" r="2.8" fill="' +
+           (A.hit ? col : 'none') + '" stroke="' + col + '" stroke-width="1.4" opacity=".95"/>';
+      if (A.hit) {
+        s += '<text x="292" y="50" font-size="8.6" text-anchor="end" fill="#3F6B58" font-weight="700">正对壶口 · 松手</text>';
+      } else {
+        s += '<text x="292" y="50" font-size="8.6" text-anchor="end" fill="#8A5A3A">' + esc(whyText(A.why)) + '</text>';
+      }
+      return s;
+    }
+
+    function render() {
+      var s = bg(), i;
+      for (i = 0; i < st.arrows.length; i++) {
+        s += arrowSVG({ x: st.arrows[i].x, y: st.arrows[i].y, a: st.arrows[i].a }, '#B9A67C', .8);
+      }
+      if (st.dim) { s += '<rect x="0" y="0" width="300" height="210" fill="#2A2A28" opacity="' + n1(.16 * st.dim) + '"/>'; }
+      s += figure();
+      s += potGroup();
+      if (st.fly && st.fly.pos) { s += arrowSVG(st.fly.pos, st.fly.ink, 1); }
+      s += handSVG();
+      s += aimSVG();
+      s += chrome();
+      s += flashSVG();
+      s += slowSVG();
+      return s;
+    }
+
+    /* ============================================================
+       剧情序列：司正报场 → 群臣四人各二矢 → 礼官两矢 → 官家压轴 → 结算
+       ============================================================ */
+    function label() { return '第 ' + (st.beat + 1) + ' / ' + st.stepMax + ' 矢 · 礼官 ' + st.me + ' : ' + st.rong + ' 官家'; }
+
+    function prelude() {
+      if (st.ph !== 'idle') { return; }
+      st.ph = 'ai';
+      st.tag = '群臣轮番 · 礼官亦预';
+      cap('司正', S.intro || '酒过三巡，园中设壶。');
+      paint();
+      after(1100, function () { nextMinister(S.ministers || []); });
+    }
+    function nextMinister(M) {
+      if (st.dead) { return; }
+      if (st.pre >= M.length) { toPlayer(); return; }
+      var m = M[st.pre];
+      cap(m.speaker, m.line);
+      paint();
+      after(320, function () {
+        aiRound(m.speaker, false, [.75, .55], function (hits) {
+          var n = (hits[0] ? 1 : 0) + (hits[1] ? 1 : 0);
+          var R = S.minResult || {};
+          st.pre += 1;
+          st.tag = m.speaker + ' · ' + n + ' / 2';
+          cap(m.speaker, R[n] || '');
+          paint();
+          after(1000, function () { nextMinister(M); });
+        });
+      });
+    }
+    function toPlayer() {
+      st.ph = 'aim'; st.armed = true; st.beat = 0;
+      var f = st.fig;
+      if (f) { f.op = 0; after(160, function () { if (st.fig === f) { st.fig = null; paint(); } }); }
+      st.tag = '礼官 · 第一矢';
+      cap('司正', S.toPlayer || '礼官请矢——两矢，中者为胜。');
+      paint();
+      hooks.step(0, label());
+    }
+
+    /* 未进的理由句：照演示页那四句（是判手感的反馈，不是剧情台词，故不进 data.js） */
+    var WHY_LINE = { '轻': '力不够，矢在半途就垂了头。', '重': '手重了——矢越过壶口，落在壶那一侧。',
+                     '平': '太平，矢撞在壶身上，弹开了。', '高': '高了半寸，越过壶口。' };
+    function fire(pow, up, jd) {
+      var f = pathOf({ pow: pow, up: up }, HAND);
+      st.ph = 'fly'; st.armed = false; st.aim = null;
+      st.tag = '礼官 · 第' + (st.beat ? '二' : '一') + '矢';
+      paint(); sfx('brush');
+      fly(f.pts, 430, '#C9B48E', function () {
+        land({ hit: jd.hit, why: jd.why }, f, true);
+        st.tag = '礼官 · ' + (jd.hit ? '中' : '偏');
+        cap('', jd.hit ? (st.me >= 2 ? '两矢皆入。满园静了一瞬。' : '一矢入壶，四座轻呼。')
+                       : (WHY_LINE[jd.why] || '矢落壶外。'));
+        paint();
+        after(1150, function () {
+          if (st.beat >= st.stepMax - 1) { finale(); } else { hooks.done(!jd.hit); }
+        });
       });
     }
 
+    function finale() {
+      st.ph = 'end'; st.dim = 1;
+      st.tag = '官家 · 压轴';
+      cap('官家', S.rongIntro || '轮到压轴——官家亲自下场。');
+      paint();
+      hooks.step(.55, '礼官 ' + st.me + ' 矢 · 官家未投');
+      after(1150, function () {
+        aiRound('官家', true, [.5, .5], function (hits) {
+          st.rong = (hits[0] ? 1 : 0) + (hits[1] ? 1 : 0);
+          var RT = S.rongThrow || { hit: ['', ''], miss: ['', ''] };
+          st.tag = '官家 · ' + st.rong + ' / 2';
+          cap('官家', RT[hits[0] ? 'hit' : 'miss'][0] + ' ' + RT[hits[1] ? 'hit' : 'miss'][1]);
+          paint();
+          after(1400, verdict);
+        });
+      });
+    }
+    function verdict() {
+      st.dim = 0;
+      var v = st.me > st.rong ? (S.verdictWin || '')
+            : (st.me === st.rong ? (S.verdictDraw || '') : (S.verdictLose || ''));
+      st.tag = '本局已毕';
+      cap('园中', v);
+      paint();
+      hooks.step(1, '礼官 ' + st.me + ' : ' + st.rong + ' 官家 · 本局已毕');
+      after(1000, function () {
+        st.dead = true;
+        ui.sheet({
+          title: '本局已毕',
+          body: '礼官 ' + st.me + ' : ' + st.rong + ' 官家 · ' +
+                (st.me >= 2 ? '两矢皆中，上品金矢' : (st.me === 1 ? '一矢入壶' : '两矢未入，礼在壶外')),
+          go: '收矢入园'
+        }, function () { hooks.done(st.me === 0); });
+      });
+    }
+
+    /* ============================================================
+       输入
+       ============================================================ */
+    function down(p) {
+      if (st.dead) { return; }
+      if (st.ph === 'ai' || st.ph === 'end') {
+        /* 看人投的时候，轻点画面＝快进这一轮（结果早已掷定，快进不改胜负） */
+        if (st.skip) { var sk = st.skip; sk(); }
+        return;
+      }
+      if (st.ph !== 'aim' || !st.armed) { return; }
+      st.drag = true; st.sx = p.x; st.sy = p.y; st.dx = 0; st.dy = 0;
+      guardDown(st, st.beat);
+    }
+    function move(p) {
+      if (!st.drag || st.ph !== 'aim' || !st.armed) { return; }
+      st.dx = p.x - st.sx; st.dy = p.y - st.sy;
+      var a = aimOf(st.dx, st.dy);
+      if (a.d < TH.min) { st.aim = null; paint(); return; }
+      var jd = judge(a.pow, a.up);
+      st.aim = { pow: a.pow, up: a.up, hit: jd.hit, why: jd.why };
+      paint();
+      /* 读数与理由给到舞台下方那一行：松手前就知道差在哪，不必靠猜 */
+      hooks.step(.06, '力 ' + Math.round(a.pow) + ' · 抛 ' + a.up.toFixed(2) + ' · ' +
+        (jd.hit ? '正对壶口' : whyText(jd.why)));
+    }
+    function up() {
+      if (!st.drag || st.ph !== 'aim' || !st.armed) { return; }
+      st.drag = false;
+      if (!guardUp(st, st.beat)) { return; }
+      var a = aimOf(st.dx, st.dy);
+      if (a.d < TH.min) {
+        st.aim = null; paint();
+        hooks.tip('矢没脱手——按住拖远一点再松手。');
+        return;
+      }
+      fire(a.pow, a.up, judge(a.pow, a.up));
+    }
+
     return {
-      beat: function (i) { st.beat = i; st.phase = 'aim'; st.dragging = false; st.dx = 0; st.dy = 0; st.log = ''; paint(); hooks.step(0, label()); },
+      beat: function (i) {
+        st.beat = i;
+        if (st.dead || st.ph === 'idle' || st.ph === 'ai') { return; }   /* 开场：群臣还在投，step 归位不算起手 */
+        st.ph = 'aim'; st.armed = true; st.drag = false; st.dx = 0; st.dy = 0; st.aim = null;
+        st.tag = '礼官 · 第' + (i ? '二' : '一') + '矢';
+        cap('', i ? '还有一矢。壶口在那儿，矢在你手里。' : '按住画面，向右上拖——虚线就是这一矢的去向。');
+        paint(); hooks.step(0, label());
+      },
       down: down, move: move, up: up,
-      start: function () {}, stop: function () {},
-      progress: progress, label: label
+      start: function () { prelude(); },
+      stop: function () { st.dead = true; clearTimers(); if (raf) { cancelAnimationFrame(raf); raf = 0; } },
+      progress: function () { return st.ph === 'aim' ? .05 : (st.ph === 'fly' ? .6 : 1); },
+      label: label,
+      /* 只读调试口（QA / 探针）：不参与玩法 */
+      state: function () {
+        return { ph: st.ph, beat: st.beat, me: st.me, rong: st.rong, pre: st.pre,
+                 armed: st.armed, cap: st.cap.sp + '|' + st.cap.tx, tag: st.tag,
+                 ai: st.ai ? { who: st.ai.who, ix: st.ai.ix, n: st.ai.list.length,
+                               hits: st.ai.hits.slice() } : null,
+                 fig: st.fig ? st.fig.who : null, arrows: st.arrows.length,
+                 fly: st.fly ? { x: Math.round(st.fly.pos ? st.fly.pos.x : -1),
+                                 y: Math.round(st.fly.pos ? st.fly.pos.y : -1) } : null,
+                 fr: FR, raf: raf,
+                 aim: st.aim ? { pow: Math.round(st.aim.pow), up: Math.round(st.aim.up * 100) / 100,
+                                 hit: st.aim.hit, why: st.aim.why } : null };
+      }
     };
   }
 
@@ -612,10 +1429,16 @@ function bagSVG(o){
            '<path d="M150 126 l6 6 l-6 6 l-6 -6 Z"/>' +
          '</g>' +
          '<circle cx="150" cy="132" r="1.9" fill="' + tone[1] + '" opacity=".32"/>';
-  } else if (body === 1){ /* 锦缎：云头两道 */
-    s += '<g stroke="' + tone[1] + '" stroke-width="1.5" fill="none" opacity=".6">' +
-           '<path d="M139 130 q5.5 -8 11 -3 q5.5 5 11 -3"/>' +
-           '<path d="M141 139 q4.5 -7 9 -2.5 q4.5 4.5 9 -2.5"/>' +
+  } else if (body === 1){ /* 锦缎：团花一朵 + 四角散点
+       ★原来那两道云头一上一下（`q5.5 -8 11 -3`），缩到 58px 的格子里就成了一张苦脸 —— 换团花 */
+    s += '<g stroke="' + tone[1] + '" fill="none" opacity=".7">' +
+           '<circle cx="150" cy="133" r="3.2" stroke-width="1.3"/>' +
+           '<path d="M150 124.6 q6.2 8.4 0 16.8 q-6.2 -8.4 0 -16.8" stroke-width="1.5"/>' +
+           '<path d="M141.6 133 q8.4 -6.2 16.8 0 q-8.4 6.2 -16.8 0" stroke-width="1.5"/>' +
+         '</g>' +
+         '<g fill="' + tone[1] + '" opacity=".45">' +
+           '<circle cx="137.5" cy="122.5" r="1.15"/><circle cx="162.5" cy="122.5" r="1.15"/>' +
+           '<circle cx="137.5" cy="144" r="1.15"/><circle cx="162.5" cy="144" r="1.15"/>' +
          '</g>';
   } else {                /* 缂丝：织纹（横线是梭路，不是花纹） */
     s += '<g stroke="' + tone[1] + '" stroke-width=".85" opacity=".3">' +
@@ -644,16 +1467,32 @@ function bagSVG(o){
        '<path d="M' + f(m - 14) + ' 123 l-2.4 5 M' + f(m - 14) + ' 123 l0 5.6 M' + f(m - 14) + ' 123 l2.4 5" stroke="' + cols[0] + '" stroke-width=".9" opacity=".7" fill="none"/>' +
        '<path d="M' + f(m + 14) + ' 123 l-2.4 5 M' + f(m + 14) + ' 123 l0 5.6 M' + f(m + 14) + ' 123 l2.4 5" stroke="' + cols[0] + '" stroke-width=".9" opacity=".7" fill="none"/>';
 
-  /* 绕丝：三道细丝缠在腰上，宽度跟着腰走（横贯腹部就成了旗子） */
-  for (k = 0; k < wound; k++){
-    var yy = 100 + k * 3.6, hw = neck + 1.6 + k * 2.2, ck = cols[k % cols.length];
-    s += '<path d="M' + f(m - hw) + ' ' + f(yy) + ' q' + f(hw) + ' 4 ' + f(hw * 2) + ' 0" fill="none" stroke="' + ck + '" stroke-width="2.6"/>';
-    s += '<path d="M' + f(m - hw) + ' ' + f(yy + 0.9) + ' q' + f(hw) + ' -1.6 ' + f(hw * 2) + ' 0" fill="none" stroke="' + ck + '" stroke-width="1" opacity=".4"/>';
+  /* 绕丝：三道丝缠在颈部，一圈一色。
+     ★原来三道挤在 y=100..107、半宽只有 8.6~13，全压在束口带上 —— 竖屏下读起来只是"带子厚了点"，
+       玩家看不出丝绕上去了。现在：位置摊到颈→肩（101.4 / 105.8 / 110.4），半宽跟着袋身轮廓走
+       （9 / 11.4 / 14.2），每道加暗底（浅色丝压米色袋才有边）、高光、两端"绕过去"的小转折。 */
+  var WY = [101.4, 105.8, 110.4], WHW = [9, 11.4, 14.2];
+  for (k = 0; k < Math.min(wound, 3); k++){
+    var yy = WY[k], hw = WHW[k], ck = cols[k % cols.length];
+    s += '<path d="M' + f(m - hw) + ' ' + f(yy) + ' q' + f(hw) + ' 4.2 ' + f(hw * 2) + ' 0" fill="none" stroke="' +
+         dk + '" stroke-width="4.6" opacity=".2"/>';
+    s += '<path d="M' + f(m - hw) + ' ' + f(yy) + ' q' + f(hw) + ' 4 ' + f(hw * 2) + ' 0" fill="none" stroke="' + ck +
+         '" stroke-width="3.2" stroke-linecap="round"/>';
+    s += '<path d="M' + f(m - hw + 1.2) + ' ' + f(yy - 0.6) + ' q' + f(hw - 1.2) + ' 3.4 ' + f(hw * 2 - 2.4) + ' 0" fill="none" stroke="#FFFDF6" stroke-width=".9" opacity=".38"/>';
+    s += '<ellipse cx="' + f(m - hw) + '" cy="' + f(yy + 2) + '" rx="1.5" ry="2.6" fill="' + ck + '" opacity=".55"/>';
+    s += '<ellipse cx="' + f(m + hw) + '" cy="' + f(yy + 2) + '" rx="1.5" ry="2.6" fill="' + ck + '" opacity=".55"/>';
   }
 
   /* 结：一枚纽结 + 两条垂尾（蝴蝶结读的是"礼品包装"，不是"扎口的结"） */
   if (bow >= 1){
-    var cy2 = 96, kb = shadeHex(cols[0], 0.7), kl = shadeHex(cols[0], 1.2);
+    var cy2 = 97.6, kb = shadeHex(cols[0], 0.7), kl = shadeHex(cols[0], 1.15);
+    /* ★先垫一层暗底：丝色若是月白（几乎白），结和垂尾压在米色囊身上会整块消失 ——
+       同"浅色丝配暗底"一条规矩。 */
+    s += '<g opacity=".34" stroke="#5A4526" fill="none" stroke-linecap="round">' +
+           '<path d="M' + (m - 1.5) + ' ' + (cy2 + 2.5) + ' q-4 7 1.5 11" stroke-width="2.9"/>' +
+           '<path d="M' + (m + 1.5) + ' ' + (cy2 + 2.5) + ' q4 7 -1.5 11" stroke-width="2.9"/>' +
+           '<circle cx="' + m + '" cy="' + cy2 + '" r="3.9"/>' +
+         '</g>';
     s += '<path d="M' + (m - 1.5) + ' ' + (cy2 + 2.5) + ' q-4 7 1.5 11" fill="none" stroke="' + cols[0] + '" stroke-width="1.6" stroke-linecap="round"/>' +
          '<path d="M' + (m + 1.5) + ' ' + (cy2 + 2.5) + ' q4 7 -1.5 11" fill="none" stroke="' + cols[0] + '" stroke-width="1.6" stroke-linecap="round"/>' +
          '<circle cx="' + m + '" cy="' + cy2 + '" r="3.2" fill="' + kl + '" stroke="' + kb + '" stroke-width="1"/>' +
@@ -1012,97 +1851,182 @@ function distStroke(p, so){
    （与 tang / proof / touhu 同一套 Canvas + hooks；坐标仍 300×210）
    ============================================================ */
 
-/* ---------------- 执杯上寿：举觞（按住停晃）／献上（托觞落案） ---------------- */
-function playShang(cv, hooks) {
-  var st = { beat: 0, down: false, held: 0, t0: 0, drag: false, cup: { x: 86, y: 180 }, done: false };
+/* ---------------- 执杯上寿：举觞（按住看圈）／献上（托觞落案） ----------------
+   2026-11-02 美术重做（口径见 01_游戏UI/执觞上寿_美术优化意见_v1.md）：
+   · 觞补三件：双耳 / 圈足 / 深内壁。形制取**漆耳杯（羽觞）**——战国至五代沿用，
+     用作"觞"最贴；去掉这三件它就只是一只纸杯。
+   · 案从"一个面"补成三层：案面（后沿收 6、抬 9 做透视）＋侧板厚 7＋两条板足，
+     再补边抹亮线、两道木纹、案下投影。只有面没有厚，第一人称俯视下必被读成光斑。
+   · 影分"举/放"：举时影小、实，且与杯底分开；放时影收紧贴底。不写字也能读出"举起来了"。
+   · 手改掌托剪影（原 `M134 145 q16 6 32 0` 是 stroke 7 的孤弧，竖屏 8px，读作一块饼干）。
+   两拍共用 tableAt()：同一张案的两个机位，不是两块不同的板。 */
+function playShang(cv, hooks, cfg, ui) {
+  var st = { beat: 0, down: false, held: 0, t0: 0, drag: false, cup: { x: 78, y: 164 }, placed: false, done: false };
   var DUR = 700;
+  /* 案：y＝案面前沿；两拍只换机位（居中 220 / 右移 126） */
+  var T = { y: 136, cx0: 150, w0: 220, cx1: 232, w1: 118, drop: { x: 232, y: 133 } };
+  var CUP0 = { x: 150, y: 106 };                 /* 举觞时机位（杯底离案面 12 单位） */
 
+  /* 觞：漆耳杯。宽 22 / 高 16.6，含耳总宽 32.8（竖屏 41px、横屏 74px，进"可辨"区间） */
   function cupSVG() {
-    return '<path d="M-9 -8 h18 l-2 11 q-7 4 -14 0 Z" fill="#D8C8A6" stroke="#8A6E33" stroke-width="1.2"/>' +
-      '<ellipse cx="0" cy="-8" rx="9" ry="2.6" fill="#F0E6CE" stroke="#8A6E33" stroke-width="1"/>' +
-      '<ellipse cx="0" cy="-8" rx="7" ry="1.9" fill="#B9C6BE"/>' +
-      '<path d="M-4 3 q4 3 8 0" stroke="#8A6E33" stroke-width="1" fill="none"/>';
+    return '<g>' +
+      /* 双耳先画：口沿压住它们的根，才像从杯身长出来，而不是贴上去两片饼干 */
+      '<ellipse cx="-12.4" cy="-5" rx="4.1" ry="2.3" fill="#8E4632" stroke="#4E2618" stroke-width=".9" transform="rotate(-12 -12.4 -5)"/>' +
+      '<ellipse cx="12.4" cy="-5" rx="4.1" ry="2.3" fill="#8E4632" stroke="#4E2618" stroke-width=".9" transform="rotate(12 12.4 -5)"/>' +
+      /* 杯身：浅腹下收 */
+      '<path d="M-11 -7 C-10.6 -1 -9 4.4 -4.8 7 H4.8 C9 4.4 10.6 -1 11 -7 Z" fill="#A8563C" stroke="#4E2618" stroke-width="1.2" stroke-linejoin="round"/>' +
+      /* 圈足＋底沿：无足即碗，有足才是"器" */
+      '<path d="M-4.8 7 h9.6 l-.9 2.5 h-7.8 Z" fill="#8E4632" stroke="#4E2618" stroke-width=".9"/>' +
+      '<ellipse cx="0" cy="9.6" rx="3.9" ry="1.1" fill="#6E3324" opacity=".85"/>' +
+      /* 口沿 / 深内壁 / 酒面反光：浅色内壁会被读成"盖"，必须深 */
+      '<ellipse cx="0" cy="-7" rx="11" ry="3.4" fill="#C0704F" stroke="#4E2618" stroke-width="1"/>' +
+      '<ellipse cx="0" cy="-6.8" rx="9.2" ry="2.7" fill="#3A231B"/>' +
+      '<ellipse cx="0" cy="-6.3" rx="7.3" ry="1.9" fill="#5E382A"/>' +
+      '<path d="M-6.4 -6.9 q2.6 -1 4.8 -.5" fill="none" stroke="#D8B394" stroke-width=".8" opacity=".55"/>' +
+      /* 外壁左缘一道受光：圆的东西没有高光就是平面色块 */
+      '<path d="M-9.4 -5.4 C-9 .2 -7.7 3.2 -5.3 5.4" fill="none" stroke="#E7C7A8" stroke-width="1.1" opacity=".45"/>' +
+      '</g>';
   }
+  /* ★不画手（意见书 §4.3 方案 B）：试过"掌托剪影"，但在竖屏 26px 的杯下，
+     那条掌根弧被读成**杯垫**——"杯垫 + 杯"恰好否掉"举起来"。第一人称本来就看不见自己的手，
+     靠"杯 + 落在案面上的影"表达，少一件画不好的东西。 */
+  /* 案：投影 → 板足 → 侧板厚 → 案面顶 → 边抹 → 木纹 */
+  function tableAt(cx, w, yT) {
+    var x0 = cx - w / 2, x1 = cx + w / 2, s = '';
+    s += '<ellipse cx="' + cx + '" cy="' + (yT + 24) + '" rx="' + n1(w * .46) + '" ry="5.4" fill="#8A6A3A" opacity=".14"/>';
+    s += '<path d="M' + n1(x0 + 14) + ' ' + (yT + 5) + ' h8 v16 h-8 Z" fill="#8A6E45"/>' +
+         '<path d="M' + n1(x1 - 22) + ' ' + (yT + 5) + ' h8 v16 h-8 Z" fill="#8A6E45"/>' +
+         '<path d="M' + n1(x0 + 14.8) + ' ' + (yT + 8) + ' h1 v13 h-1 Z M' + n1(x1 - 21.2) + ' ' + (yT + 8) + ' h1 v13 h-1 Z" fill="#6E5732" opacity=".5"/>';
+    s += '<path d="M' + n1(x0) + ' ' + yT + ' h' + n1(w) + ' v7 h-' + n1(w) + ' Z" fill="#A9873F"/>';
+    s += '<path d="M' + n1(x0 + 6) + ' ' + (yT - 9) + ' H' + n1(x1 - 6) + ' L' + n1(x1) + ' ' + yT + ' H' + n1(x0) + ' Z" fill="#DCC38C" stroke="#B99A5E" stroke-width=".8" stroke-linejoin="round"/>';
+    s += '<path d="M' + n1(x0 + 1.2) + ' ' + (yT - .7) + ' H' + n1(x1 - 1.2) + '" stroke="#F3E4C0" stroke-width="1.1" opacity=".7"/>';
+    s += '<path d="M' + n1(x0 + 24) + ' ' + (yT - 6) + ' q' + n1(w * .17) + ' -1.8 ' + n1(w * .32) + ' .5" fill="none" stroke="#B99A5E" stroke-width=".8" opacity=".4"/>' +
+         '<path d="M' + n1(x0 + w * .48) + ' ' + (yT - 2.6) + ' q' + n1(w * .15) + ' -1.6 ' + n1(w * .28) + ' .3" fill="none" stroke="#B99A5E" stroke-width=".8" opacity=".3"/>';
+    return s;
+  }
+
+  function ring0() { return st.beat === 0 ? st.held / DUR : (st.placed ? 1 : 0); }
   function scene() {
-    var s = '<ellipse cx="150" cy="158" rx="86" ry="12" fill="#DFD0AE" opacity=".55"/>';
+    var s = '', p = Math.min(1, ring0());
     if (st.beat === 0) {
-      var hr = 34, C = 2 * Math.PI * hr;
-      s += '<ellipse cx="150" cy="150" rx="13" ry="3.8" fill="rgba(80,64,32,.16)"/>' +
-        '<g id="hring"><circle cx="150" cy="122" r="' + hr + '" fill="none" stroke="#C9B48A" stroke-width="2.4" opacity=".34"/>' +
-        '<circle id="harc" cx="150" cy="122" r="' + hr + '" fill="none" stroke="#7FA9A1" stroke-width="3.6" stroke-linecap="round" ' +
-        'transform="rotate(-90 150 122)" stroke-dasharray="' + n1(C) + '" stroke-dashoffset="' + n1(C) + '"/></g>' +
-        '<g id="cup" transform="translate(150,138)">' + cupSVG() + '</g>' +
-        '<path d="M134 145 q16 6 32 0" fill="none" stroke="#C6A385" stroke-width="7" opacity=".9"/>' +
-        '<text x="150" y="200" font-size="9" text-anchor="middle" fill="#8A8378">按住觞 · 稳住不晃</text>';
+      var hr = 26, C = 2 * Math.PI * hr;
+      /* 环在下、案在更下：环底被案面挡住是正常的（案是实体，环是标尺） */
+      s += '<g id="hring"><circle cx="150" cy="111" r="' + hr + '" fill="none" stroke="#C9B48A" stroke-width="2.2" opacity=".32"/>' +
+        '<circle id="harc" cx="150" cy="111" r="' + hr + '" fill="none" stroke="#7FA9A1" stroke-width="3.4" stroke-linecap="round" ' +
+        'transform="rotate(-90 150 111)" stroke-dasharray="' + n1(C) + '" stroke-dashoffset="' + n1(C * (1 - p)) + '"/></g>';
+      s += tableAt(T.cx0, T.w0, T.y);
+      /* 影落在案面上：比杯小一号、实一点 —— 杯与影分开，"举"才成立 */
+      s += '<ellipse cx="150" cy="' + (T.y - 4) + '" rx="' + n1(8 - 1 * p) + '" ry="' + n1(2.6 - .4 * p) +
+           '" fill="#7A5C2E" opacity="' + n1(.22 - .06 * p) + '"/>';
+      s += '<g id="cup" transform="translate(' + CUP0.x + ',' + n1(CUP0.y - 3 * p) + ')">' + cupSVG() + '</g>';
+      if (ui && ui.hud) { s += ui.hud('按住觞，等外圈走满再松', Math.round(p * 100) + '%', p >= .99 ? 'ok' : null); }
     } else {
-      s += '<rect x="196" y="140" width="92" height="16" rx="4" fill="#D8C8A6" stroke="#8A6E33" stroke-width="1.2"/>' +
-        '<ellipse cx="238" cy="148" rx="26" ry="11" fill="none" stroke="#8A7B5E" stroke-width="1.5" stroke-dasharray="4 4" opacity=".75"/>' +
-        '<g id="cup" transform="translate(' + n1(st.cup.x) + ',' + n1(st.cup.y) + ')">' + cupSVG() + '</g>' +
-        '<text x="150" y="200" font-size="9" text-anchor="middle" fill="#8A8378">托觞送上案面</text>';
+      s += tableAt(T.cx1, T.w1, T.y);
+      /* 目标：案面上一个虚圈（落在案面里，不在案沿上） */
+      s += '<ellipse cx="' + T.drop.x + '" cy="' + T.drop.y + '" rx="22" ry="7" fill="none" stroke="#8A7B5E" ' +
+           'stroke-width="1.5" stroke-dasharray="4 4" opacity=".8"/>';
+      if (st.placed) {
+        s += '<ellipse cx="' + T.drop.x + '" cy="' + T.drop.y + '" rx="24" ry="8.2" fill="none" stroke="#8FB5B0" stroke-width="1.8" opacity=".85"/>';
+      }
+      /* 托着走时影跟着杯走；落定后影收紧贴底 */
+      var shx = st.cup.x, shy = st.cup.y + 12.6, shr = st.placed ? 11 : 8.6;
+      s += '<ellipse cx="' + n1(shx) + '" cy="' + n1(shy) + '" rx="' + n1(shr) + '" ry="2.6" fill="#7A5C2E" opacity="' + n1(st.placed ? .2 : .14) + '"/>';
+      s += '<g id="cup" transform="translate(' + n1(st.cup.x) + ',' + n1(st.cup.y) + ')">' + cupSVG() + '</g>';
+      /* 落案后不再画场内条：末尾过渡条就钉在这一带，两条叠在一起会互相透字 */
+      if (ui && ui.hud && !st.placed) { s += ui.hud('托觞上前，杯底放进案上虚圈', '待落案', null); }
     }
     return s;
   }
   function paint() { cv.html(scene()); }
-  function ring0() { return st.beat === 0 ? st.held / DUR : (st.done ? 1 : 0); }
 
   function down(p) {
     guardDown(st, st.beat);
+    if (st.done) { return; }
     if (st.beat === 0) {
       st.down = true; st.t0 = now(); st.held = 0;
-      var c = cv.q('#cup'); if (c) { c.style.animation = 'none'; }
       return;
     }
-    if (dist(p, st.cup) < 30) { st.drag = true; }
+    if (dist(p, st.cup) < 34) { st.drag = true; }
   }
   function move(p) {
-    if (st.beat === 1 && st.drag) { st.cup = { x: p.x, y: p.y }; paint(); }
+    if (st.beat === 1 && st.drag && !st.placed) {
+      st.cup = { x: p.x, y: p.y };
+      paint();
+    }
   }
   function up(p) {
     if (!guardUp(st, st.beat)) { return; }
     if (st.beat === 0) {
-      st.down = false;
-      var ph = Math.min(1, st.held / DUR);
-      var c = cv.q('#cup'); if (c) { c.style.animation = ''; }
-      if (ph >= 0.92) { st.done = true; hooks.step(1, '觞已举稳'); hooks.done(false); }
-      else { st.held = 0; hooks.tip('再按住一会儿——等外圈走满。'); paint(); }
+      /* ★按住的时长直接取 now()−t0，不读 loop() 写的 st.held：
+         rAF 在后台/省电/无头环境会被吞帧，靠它累加会让"明明按够了"判成没按够。 */
+      var el = now() - st.t0;
+      st.down = false; st.held = el;
+      var ph = Math.min(1, el / DUR);
+      if (ph >= 0.92) {
+        st.done = true; paint();
+        hooks.step(1, '觞已举稳');
+        hooks.done(false);                 /* 交棒：F.iv 判过这一拍 → 迸献上拍 */
+        return;
+      }
+      st.held = 0; paint();
+      hooks.tip('再按住一会儿——等外圈走满。');
       return;
     }
     if (!st.drag) { return; }
     st.drag = false;
-    if (dist(st.cup, { x: 238, y: 148 }) < 26) { st.done = true; hooks.step(1, '觞已落案'); hooks.done(false); }
-    else { hooks.tip('托到案上那个虚圈里。'); }
+    if (dist(st.cup, T.drop) < 26) {
+      st.placed = true; st.cup = { x: T.drop.x, y: T.drop.y - 3 };   /* 落位吸附到案面中线 */
+      paint();
+      hooks.step(1, '觞已落案');
+      /* 末尾过渡条（与汤饼/丝结/史官线同一处、同一形制）：点掉才交棒 */
+      if (ui && ui.sheet) {
+        ui.sheet({
+          title: (cfg && cfg.steps && cfg.steps[1] && cfg.steps[1].done) || '觞已献。',
+          body: (cfg && cfg.done) || '四礼习毕。',
+          go: '收觞'
+        }, function () { hooks.done(false); });
+      } else { hooks.done(false); }
+    } else {
+      hooks.tip('托到案上那个虚圈里。');
+    }
   }
 
   var raf = 0;
   function loop() {
     raf = 0;
-    if (st.beat === 0 && st.down) {
+    if (st.beat === 0 && st.down && !st.done) {
       st.held = now() - st.t0;
       var ph = Math.min(1, st.held / DUR);
       var arc = cv.q('#harc');
       if (arc) {
-        arc.setAttribute('stroke-dashoffset', n1(2 * Math.PI * 34 * (1 - ph)));
+        arc.setAttribute('stroke-dashoffset', n1(2 * Math.PI * 26 * (1 - ph)));
         arc.setAttribute('stroke', ph >= 0.99 ? '#6E9A94' : '#7FA9A1');
       }
+      var cg = cv.q('#cup');
+      if (cg) { cg.setAttribute('transform', 'translate(' + CUP0.x + ',' + n1(CUP0.y - 3 * ph) + ')'); }
       hooks.step(ph, '稳住… ' + Math.round(ph * 100) + '%');
     }
     if (st.live) { raf = requestAnimationFrame(loop); }
   }
 
   return {
-    beat: function (i) { st.beat = i; st.down = false; st.drag = false; st.held = 0; st.done = false;
-      st.cup = { x: 86, y: 180 }; paint(); hooks.step(0, i === 0 ? '按住觞' : '托觞上前'); },
+    beat: function (i) {
+      st.beat = i; st.down = false; st.drag = false; st.held = 0; st.done = false;
+      st.cup = { x: 78, y: 164 }; st.placed = false;
+      paint(); hooks.step(0, i === 0 ? '按住觞' : '托觞上前');
+    },
     down: down, move: move, up: up,
     start: function () { st.live = true; if (!raf) { raf = requestAnimationFrame(loop); } },
     stop: function () { st.live = false; if (raf) { cancelAnimationFrame(raf); raf = 0; } },
-    progress: ring0, label: function () { return st.beat === 0 ? '按住 ' + (st.held / 1000).toFixed(1) + ' / 0.7 秒' : '托觞'; }
+    progress: ring0, label: function () { return st.beat === 0 ? '按住 ' + (st.held / 1000).toFixed(1) + ' / 0.7 秒' : '托觞'; },
+    state: function () { return { beat: st.beat, held: Math.round(st.held), placed: st.placed, cup: st.cup }; }
   };
 }
 
 /* ---------------- 丝结承露囊：择丝 / 选囊 / 绕丝 / 放香药 / 结绳 ---------------- */
-function playFolk(cv, hooks) {
+function playFolk(cv, hooks, cfg, ui) {
   var st = { beat: 0, silk: [], taken: [], body: 0, wound: 0, lastAng: 0, acc: 0, down: false,
-    hits: 0, drag: false, dish: { x: 62, y: 164 }, spiced: false, knot: 0 };
+    hits: 0, drag: false, dish: { x: 62, y: 164 }, spiced: false, knot: 0, fin: false, pt: null };
 
   /* 十二束六色，两排 */
   var SK = [];
@@ -1143,47 +2067,88 @@ function playFolk(cv, hooks) {
     if (st.beat === 1) {
       var nm = ['素绢', '锦缎', '缂丝'], PX = [86, 150, 214], q;
       for (q = 0; q < 3; q++) {
-        s += '<rect x="' + (PX[q] - 29) + '" y="84" width="58" height="78" rx="10" fill="none" stroke="' + (st.body === q ? '#527E79' : '#D8CFBA') + '" stroke-width="' + (st.body === q ? '2' : '1') + '"/>' +
+        /* 未选前谁都不高亮：st.body 默认就是 0，按 st.body 判会把素绢先点亮（＝替玩家选了） */
+        var on = st.chosen && st.body === q;
+        s += '<rect x="' + (PX[q] - 29) + '" y="84" width="58" height="78" rx="10" fill="none" stroke="' + (on ? '#527E79' : '#D8CFBA') + '" stroke-width="' + (on ? '2' : '1') + '"/>' +
           '<g transform="translate(' + PX[q] + ',106) scale(.58) translate(-150,-100)">' + bagSVG({ cols: colsOf(), body: q, wound: 3 }) + '</g>' +
           '<text x="' + PX[q] + '" y="178" font-size="10" text-anchor="middle" fill="#5A5750">' + nm[q] + '</text>';
       }
       return s;
     }
+    /* ---- 成品页：结完就停在这里，不直接跳走 ---- */
+    if (st.fin) { return finale(); }
+
     /* 后三拍都在囊上做 */
     s += bagSVG({ cols: colsOf(), body: st.body, wound: (st.beat === 2 ? st.wound : 3), spice: st.spiced, cinch: st.knot >= 1 ? 1 : (st.beat === 4 ? 0.35 : 1), bow: st.knot >= 2 ? 1 : 0 });
     if (st.beat === 2) {
-      s += '<circle cx="150" cy="96" r="27" fill="none" stroke="#527E79" stroke-width="1.2" stroke-dasharray="4 4" opacity=".5"/>' +
-        '<text x="150" y="200" font-size="9" text-anchor="middle" fill="#8A8378">捏住丝头绕三圈</text>';
+      s += '<circle cx="150" cy="96" r="27" fill="none" stroke="#527E79" stroke-width="1.2" stroke-dasharray="4 4" opacity=".5"/>';
+      /* 丝头跟手：绕到哪儿、线头在哪儿，一眼看得见（不然只有三道静态的线，"在绕"这件事没有证据） */
+      if (st.down && st.pt) {
+        var hw0 = [9, 11.4, 14.2][Math.min(2, st.wound)] || 9;
+        var cy0 = [101.4, 105.8, 110.4][Math.min(2, st.wound)] || 101.4;
+        var ck0 = colsOf()[st.wound % 3];
+        s += '<path d="M' + n1(150 + hw0) + ' ' + n1(cy0 + 2) + ' Q' + n1(st.pt.x + 6) + ' ' + n1(st.pt.y - 6) + ' ' +
+          n1(st.pt.x) + ' ' + n1(st.pt.y) + '" fill="none" stroke="' + ck0 + '" stroke-width="1.6" stroke-linecap="round" opacity=".85"/>' +
+          '<circle cx="' + n1(st.pt.x) + '" cy="' + n1(st.pt.y) + '" r="2.2" fill="' + ck0 + '" opacity=".9"/>';
+      }
+      s += hudBar('捏住丝头，绕囊口打圈', st.wound + '/3 圈', st.wound >= 3 ? 'ok' : null);
     }
     if (st.beat === 3) {
       s += '<g transform="translate(' + n1(st.dish.x) + ',' + n1(st.dish.y) + ')"><ellipse rx="15" ry="5.6" fill="#9FA8A2" stroke="#5E6B64" stroke-width="1.2"/>' +
         '<ellipse cy="-1" rx="11" ry="4" fill="#B39A6A"/><circle cx="-4" cy="-2" r="1.5" fill="#C9A34E"/><circle cx="2" cy="-3" r="1.3" fill="#B39A6A"/></g>' +
-        '<circle cx="150" cy="96" r="22" fill="none" stroke="#9A7728" stroke-width="1.5" stroke-dasharray="4 4" opacity=".6"/>' +
-        '<text x="150" y="200" font-size="9" text-anchor="middle" fill="#8A8378">把香药倒进囊口</text>';
+        '<circle cx="150" cy="96" r="22" fill="none" stroke="#9A7728" stroke-width="1.5" stroke-dasharray="4 4" opacity=".6"/>';
+      s += hudBar('把香药倒进囊口', st.spiced ? '已入' : '待放', st.spiced ? 'ok' : null);
     }
     if (st.beat === 4) {
-      s += '<circle cx="150" cy="86" r="18" fill="none" stroke="#527E79" stroke-width="1.3" stroke-dasharray="4 4" opacity=".55"/>' +
-        '<text x="150" y="200" font-size="9" text-anchor="middle" fill="#8A8378">在囊口连点两下：先收口，再打结</text>';
+      s += '<circle cx="150" cy="86" r="18" fill="none" stroke="#527E79" stroke-width="1.3" stroke-dasharray="4 4" opacity=".55"/>';
+      s += hudBar('在囊口连点两下：先收口，再打结', st.knot + '/2 下', st.knot >= 2 ? 'ok' : null);
     }
     return s;
   }
+  /* 成品页：囊居中 + 题识（款式）+ 三色点。整体上移 8，底边停在 y≈149 ——
+     底部那条过渡对话框钉在舞台下沿，不能压住成品。 */
+  function finale() {
+    var nm = ['素绢', '锦缎', '缂丝'][st.body] || '素绢';
+    var cs = colsOf(), dots = '', i2;
+    /* ★三色点上移（2026-11-02 实机反馈）：原来 cy=60，成品放大 1.12 + 上移 10 之后
+       挂环顶已经到 y≈64 —— 三个点正好压在挂环上，读作"囊上有三颗钉"。
+       现在 cy=52（点底 55.2、环顶 64，留 8.8 单位净空），题识也跟着上抬到 36。 */
+    for (i2 = 0; i2 < 3; i2++) {
+      dots += '<circle cx="' + (140 + i2 * 10) + '" cy="52" r="3.2" fill="' + (cs[i2] || '#8FB5B0') +
+        '" stroke="#FFFDF6" stroke-width="1"/>';
+    }
+    return '<defs><radialGradient id="finG" cx=".5" cy=".45" r=".55">' +
+        '<stop offset="0" stop-color="#FFFDF6" stop-opacity=".92"/>' +
+        '<stop offset="1" stop-color="#FFFDF6" stop-opacity="0"/>' +
+      '</radialGradient></defs>' +
+      '<ellipse cx="150" cy="110" rx="88" ry="74" fill="url(#finG)"/>' +
+      '<text x="150" y="36" font-size="9" text-anchor="middle" fill="#8A8378">承露囊 · ' + nm + '</text>' +
+      dots +
+      /* 成品比游戏里大 12%：这一页就是"给玩家看一眼"的，不能和过程图一个尺寸 */
+      '<g transform="translate(0,-10)"><g transform="translate(150,122) scale(1.12) translate(-150,-122)">' +
+        bagSVG({ cols: cs, body: st.body, wound: 3, spice: true, cinch: 1, bow: 1 }) +
+      '</g></g>';
+  }
+
   function paint() { cv.html(scene()); }
   function prog() {
+    if (st.fin) { return 1; }
     if (st.beat === 0) { return st.silk.length / 3; }
-    if (st.beat === 1) { return st.body || st.body === 0 ? 1 : 0; }
+    if (st.beat === 1) { return st.chosen ? 1 : 0; }
     if (st.beat === 2) { return st.wound / 3; }
     if (st.beat === 3) { return st.spiced ? 1 : 0; }
     return st.knot / 2;
   }
   function lab() {
     if (st.beat === 0) { return '已挑 ' + st.silk.length + ' / 3 束'; }
-    if (st.beat === 1) { return '已选 ' + ['素绢', '锦缎', '缂丝'][st.body]; }
+    if (st.beat === 1) { return st.chosen ? ('已选 ' + ['素绢', '锦缎', '缂丝'][st.body]) : '待选囊体'; }
     if (st.beat === 2) { return '已绕 ' + st.wound + ' / 3 圈'; }
     if (st.beat === 3) { return st.spiced ? '香药已入' : '待放香药'; }
     return '已结 ' + st.knot + ' / 2 下';
   }
 
   function down(p) {
+    if (st.fin) { return; }                 /* 收尾态：底部对话框接管，画布不再吃手势 */
     guardDown(st, st.beat);
     if (st.beat === 0) {
       var best = -1, bd = 1e9, i, d2;
@@ -1214,11 +2179,21 @@ function playFolk(cv, hooks) {
       if (dist(p, { x: 150, y: 86 }) > 20) { return; }
       st.knot = Math.min(2, st.knot + 1);
       paint(); hooks.step(prog(), lab());
-      if (st.knot >= 2) { hooks.done(false); }
+      if (st.knot >= 2) {
+        /* 不直接交棒：先进成品页，再把对话框贴到舞台下沿，玩家点过才走 */
+        st.fin = true;
+        paint(); hooks.step(1, '双结系牢');
+        ui.sheet({
+          title: (cfg && cfg.steps && cfg.steps[4] && cfg.steps[4].done) || '双结系牢。',
+          body: (cfg && cfg.done) || '囊成。',
+          go: '收下'
+        }, function () { hooks.done(false); });
+      }
     }
   }
   function move(p) {
     if (st.beat === 2 && st.down) {
+      st.pt = { x: p.x, y: p.y };                 /* 丝头从这里牵出来 */
       var a = Math.atan2(p.y - 96, p.x - 150);
       if (st.lastAng) {
         var da = a - st.lastAng;
@@ -1251,21 +2226,26 @@ function playFolk(cv, hooks) {
 
   return {
     beat: function (i) {
-      st.beat = i; st.down = false; st.drag = false; st.lastAng = 0; st.acc = 0;
-      if (i === 0) { st.silk = []; st.taken = []; st.body = 0; st.wound = 0; st.spiced = false; st.knot = 0; }
+      st.beat = i; st.down = false; st.drag = false; st.lastAng = 0; st.acc = 0; st.pt = null; st.fin = false;
+      if (ui && ui.sheet) { ui.sheet.close(); }
+      if (i === 0) { st.silk = []; st.taken = []; st.body = 0; st.chosen = false; st.wound = 0; st.spiced = false; st.knot = 0; }
       if (i === 2) { st.wound = 0; }
       paint(); hooks.step(prog(), lab());
     },
     down: down, move: move, up: up,
     start: function () { }, stop: function () { },
-    progress: prog, label: lab
+    progress: prog, label: lab,
+    state: function () {
+      return { beat: st.beat, silk: st.silk.slice(), body: st.body, chosen: !!st.chosen,
+               wound: st.wound, spiced: st.spiced, knot: st.knot, fin: st.fin };
+    }
   };
 }
 
 /* ---------------- 食单记注：研墨 / 蘸笔 / 临帖 ---------------- */
-function playShiFood(cv, hooks) {
-  var st = { beat: 0, passes: 0, dir: 0, lastX: 0, drag: false, brush: { x: 232, y: 62 },
-    ink: 0, gi: 0, trail: [], cov: {}, done: false, sT0: 0 };
+function playShiFood(cv, hooks, cfg, ui) {
+  var st = { beat: 0, passes: 0, acc: 0, mx: 150, my: 104, tilt: 0, drag: false,
+    brush: { x: 232, y: 62 }, ink: 0, gi: 0, trail: [], done: false, sT0: 0, fin: false, moDone: false };
 
   /* ★字帖几何单点定义（2026-11-01 修「说明文字压字」）
    * 原：by=12 / bh=186 ⇒ 底板 y 4~204，而说明文字基线 y=206、字号 9
@@ -1274,20 +2254,45 @@ function playShiFood(cv, hooks) {
    *     ⇒ 净间距 9 个 viewBox 单位（≈14px @ 1.6×），字缩小约 8%，其余不变。
    * 底板 rect 与文字基线都从这里的常量派生，杜绝两处硬编码再次走散。 */
   var GB = { bx: 96, by: 6, bw: 110, bh: 172, pad: 3, plate: 8, plateBot: 14, noteY: 202 };
+  var POOL = { x: 150, y: 120, rx: 30, ry: 24 };     /* 砚池 */
+  var RUN = { x: 20, y: 9 };                          /* 墨条重心能到的最远（池内） */
+  var PASS = 40;                                      /* 累计横移 40 单位＝推满一趟（往返一次约 40） */
+
   function glyph() {
     if (!st.chars) { st.chars = glyphPrep({ text: '湯餅', bx: GB.bx, by: GB.by, bw: GB.bw, bh: GB.bh, cols: 1, rows: 2, pad: GB.pad }); }
     return st.chars;
   }
+  function inkCol() {
+    /* 墨色随趟数递深：浅灰 → 近黑（一池水磨成墨，看得见） */
+    var p = st.passes / 4;
+    var r = Math.round(96 - 66 * p), g = Math.round(98 - 68 * p), b = Math.round(104 - 70 * p);
+    return 'rgb(' + r + ',' + g + ',' + b + ')';
+  }
+  function moTiao() {
+    /* 墨条：跟手 + 逐趟磨短（磨掉的那截是真会没的）+ 按移动方向微倾 */
+    var wear = Math.min(6, st.passes * 1.5);
+    return '<g id="mo" transform="translate(' + n1(st.mx) + ',' + n1(st.my) + ') rotate(' + n1(st.tilt) + ')">' +
+      '<rect x="-6" y="' + n1(-34 + wear) + '" width="12" height="' + n1(34 - wear) + '" rx="2" fill="#2E2E34" stroke="#17171B"/>' +
+      '<rect x="-6" y="' + n1(-37 + wear) + '" width="12" height="5" rx="1" fill="#5A5A64"/>' +
+      /* 磨口：一道被磨白的斜面 */
+      '<path d="M-6 0 h12 l-1.4 2.6 h-9.2 Z" fill="#6E6E78" opacity=".9"/>' +
+      '<path d="M-4.4 -20 h1 v14 h-1" fill="#4A4A52" opacity=".7"/>' +
+      '</g>';
+  }
+
   function scene() {
     var s = '';
     if (st.beat === 0) {
+      var p = st.passes / 4;
       s += '<rect x="104" y="86" width="92" height="68" rx="7" fill="#4A4A4E" stroke="#2C2C30" stroke-width="2"/>' +
-        '<ellipse cx="150" cy="120" rx="30" ry="24" fill="#8A8A90"/>' +
-        '<ellipse cx="150" cy="120" rx="27" ry="21" fill="' + (st.passes >= 4 ? '#33333A' : '#5A5A62') + '"/>' +
-        '<circle cx="150" cy="120" r="20" fill="none" stroke="#E8E4D6" stroke-width="1.2" stroke-dasharray="4 4" opacity=".55"/>' +
-        '<g id="motiao" transform="translate(' + (150 + (st.passes % 2 ? -22 : 22)) + ',100)">' +
-        '<rect x="-6" y="0" width="12" height="34" rx="2" fill="#2E2E34" stroke="#17171B"/><rect x="-6" y="-3" width="12" height="5" rx="1" fill="#5A5A64"/></g>' +
-        '<text x="150" y="200" font-size="9" text-anchor="middle" fill="#8A8378">按住墨条，在砚池里左右推</text>';
+        '<ellipse cx="' + POOL.x + '" cy="' + POOL.y + '" rx="' + POOL.rx + '" ry="' + POOL.ry + '" fill="#8A8A90"/>' +
+        '<ellipse cx="' + POOL.x + '" cy="' + POOL.y + '" rx="27" ry="21" fill="' + inkCol() + '"/>' +
+        '<ellipse cx="' + POOL.x + '" cy="' + POOL.y + '" rx="20" ry="14" fill="#191920" opacity="' + n1(.12 + .5 * p) + '"/>' +
+        '<ellipse cx="141" cy="112" rx="8" ry="4" fill="#6E6E78" opacity="' + n1(.34 - .2 * p) + '"/>' +
+        /* 目标：池心一圈虚线（不要求精确，只要在池里推） */
+        '<circle cx="' + POOL.x + '" cy="' + POOL.y + '" r="20" fill="none" stroke="#E8E4D6" stroke-width="1.2" stroke-dasharray="4 4" opacity=".5"/>' +
+        moTiao() +
+        '<text x="150" y="200" font-size="9" text-anchor="middle" fill="#8A8378">按住墨条，在砚池里左右推——推满四趟</text>';
       return s;
     }
     if (st.beat === 1) {
@@ -1320,29 +2325,87 @@ function playShiFood(cv, hooks) {
     h += '<g id="hzinkg"><polyline id="hzg" fill="none" stroke="#3F4A45" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></g>';
     h += '<circle id="hzstart" cx="' + (st.chars && st.chars.flat[st.gi] ? st.chars.flat[st.gi].start.x.toFixed(1) : 150) + '" cy="' +
       (st.chars && st.chars.flat[st.gi] ? st.chars.flat[st.gi].start.y.toFixed(1) : 40) + '" r="9" fill="none" stroke="#B5503F" stroke-width="1.6" stroke-dasharray="3 3"/>';
-    h += '<text x="150" y="' + GB.noteY + '" font-size="9" text-anchor="middle" fill="#527E79">照红字描「湯餅」· 从红圈起笔</text>';
+    if (!st.fin) { h += '<text x="150" y="' + GB.noteY + '" font-size="9" text-anchor="middle" fill="#527E79">照红字描「湯餅」· 从红圈起笔</text>'; }
     return h;
   }
   function paint() { cv.html(scene()); }
 
+  /* ---------- 描字：按"这一笔被覆盖了多少"判，不按"抬手那一刻"判 ----------
+     ★2026-11-02 支持连笔：原来只在 up() 里判当前一笔，手指不抬就换到下一笔时，
+       整段轨迹被当作"只描了一笔"、其余全判没描到（实机反馈"笔画中断/识别不了"）。
+       现在每次 move 都判：只要当前这一笔被覆盖满 55%，就即时判过、游标前移，
+       剩下的轨迹继续拿去判下一笔 —— 一口气写下去也能过，抬不抬手都行。 */
+  function coverOf(so, trail) {
+    var hit = 0, i, j;
+    for (i = 0; i < so.samp.length; i++) {
+      for (j = 0; j < trail.length; j++) {
+        if (dist(trail[j], so.samp[i]) <= 10) { hit++; break; }
+      }
+    }
+    return hit / so.samp.length;
+  }
+  function checkStrokes() {
+    var g = glyph(), moved = false;
+    while (st.gi < g.flat.length && coverOf(g.flat[st.gi], st.trail) >= 0.55) {
+      g.flat[st.gi].done = true;
+      st.gi += 1;
+      moved = true;
+    }
+    if (moved) {
+      paint();
+      hooks.step(st.gi / g.flat.length, '已写 ' + st.gi + ' / ' + g.flat.length + ' 笔');
+      if (st.gi >= g.flat.length && !st.fin) {
+        st.fin = true;
+        /* 末尾过渡条（与女官线同款）：点掉才交棒 */
+        if (ui && ui.sheet) {
+          ui.sheet({ title: '两字写毕', body: (cfg && cfg.done) || '记毕。', go: '收笔' }, function () {
+            hooks.done(false);
+          });
+        } else { hooks.done(false); }
+      }
+    }
+    return moved;
+  }
+
   function down(p) {
     guardDown(st, st.beat);
-    if (st.beat === 0) { st.drag = true; st.lastX = p.x; return; }
+    if (st.beat === 0) {
+      /* ★整块砚台都能按（原来只有按准那根 12×34 的墨条才算，实机很难按上） */
+      if (dist(p, { x: POOL.x, y: POOL.y }) < 46 || dist(p, { x: st.mx, y: st.my }) < 30) {
+        st.drag = true;
+        st.mx = clamp(p.x, POOL.x - RUN.x, POOL.x + RUN.x);
+        st.my = clamp(p.y, POOL.y - RUN.y, POOL.y + RUN.y);
+        paint();
+      }
+      return;
+    }
     if (st.beat === 1) { st.drag = dist(p, { x: 150, y: 120 }) < 34 || dist(p, st.brush) < 30; return; }
+    if (st.fin) { return; }
     var g = glyph();
     if (st.gi >= g.flat.length) { return; }
     var so = g.flat[st.gi];
-    if (dist(p, so.start) > 18) { hooks.tip('从红圈起笔。'); st.trail = []; return; }
-    sfx('brush');   /* 落笔：短促摩擦声（描红/研墨共用同一音色族） */
+    if (dist(p, so.start) > 24) { hooks.tip('从红圈起笔。'); st.trail = []; return; }
+    sfx('brush');
     st.trail = [p]; st.sT0 = now();
   }
   function move(p) {
     if (st.beat === 0 && st.drag) {
-      var dx = p.x - st.lastX;
-      if (Math.abs(dx) > 10) {
-        if (st.dir * dx <= 0) { st.passes = Math.min(4, st.passes + 1); st.dir = dx > 0 ? 1 : -1; sfx('brush'); paint(); hooks.step(st.passes / 4, '已推 ' + st.passes + ' / 4 趟'); }
+      /* 墨条跟手：夹在池内 → 累加横移 → 每 40 单位算一趟 */
+      var nx = clamp(p.x, POOL.x - RUN.x, POOL.x + RUN.x);
+      var ny = clamp(p.y, POOL.y - RUN.y, POOL.y + RUN.y);
+      var dx = nx - st.mx;
+      st.acc += Math.abs(dx);
+      st.tilt = clamp(dx * .5, -7, 7);
+      st.mx = nx; st.my = ny;
+      var np = Math.min(4, Math.floor(st.acc / PASS));
+      if (np !== st.passes) {
+        st.passes = np;
+        sfx('brush');
+        hooks.step(np / 4, '已推 ' + np + ' / 4 趟');
       }
-      st.lastX = p.x;
+      paint();
+      /* 研墨→蘸笔是一口气的工序，中间不插过渡条（过渡条只在本节末尾） */
+      if (st.passes >= 4 && !st.moDone) { st.moDone = true; setTimeout(function () { hooks.done(false); }, 260); }
       return;
     }
     if (st.beat === 1 && st.drag) {
@@ -1359,19 +2422,17 @@ function playShiFood(cv, hooks) {
       }
       return;
     }
-    if (st.beat === 2 && st.trail.length) {
+    if (st.beat === 2 && st.trail.length && !st.fin) {
       st.trail.push(p);
+      if (st.trail.length > 420) { st.trail.shift(); }     /* 一口气连写也不让它无限长 */
       var pl = cv.q('#hzg');
       if (pl) { pl.setAttribute('points', st.trail.map(function (q) { return q.x.toFixed(1) + ',' + q.y.toFixed(1); }).join(' ')); }
+      checkStrokes();                                       /* ★即时判：连笔不必抬手 */
     }
   }
   function up(p) {
     if (!guardUp(st, st.beat)) { return; }
-    if (st.beat === 0) {
-      st.drag = false;
-      if (st.passes >= 4) { hooks.done(false); }
-      return;
-    }
+    if (st.beat === 0) { st.drag = false; return; }
     if (st.beat === 1) {
       st.drag = false;
       var d = dist(st.brush, { x: 150, y: 120 });
@@ -1380,42 +2441,77 @@ function playShiFood(cv, hooks) {
       else { hooks.tip('笔头要黑透——再往池心探一点。'); }
       return;
     }
-    var g = glyph();
     if (!st.trail.length) { return; }
-    var so = g.flat[st.gi], hit = 0, i;
-    for (i = 0; i < so.samp.length; i++) {
-      for (var j = 0; j < st.trail.length; j++) {
-        if (dist(st.trail[j], so.samp[i]) <= 10) { hit++; break; }
-      }
-    }
-    var cov = hit / so.samp.length;
+    checkStrokes();                          /* 抬手时再判一次（收笔落在同一笔上也算） */
     st.trail = [];
     var pl = cv.q('#hzg'); if (pl) { pl.setAttribute('points', ''); }
-    if (cov < 0.55) { hooks.tip('这一笔没描到——照着红线走。'); return; }
-    so.done = true; st.gi++;
-    paint();
-    hooks.step(st.gi / g.flat.length, '已写 ' + st.gi + ' / ' + g.flat.length + ' 笔');
-    if (st.gi >= g.flat.length) { hooks.done(false); }
+    if (st.gi < glyph().flat.length) { hooks.tip('这一笔没描到——照着红线走。'); }
   }
 
   return {
-    beat: function (i) { st.beat = i; st.drag = false; st.trail = []; paint(); hooks.step(0, '第 ' + (i + 1) + ' 拍'); },
+    beat: function (i) {
+      st.beat = i; st.drag = false; st.trail = []; st.fin = false;
+      if (i === 0) { st.acc = 0; st.passes = 0; st.mx = 143; st.my = 110; st.tilt = -7; st.moDone = false; }
+      paint(); hooks.step(0, '第 ' + (i + 1) + ' 拍');
+    },
     down: down, move: move, up: up,
     start: function () { }, stop: function () { },
-    progress: function () { return st.beat === 0 ? st.passes / 4 : (st.beat === 1 ? st.ink : (st.gi / (st.chars ? st.chars.flat.length : 26))); },
-    label: function () { return st.beat === 2 ? '已写 ' + st.gi + ' 笔' : ''; }
+    progress: function () {
+      return st.beat === 0 ? st.passes / 4 : (st.beat === 1 ? st.ink : (st.gi / (st.chars ? st.chars.flat.length : 26)));
+    },
+    label: function () { return st.beat === 2 ? '已写 ' + st.gi + ' 笔' : (st.beat === 0 ? '已推 ' + st.passes + ' 趟' : ''); },
+    /* 只读调试口：cur 是"当前该写的这一笔"的起笔点与采样点（QA 用来走连笔） */
+    state: function () {
+      var g = st.chars, so = g && g.flat[st.gi], sm = [];
+      if (so) { for (var i = 0; i < so.samp.length; i++) { sm.push([Math.round(so.samp[i].x * 10) / 10, Math.round(so.samp[i].y * 10) / 10]); } }
+      return { beat: st.beat, passes: st.passes, acc: Math.round(st.acc), mx: Math.round(st.mx), my: Math.round(st.my),
+               ink: Math.round(st.ink * 100) / 100, gi: st.gi, n: g ? g.flat.length : 0, fin: st.fin,
+               cur: so ? { start: [Math.round(so.start.x * 10) / 10, Math.round(so.start.y * 10) / 10], samp: sm } : null };
+    }
   };
 }
 
 /* ---------------- 民俗记注：观俗（横拖全景）／问俗（找三位摊主）／落笔（按三笔） ---------------- */
-var VEND = [
-  { x: 153, name: '卖囊妇人', note: '士庶以丝结承露囊，更相遗问。' },
-  { x: 450, name: '茶摊老板娘', note: '桥头茶摊卖江陵粗茶，市人聚饮。' },
-  { x: 747, name: '南来客商', note: '占城贡香在礼部库，桥市所售非贡余。' }
+/* ---------- 民俗记注 · 桥市全景素材接口（S4） ----------
+ * 占位态（cfg.s4.pano 为 null）用代码画：水面 / 勾栏 / 拱桥 / 幌子 / 行人 / 三个摊位。
+ * 正式素材就位后**只改 data.js 的 s4 字段**，这里与全部交互、判定、俗记文案都不动：
+ *   s4: { pano:'assets/scenes/s4_qiaoshi/pano.webp',
+ *         screens: 3,                      // 全景等于几屏宽
+ *         fit: 'xMidYMid slice',           // 纵向取景（preserveAspectRatio 原样下发）
+ *         vend: [{fx:0.17,...},{fx:0.50,...},{fx:0.83,...}] }
+ * · fx 是摊主在**全景宽度上的比例位置**（0~1），与素材分辨率无关 —— 换成 2880 宽不用改数。
+ * · 加载失败自动退回代码占位，不白屏。
+ * · 分层视差（S4 方案 L2~L5）留待素材到位后再加，接口形状不变：多张时同样按 fx 归一。 */
+var DEF_VEND = [
+  { fx: 0.17, name: '卖囊妇人', note: '士庶以丝结承露囊，更相遗问。' },
+  { fx: 0.50, name: '茶摊老板娘', note: '桥头茶摊卖江陵粗茶，市人聚饮。' },
+  { fx: 0.83, name: '南来客商', note: '占城贡香在礼部库，桥市所售非贡余。' }
 ];
-function playShiFolk(cv, hooks) {
+var PANO_CACHE = {};
+function panoMeta(src) {
+  var e = PANO_CACHE[src];
+  if (e) { return e; }
+  e = PANO_CACHE[src] = { src: src, ok: false, done: false, cb: null };
+  var im = new Image();
+  im.onload = function () { e.ok = true; e.done = true; if (e.cb) { e.cb(); } };
+  im.onerror = function () { e.ok = false; e.done = true; if (e.cb) { e.cb(); } };
+  im.src = src;
+  return e;
+}
+function playShiFolk(cv, hooks, cfg, ui) {
+  var S4 = (cfg && cfg.s4) || {};
   var st = { beat: 0, off: 0, seen: [false, false, false], drag: false, sx: 0, so: 0, asked: [], notes: 0 };
-  var VW = 300, SW = 900;
+  var VW = 300, SW = VW * (S4.screens || 3);
+  var pano = S4.pano ? panoMeta(S4.pano) : null;
+  var VS = (S4.vend && S4.vend.length === 3) ? S4.vend : DEF_VEND;
+  var VEND = [];
+  (function () {
+    for (var vi = 0; vi < 3; vi++) {
+      var vv = VS[vi] || DEF_VEND[vi];
+      var fx = (vv.fx != null) ? vv.fx : DEF_VEND[vi].fx;
+      VEND.push({ x: fx * SW, name: vv.name || DEF_VEND[vi].name, note: vv.note || DEF_VEND[vi].note });
+    }
+  })();
 
   function stalls() {
     var s = '', i;
@@ -1447,8 +2543,20 @@ function playShiFolk(cv, hooks) {
         '<rect x="-24" y="78" width="12" height="8" rx="2" fill="#D8C8A6" stroke="#A8926A"/>' +
         '<rect x="10" y="80" width="14" height="7" rx="2" fill="#D8C8A6" stroke="#A8926A"/>' +
         '</g>';
+    }
+    return s;
+  }
+  /* 摊主标记：两种素材态共用。
+     观俗这一拍**一个标记都不画**（要"找"才有意义）；问俗起，未问的给一圈很淡的虚线，
+     已问的改朱实线圈 —— 只标"这个能问"，不替玩家指路。 */
+  function vendMarks() {
+    var s = '', i, x;
+    for (i = 0; i < 3; i++) {
+      x = VEND[i].x;
       if (st.asked.indexOf(i) >= 0) {
         s += '<circle cx="' + x + '" cy="84" r="13" fill="none" stroke="#3F6B58" stroke-width="1.6" opacity=".8"/>';
+      } else if (st.beat >= 1) {
+        s += '<circle cx="' + x + '" cy="84" r="16" fill="none" stroke="#527E79" stroke-width="1.1" stroke-dasharray="4 4" opacity=".38"/>';
       }
     }
     return s;
@@ -1456,6 +2564,12 @@ function playShiFolk(cv, hooks) {
   function scene() {
     var s = '<defs><clipPath id="panoClip"><rect x="0" y="40" width="' + VW + '" height="118"/></clipPath></defs>';
     s += '<g clip-path="url(#panoClip)"><g transform="translate(' + n1(-st.off) + ',0)">';
+    if (pano && pano.ok) {
+      /* 正式全景：一张图铺满 [0,SW]×[40,158]；纵向取景交给 fit，避免裁掉主体 */
+      s += '<image x="0" y="40" width="' + SW + '" height="118" href="' + pano.src +
+        '" preserveAspectRatio="' + (S4.fit || 'xMidYMid slice') + '"/>';
+      s += vendMarks();
+    } else {
     s += '<rect x="0" y="40" width="' + SW + '" height="118" fill="#EAF0EC"/>';
     /* 水 */
     s += '<rect x="0" y="126" width="' + SW + '" height="32" fill="#C9D8D2"/>';
@@ -1466,6 +2580,8 @@ function playShiFolk(cv, hooks) {
     for (var p = 8; p < SW; p += 26) { s += '<path d="M' + p + ' 112 v-12" stroke="#B9A67C" stroke-width="1.6"/>'; }
     s += '<path d="M0 100 h' + SW + '" stroke="#A8926A" stroke-width="2"/>';
     s += stalls();
+    s += vendMarks();
+    }
     s += '</g></g>';
     s += '<rect x="0" y="40" width="' + VW + '" height="118" fill="none" stroke="#C9B48A" stroke-width="1"/>';
     /* 观察位刻度：只说"还有几段没看"，不指路 */
@@ -1512,7 +2628,7 @@ function playShiFolk(cv, hooks) {
         if (Math.abs(p.x + st.off - VEND[i].x) < 26 && p.y > 60 && p.y < 104) {
           st.moved = 0; st.askHit = true;
           if (st.asked.indexOf(i) < 0) { st.asked.push(i); paint(); hooks.step(prog(), lab()); hooks.tip(VEND[i].name + '：' + VEND[i].note); }
-          if (st.asked.length >= 3) { hooks.done(false); }
+          if (st.asked.length >= 3) { hooks.done(false); }   /* 中间拍不插条：过渡条只在本节末尾 */
           return;
         }
       }
@@ -1521,7 +2637,13 @@ function playShiFolk(cv, hooks) {
     }
     if (st.notes >= 3 || p.y < 150) { return; }
     st.notes++; paint(); hooks.step(prog(), lab());
-    if (st.notes >= 3) { hooks.done(false); }
+    if (st.notes >= 3 && !st._finSheet) {
+      /* 末尾过渡条（史官线统一：与 食单/校字 同一处、同一形制） */
+      st._finSheet = true;
+      if (ui && ui.sheet) {
+        ui.sheet({ title: '三俗记毕', body: (cfg && cfg.done) || '记毕。', go: '收笔' }, function () { hooks.done(false); });
+      } else { hooks.done(false); }
+    }
   }
   function move(p) {
     if (!st.drag) { return; }
@@ -1539,12 +2661,21 @@ function playShiFolk(cv, hooks) {
     st.drag = false; st.moved = 0;
   }
 
+  if (pano) {
+    /* 图可能在这一拍挂载之后才解码完：回来重画一次即可，其它一律不动 */
+    pano.cb = function () { try { paint(); } catch (e) { } };
+    if (pano.done) { paint(); }
+  }
   return {
     beat: function (i) { st.beat = i; st.drag = false; paint(); hooks.step(prog(), lab()); },
     down: down, move: move, up: up,
     start: function () { }, stop: function () { },
     progress: prog, label: lab,
-    state: function () { return { beat: st.beat, off: st.off, asked: st.asked.slice(), notes: st.notes }; }
+    state: function () {
+      return { beat: st.beat, off: st.off, asked: st.asked.slice(), notes: st.notes,
+               pano: !!(pano && pano.ok), panoSrc: pano ? pano.src : null, sw: SW,
+               vend: VEND.map(function (v) { return Math.round(v.x); }) };
+    }
   };
 }
 
@@ -1557,7 +2688,11 @@ function playShiFolk(cv, hooks) {
     var mk = MAKERS[kind];
     if (!mk) { return null; }
     var cv = new Canvas(stage);
-    var g = mk(cv, hooks);
+    var sheet = makeSheet(stage);
+    /* ui.sheet(...) 直接调用，ui.sheet.close() 收掉 —— 两用，免得各小节写法不一样 */
+    function uiSheet(o, cb) { sheet.show(o, cb); }
+    uiSheet.close = sheet.close;
+    var g = mk(cv, hooks, cfg || {}, { sheet: uiSheet, hud: hudBar });
     TQM.cur = g;                       /* 只读调试口：测试/QA 读当前游戏状态 */
     var startBeat = 0;
     g.beat(startBeat);
@@ -1576,6 +2711,7 @@ function playShiFolk(cv, hooks) {
       next: function (i) { g.beat(i); },
       destroy: function () {
         g.stop();
+        sheet.close();
         stage.removeEventListener('pointerdown', onDown);
         stage.removeEventListener('pointermove', onMove);
         stage.removeEventListener('pointerup', onUp);

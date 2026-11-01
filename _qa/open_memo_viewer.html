@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>天清往事 · 显德五年天清节</title>
+<link rel="stylesheet" href="../css/app.css">
+</head>
+<body>
+<div id="app" class="app"></div>
+<script>
+(function(){
+  var s={v:1,role:'nv',actIndex:2,step:0,
+    shards:{'1':true,'3':true,'5':true,'7':true,'10':true,'12':true,'13':true,'14':true},
+    deco:{},memories:{},taskDone:{},choices:{},updated:Date.now()};
+  try{ localStorage.setItem('tianqing_save_v1',JSON.stringify(s)); }catch(e){}
+})();
+</script>
+<script src="../js/data.js"></script>
+<script src="../js/minigame.js"></script>
+<script src="../js/frag.js"></script>
+<script src="../js/storage.js"></script>
+<script src="../js/cloudsync.js"></script>
+<script src="../js/assets.js"></script>
+<script src="../js/portraits.js"></script>
+<script src="../js/sfx.js"></script>
+<script src="../js/app.js"></script>
+<script>
+(function(){
+  var st=0;
+  var iv=setInterval(function(){
+    if(!window.TQApp){return;}
+    if(st===0){ st=1; window.TQApp.memo(); return; }
+    var cells=document.querySelectorAll('.memo-cell[role="button"]');
+    if(cells.length && st===1){ st=2; cells[0].click(); setTimeout(function(){var cv=document.querySelector('.shv-stage canvas');var stg=document.querySelector('.shv-stage');var sh=document.querySelector('.shv-sheet');if(cv&&stg){document.body.setAttribute('data-cv','cw='+document.documentElement.clientWidth+' iw='+window.innerWidth+' sheet='+sh.offsetWidth+' stage='+stg.offsetWidth+'x'+stg.offsetHeight+' cv='+cv.width+'x'+cv.height+' css='+cv.offsetWidth);}},400); }
+  },80);
+})();
+</script>
+</body>
+</html>

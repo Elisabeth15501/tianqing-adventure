@@ -539,7 +539,7 @@
     'yinchongyi_e2':  { cx: 0.544, ratio: 0.667, headW: 0.180, y0: 0.079, bw: 0.436, y1: 0.976, bwv: 0.437},
     'yinchongyi_e3':  { cx: 0.475, ratio: 0.667, headW: 0.180, y0: 0.079, bw: 0.496, y1: 0.976, bwv: 0.497},
     'yinchongyi_e1':  { cx: 0.544, ratio: 0.667, headW: 0.180, y0: 0.079, bw: 0.443, y1: 0.976, bwv: 0.444},
-    'zhangyongde_a1':  { cx: 0.597, ratio: 0.667, headW: 0.180, y0: 0.075, bw: 0.638, y1: 0.97, bwv: 0.612},
+    'zhangyongde_a1':  { cx: 0.596, ratio: 0.667, headW: 0.178, y0: 0.075, bw: 0.637, y1: 0.97, bwv: 0.611},
     'zhangyongde_e1': { cx: 0.536, ratio: 0.667, headW: 0.160, y0: 0.081, bw: 0.479, y1: 0.970, bwv: 0.479},
     'zhaokuangyin_a1': { cx: 0.552, ratio: 0.667, headW: 0.199, y0: 0.072, bw: 0.529, y1: 0.971, bwv: 0.502},
     'zhaokuangyin_e3': { cx: 0.539, ratio: 0.667, headW: 0.212, y0: 0.077, bw: 0.523, y1: 0.973, bwv: 0.524},
@@ -609,6 +609,10 @@
    *     且是「可见部分」不交叠，不是靠调数值碰运气。 */
   var DUO_GAP = 14;      /* 人物本体与半幅边缘的最小像素间隙 */
   var DUO_BLEED = 0.12;  /* 半身像允许向「画面外侧」多占的屏宽比例 */
+  var DUO_BODY_BLEED = 0.05; /* 全身像双人档外溢额度（11-02 试验）：治「举臂姿势 bwv 宽 → kSide 被压 → 同框头小一圈」。
+   * ★只在横版宽屏媒体查询下生效（与 css/app.css 的 .main 断点同条件）——390 竖版 / 768 中屏
+   *   的双人中缝基线（30px / 82px）已锁定，额度会把两人往两边推（实测 30→77 / 82→142），不能带过去。 */
+  var WIDE_MQ = (typeof matchMedia === 'function') ? matchMedia('(min-aspect-ratio:6/5) and (min-width:900px)') : null;
   var DUO_HEAD_H = 0.134;/* 双人档头宽占槽高的比例（10-31 实测：390 档 83/622、768 档 103/765）*/
 
   function duoGeom(slot, key, useSlot, stageW) {
@@ -625,8 +629,11 @@
     /* 半身像（640² 胸像）整幅就是「脸+肩」，若同样按半幅硬夹，390 屏上两张脸只剩 38px。
      * 胸像的正确取景本来就允许肩部出画：给一个外溢额度，且只算在**靠屏幕边那一侧**
      * （见 duoPlan 的 tc 外推）——溢出的部分是肩，被画框裁掉；中缝交叠因此减半。
-     * 全身像不给额度：它的宽度是衣摆，外溢会真的压到隔壁那个人。 */
-    var bleed = (f.ratio >= 0.9) ? Math.round((stageW || W * 2) * DUO_BLEED) : 0;
+     * 全身像（2026-11-02 试验额度 DUO_BODY_BLEED）：衣摆不给额度，但「举臂/佩刀」
+     *   一类姿势会把 bwv 撑宽（张永德 0.612），kSide 被压到 1.40，同框头宽比郭荣
+     *   小 27%。给 5% 额度让 kSide 松一档：外侧多出画的是后背/衣摆，可接受。 */
+    var bleed = (f.ratio >= 0.9) ? Math.round((stageW || W * 2) * DUO_BLEED)
+              : (DUO_BODY_BLEED && WIDE_MQ && WIDE_MQ.matches) ? Math.round((stageW || W * 2) * DUO_BODY_BLEED) : 0;
     var kTop = H / Math.max(1, baseH * (1 - y0));
     var kSide = (W + bleed - DUO_GAP * 2) / Math.max(1, bwVis * baseW);
     /* ★头宽归一化（10-31 加）：双人档原来只受「铺满槽高 / 不溢半幅」两个几何约束，
@@ -727,6 +734,23 @@
   function shiftFor(key, slotW, slotH, fit) { return fitFor(key, slotW, slotH, fit).x; }
   TP_SHIFT = shiftFor;
 
+  /* ---- 原生朝向表（2026-11-02 逐张判读 AI 立绘头部特写；小图判读不可靠，
+   *   已用 _qa/sheet_faces_big/xl.png 大图终审复核一遍）----
+   * 'l' = 原图脸朝左；'r' = 朝右；'' = 端正正面。
+   * ★两处关键纠错：zhangyongde（a1/e1 举杯侧）与 lichongjin 原生**朝右**，
+   *   其余多数朝左或近正面微偏；全组只有 3 个朝右（+guowei）。
+   * 双人档的镜像规则因此**不能**是「右位一律镜像」——那样原生朝左的角色
+   * 在右位（说话方）会被翻成朝外看，两人变成「背对背」。正解（VN 惯例）：
+   *   左槽应朝右（朝向对方）⇒ 原生朝左的镜像；
+   *   右槽应朝左（朝向对方）⇒ 原生朝右的镜像；正面不管站哪边都不翻。 */
+  var FACE = {
+    guorong: 'l', fuhou: 'l', guowei: 'r', fengdao: 'l',
+    fanzhi: 'l', ligu: 'l', wangpu: 'l', wangpu2: 'l',
+    zhangyongde: 'r', zhaokuangyin: 'l', yinchongyi: 'l', lichongjin: 'r',
+    nvguan: 'l', shiguan: 'l', shaonian: 'l', zongxun: 'l',
+    qijulang: 'l', shanggong: 'l', sizheng: 'l', shangshiling: ''
+  };
+
   /* 把 fit 模式与横向补偿写到槽上：
    * - 全身像（ratio<0.9）→ cover：铺满舞台，人物本就不宽，左右裁到的是空白；
    * - 半身像（ratio≥0.9）→ contain：1:1 图在竖版窄槽里若用 cover 会被裁掉近半宽，
@@ -742,9 +766,16 @@
      * plan 依赖「对面那个槽」当前是谁，所以两边算出来的 k 必然相同；
      * 换人后要两边一起重算 —— 见 TP.refit()（app.js 每次双人换人后都会调用）。 */
     var opt = null;
-    /* 双人档右位：水平镜像（两人面对面而不是同向看）。判定放在这里而不是 CSS，
+    /* 双人档镜像（2026-11-02 v2）：不再「右位一律镜像」，改按 FACE 原生朝向
+     * 决定谁翻——目标是两人脸朝向彼此。判定放在这里而不是 CSS，
      * 因为镜像会改变包围盒重心，位姿必须一起重算（见 fitFor ⑤b）。 */
-    var mir = (slot.getAttribute('data-duo') === '1' && slot.getAttribute('data-side') === 'r');
+    var mir = false;
+    if (slot.getAttribute('data-duo') === '1') {
+      var dSide = slot.getAttribute('data-side');
+      var nf = FACE[key] || '';
+      if (dSide === 'l') { mir = (nf === 'l'); }
+      else if (dSide === 'r') { mir = (nf === 'r'); }
+    }
     if (slot.getAttribute('data-duo') === '1') {
       var plan = duoPlan(slot);
       opt = plan ? { k: plan.k, bw: plan.bw, tc: plan.tc, bleed: plan.bleed, mir: mir } : null;
@@ -757,6 +788,19 @@
     slot.style.setProperty('--fig-sx', m.sx == null ? m.s : m.sx);
   }
   var TP_APPLY = applyFit;
+
+  /* 素材缺失角标（只在真的 fail 时出现；矢量模式不算「缺失」，是玩家自己选的） */
+  function markMissing(slot, stt) {
+    if (!slot || stt === 'none') { return; }
+    if (TQA && TQA.assetsMode && TQA.assetsMode() === 'vector') { return; }
+    if (slot.querySelector('.fig-miss')) { return; }
+    var a = document.createElement('a');
+    a.className = 'fig-miss';
+    a.setAttribute('href', './assets-check.html');
+    a.setAttribute('title', '素材自检');
+    a.textContent = '立绘未载入 · 自检';
+    slot.appendChild(a);
+  }
 
   var CHAR_ASSETS = {
     guorong: 'a1', nvguan: 'a1', shiguan: 'a1',
@@ -867,37 +911,71 @@
       var gen = (slot._tqGen || 0) + 1; /* 世代号：异步 resolve 回来时若已换人或换槽则丢弃 */
       slot._tqGen = gen;
       var c = TP.meta(key);
-      slot.innerHTML = figure(key, opts && opts.fill ? 'fill' : null);
-      slot.removeAttribute('data-fit');
+      var ak = 'char-' + key + (useSlot && useSlot !== CHAR_ASSETS[key] ? '-' + useSlot : '');
+      /* ★热路径（2026-11-02）：该角色的图已经解过（预取命中 / 本局已出过场），
+       *   就**不画矢量占位**——旧版无条件先 `innerHTML = figure()`，
+       *   即使真图在内存里也要付一次「建 SVG 串 + 解析 + 弃掉 + 0.26s 淡入」，
+       *   玩家看到的是「占位闪一下再换成真人」，切换显得又慢又跳。
+       *   命中时直接上图，并打 data-instant 关掉入场动画（见 css .fig-real[data-instant]）。 */
+      var hot = !!(TQA && TQA.reg[ak] && TQA.status[ak] === 'ok' && TQA.imgs[ak]);
+      var canReal = !!(TQA && TQA.reg[ak]);
+      if (hot) {
+        slot.innerHTML = '';
+        slot.removeAttribute('data-fit');
+      } else {
+        slot.innerHTML = figure(key, opts && opts.fill ? 'fill' : null);
+        slot.removeAttribute('data-fit');
+      }
       applyFit(slot, key, useSlot);
+      /* 名牌先就位：paintReal 要往 .fig-meta .sub 里写「已入仓」标记 */
       var ifig = document.createElement('div');
       ifig.className = 'fig-meta';
       ifig.innerHTML = '<div class="tag">' + c.label + '</div>'
         + '<div class="sub">' + (c.title || '') + '</div>';
       slot.appendChild(ifig);
-      if (first) { slot.classList.add('fig-fade'); } /* 首次不做渐显，避免首帧闪 */
-      /* 真图升级（未注册 → resolve 'none'，维持占位） */
-      var ak = 'char-' + key + (useSlot && useSlot !== CHAR_ASSETS[key] ? '-' + useSlot : '');
-      if (TQA && TQA.reg[ak]) {
+      function paintReal(src, instant) {
+        var old = slot.querySelector('.fig-real');
+        if (old) { old.parentNode.removeChild(old); }
+        var pic = document.createElement('img');
+        pic.className = 'fig-real';
+        if (instant) { pic.setAttribute('data-instant', '1'); }
+        pic.src = src;
+        pic.alt = (TP.meta(key).label || '') + ' 立绘';
+        slot.insertBefore(pic, slot.firstChild);
+        var art = slot.querySelector('.fig-art');
+        if (art && art.parentNode) { art.parentNode.removeChild(art); }
+        var m = slot.querySelector('.fig-meta .sub');
+        if (m) { m.textContent = (TP.meta(key).title || '') + ' · AI 立绘已入仓'; }
+        slot.classList.add('has-real');
+        applyFit(slot, key, useSlot);
+      }
+      if (hot) { paintReal(TQA.imgs[ak].src, true); }
+      else if (canReal) {
         TQA.resolve(ak, function (stt) {
-          if (stt !== 'ok' || slot._tqGen !== gen || slot._tqKey !== key || slot._tqSlot !== useSlot) { return; }
+          if (slot._tqGen !== gen || slot._tqKey !== key || slot._tqSlot !== useSlot) { return; }
+          if (stt === 'timeout') {
+            /* 只是慢：占位先留着，图一到就在原位升级（旧版这里等于放弃，占位留到天荒地老） */
+            TQA.onLate(ak, function (st2) {
+              if (st2 !== 'ok' || slot._tqGen !== gen || slot._tqKey !== key || slot._tqSlot !== useSlot) { return; }
+              if (TQA.imgs[ak]) { paintReal(TQA.imgs[ak].src, true); }
+            });
+            return;
+          }
+          if (stt !== 'ok') {
+            /* 真失败（404 / 解码失败 / 矢量模式）：在槽角上挂一个可见角标。
+             * 以前这里只是静默 `return`，玩家看到的是「一张矢量剪影」，
+             * 分不清是「设计如此」还是「素材没载入」——实机排障全靠猜。 */
+            markMissing(slot, stt);
+            return;
+          }
           var im = TQA.image(ak);
           if (!im) { return; }
-          var pic = document.createElement('img');
-          pic.className = 'fig-real';
-          pic.src = im.src;
-          pic.alt = (TP.meta(key).label || '') + ' 立绘';
-          slot.insertBefore(pic, slot.firstChild);
-          var art = slot.querySelector('.fig-art');
-          if (art && art.parentNode) { art.parentNode.removeChild(art); }
-          var m = slot.querySelector('.fig-meta .sub');
-          if (m) { m.textContent = (TP.meta(key).title || '') + ' · AI 立绘已入仓'; }
-          slot.classList.add('has-real');
-          applyFit(slot, key, useSlot);
-        });
+          paintReal(im.src, false);
+        }, { hot: true });   /* 屏上优先：预取队列见到 _hot 就让路 */
       } else {
         slot.classList.remove('has-real');
       }
+      if (first) { slot.classList.add('fig-fade'); } /* 首次不做渐显，避免首帧闪 */
       /* 通知宿主重算「立绘↔对话框」锚点：角色切换可能改变停靠方位（全身/半身） */
       if (typeof global.TQ_ON_FIG_CHANGE === 'function') { global.TQ_ON_FIG_CHANGE(key, useSlot); }
     },
@@ -911,18 +989,48 @@
       if (!TQA.reg[ak]) { return false; }
       var tok = (node._tqTok || 0) + 1;
       node._tqTok = tok;
-      TQA.resolve(ak, function (stt) {
-        if (stt !== 'ok' || node._tqTok !== tok) { return; }
-        var im = TQA.image(ak);
-        if (!im) { return; }
+      function put(im) {
         var pic = document.createElement('img');
         pic.className = 'mem-fig-real';
         pic.src = im.src;
         pic.alt = (TP.meta(key).label || '') + ' 立绘';
         node.innerHTML = '';
         node.appendChild(pic);
-      });
+      }
+      /* 命中内存里的图：同步落图，回忆舞台不闪占位 */
+      if (TQA.status[ak] === 'ok' && TQA.imgs[ak]) { put(TQA.imgs[ak]); return true; }
+      TQA.resolve(ak, function (stt) {
+        if (node._tqTok !== tok) { return; }
+        if (stt === 'timeout') {
+          TQA.onLate(ak, function (st2) {
+            if (st2 !== 'ok' || node._tqTok !== tok) { return; }
+            if (TQA.imgs[ak]) { put(TQA.imgs[ak]); }
+          });
+          return;
+        }
+        if (stt !== 'ok') { return; }
+        var im = TQA.image(ak);
+        if (!im) { return; }
+        put(im);
+      }, { hot: true });
       return true;
+    },
+    /* 资源键：'char-<key>[-<slot>]'（默认槽不带后缀）——宿主做预取/预热时用，
+     * 不要在外面自己拼字符串，槽名规则一改就会对不上。 */
+    akOf: function (key, slot) {
+      var a = pickSlot(key, slot);
+      return a ? ('char-' + key + (a !== CHAR_ASSETS[key] ? '-' + a : '')) : null;
+    },
+    /* 批量预热：把「接下来的几个说话人」提前拉进内存，切人时直接命中热路径。
+     * opt = { conc: 3, done: fn }；未注册的角色自动跳过。 */
+    prefetch: function (keys, opt) {
+      if (!TQA || !TQA.preload) { return; }
+      var ak = [];
+      (keys || []).forEach(function (k) {
+        var a = TP.akOf(k);
+        if (a) { ak.push(a); }
+      });
+      TQA.preload(ak, opt);
     },
     /* 供 dev/验证：全部 key、默认槽、已注册的派生槽（接线盘点用） */
     list: function () {

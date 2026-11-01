@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>iv 小游戏冒烟 · QA</title>
+<base href="../">
+<link rel="stylesheet" href="css/app.css">
+<style>html,body{margin:0;background:#1F2A28}#box{position:relative;width:390px;background:#F4F1EA}</style>
+</head>
+<body>
+<!-- 逐个把 D.iv 里有 rich 的小节挂一遍：节点数、探针状态、报错。
+     chrome --dump-dom 后读 #json。 -->
+<div id="box"></div>
+<pre id="json" style="color:#9f0;font:11px Consolas,monospace">boot</pre>
+<script src="js/data.js"></script>
+<script src="js/minigame.js"></script>
+<script src="js/frag.js"></script>
+<script src="js/storage.js"></script>
+<script src="js/assets.js"></script>
+<script src="js/portraits.js"></script>
+<script src="js/sfx.js"></script>
+<script>
+(function () {
+  var errs = [];
+  window.onerror = function (m, s, l, c) { errs.push(m + ' @' + l + ':' + c); };
+  var D = window.TQ_DATA, out = [], keys = Object.keys(D.iv || {});
+  if (D.iv.touhu) { D.iv.touhu.story = D.touhu; }
+  keys.forEach(function (k) {
+    var cfg = D.iv[k];
+    if (!cfg || !cfg.rich) { return; }
+    var box = document.getElementById('box');
+    box.innerHTML = '';
+    var main = document.createElement('div');
+    main.className = 'main';
+    main.style.cssText = 'height:560px;position:relative';
+    box.appendChild(main);
+    var row = { key: k, rich: cfg.rich, ok: false };
+    try {
+      main.appendChild(window.F.iv(main, cfg, function () {}, null));
+      var sv = main.querySelector('.iv-stage svg');
+      row.nodes = sv ? sv.querySelectorAll('*').length : 0;
+      row.tag = (main.querySelector('.step-tag') || {}).textContent;
+      row.st = !!(window.TQM && window.TQM.cur && window.TQM.cur.state);
+      row.ok = !!sv && row.nodes > 8;
+    } catch (e) { row.err = e.message; }
+    out.push(row);
+  });
+  document.getElementById('json').textContent = JSON.stringify({ rows: out, errs: errs });
+})();
+</script>
+</body>
+</html>

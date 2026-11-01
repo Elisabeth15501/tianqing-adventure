@@ -21,6 +21,9 @@
   var SHARD_INNER_YAW = [0, 210, 30, 210, 30, 180, 300, 30, 210, 0, 0, 60, 210, 180, 150, 0, 60];
   var SHARD_INNER_PITCH = [0, 0, 0, -45, 0, -45, -45, -45, 0, 0, 0, 0, 45, 45, 45, 45, 45];
   TA.INNER_RATIO = SHARD_INNER_RATIO;
+  /* 每片「内壁朝外」的 yaw（pick_inner_pose 实测）：查看器一进去就转到有画的那一面，
+   * 否则默认 yaw=0 对着外壁，玩家看到的是纯釉，会以为「没东西可看」。 */
+  TA.INNER_YAW = SHARD_INNER_YAW;
 
   /* ---------- 注册表：16 碎片转台 atlas（P0 已产，4×3 · 12 帧 · 160px） ----------
    * prop 帧组（汤饼碗/金觞/承露囊/旧灯等）待 3D 渲染交付后由 manifest 构建期追加条目；
@@ -77,9 +80,43 @@
     try { localStorage.setItem(k, v); } catch (err) { /* 隐私模式静默 */ }
   }
   TA.assetsMode = function () { return lsGet('tq_assets_mode', 'auto'); }; /* auto | vector */
-  TA.tifa = function () { return lsGet('tq_tifa', 'gongxing'); };         /* gongxing | jie */
+  TA.tifa = function () { return lsGet('tq_tifa', 'gongxing'); };         /* gongxing | jie · 保留备用 */
   TA.tifaJie = function () { return TA.tifa() === 'jie'; };
   TA.setSetting = function (k, v) { lsSet(k, v); };
+
+  /* ---------- 游戏系统闸门（11-01 收束为单轨） ----------
+   * 「动手小节」原先按体法（tq_tifa）在两套系统间切换：
+   *   躬行 → 逐手势小游戏（js/minigame.js） ／ 应节 → 更漏·礼乐节拍器（app.js runJie）
+   * 第一版收束为**单轨**：一律走小游戏，不再按体法切换。
+   *
+   * ★应节轨完整保留、可以随时恢复：
+   *   1) 把 GSYS.jie.on 改成 true；
+   *   2) 把 TA.gameSystem() 改成读 tq_tifa（文件末尾有注释掉的原始一行）。
+   *   除此之外不需要改任何别的地方 —— runJie / 更漏皮 / .mode-jie 样式 / tq_tifa 键都还在。
+   *
+   * 「无障碍模式」是本作整体（不只动手小节）的无障碍设计，**暂不开发**，
+   * 这里只登记一个占位 id，防止将来与「应节」混为一谈。 */
+  var GSYS = {
+    minigame: { id: 'minigame', label: '动手', on: true },
+    jie:      { id: 'jie', label: '应节', on: false, kept: true },
+    a11y:     { id: 'a11y', label: '无障碍', on: false, built: false }
+  };
+  TA.GSYS = GSYS;
+  TA.gameSystem = function () {
+    /* 原始分叉（恢复应节时改回这一行）：
+       return (TA.modeOpen('jie') && TA.tifaJie()) ? 'jie' : 'minigame'; */
+    return 'minigame';
+  };
+  TA.modeOpen = function (id) { var m = GSYS[id]; return !!(m && m.on); };
+  TA.modeKept = function (id) { var m = GSYS[id]; return !!(m && m.kept); };
+  TA.setGameSystem = function (id) { return TA.modeOpen(id); };
+  TA.modeNote = function (id) {
+    var m = GSYS[id];
+    if (!m) { return ''; }
+    if (m.built === false) { return m.label + '模式未开发'; }
+    if (m.on) { return m.label + '模式已启用'; }
+    return m.label + '轨已完整保留，本版不启用';
+  };
 
   /* ---------- boot 探针（L0：1×1 WebP 解码 + 2048 纹理绘制，一次性） ---------- */
   TA.probeEnv = function (cb) {
@@ -114,37 +151,157 @@
   };
   TA.kindOut = function (kind) { return !!TA.slowKinds[kind + '_out']; };
 
-  /* ---------- 逐 assetKey 侦测（缓存 + 2s 超时；force-vector 直判 fail） ---------- */
-  TA.resolve = function (key, cb) {
+  /* ---------- 逐 assetKey 侦测（缓存 + 2s 超时；force-vector 直判 fail） ----------
+   * ★2026-11-02 修「只看到占位」：
+   *   旧版超时写的是 `finish('fail')`，而 fail 会被永久缓存（第 159 行直接短路），
+   *   于是一张 2s 内没下完的图（慢网实测 2.3~3.1s）会让该角色**整局只剩矢量占位**，
+   *   连网络恢复后重新 show 也不出图（实测 status 停在 fail、realNow=false）。
+   *   现在分三态：
+   *     ok       → 已解码，可直接画（imgs[key] 有图）
+   *     fail     → 文件真的不可用（404 / 解码失败 / 矢量模式）：永久缓存，不再浪费请求
+   *     timeout  → 只是慢：**不写 status**，调用方先画占位；图晚到则写回 ok 并回调 onLate
+   *   `_inflight` 让超时后的重新 resolve 复用同一个 Image，不会重复发请求。 */
+  TA._late = {};      /* key → [cb]：占位已在屏上、等晚到的图 */
+  TA._inflight = {};  /* key → { im, cbs }：请求未决（含已超时但仍在下载） */
+  TA._hot = {};       /* key → 1：**屏上正在等**的图。预取见到它就停手，先把带宽让出来 */
+
+  TA.resolve = function (key, cb, opt) {
     var ent = TA.reg[key];
     if (!ent) { cb('none'); return; }
     if (TA.assetsMode() === 'vector') { TA.status[key] = 'fail'; cb('fail'); return; }
     if (TA.status[key]) { cb(TA.status[key]); return; }
+    if (opt && opt.hot) { TA._hot[key] = 1; }
     if (TA._pending[key]) { TA._pending[key].push(cb); return; }
+    var flight = TA._inflight[key];
+    if (flight) { flight.cbs.push(cb); return; }   /* 已超时仍在下载：排队等它落地 */
     TA._pending[key] = [cb];
     var im = new Image();
     var done = false;
-    function finish(stt) {
-      if (done) { return; }
-      done = true;
-      TA.status[key] = stt;
-      if (stt === 'ok') { TA.imgs[key] = im; }
-      var q = TA._pending[key];
+    function drain(stt) {
+      delete TA._hot[key];
+      var q = TA._pending[key] || [];
       delete TA._pending[key];
       for (var j = 0; j < q.length; j += 1) { q[j](stt); }
     }
-    var to = setTimeout(function () { finish('fail'); }, 2000);
-    im.onload = function () {
+    function finish(stt) {
+      if (done) { return; }
+      done = true;
       clearTimeout(to);
+      TA.status[key] = stt;
+      if (stt === 'ok') { TA.imgs[key] = im; delete TA._inflight[key]; }
+      drain(stt);
+      if (stt === 'ok') { fireLate(key); }
+      else { delete TA._inflight[key]; delete TA._late[key]; }
+    }
+    function fireLate(k) {
+      var q = TA._late[k] || [];
+      delete TA._late[k];
+      for (var j = 0; j < q.length; j += 1) { q[j]('ok'); }
+    }
+    var to = setTimeout(function () {
+      if (done) { return; }
+      done = true;                    /* 只结束「本轮回调」，不结束这次下载 */
+      TA._inflight[key] = { im: im, cbs: [] };
+      drain('timeout');
+    }, 2000);
+    im.onload = function () {
       var tooBig = TA.env && TA.env.tex2048 === false && Math.max(im.width, im.height) > 2048;
+      if (done) {                     /* 超时后晚到：补写 ok，把屏上的占位原位升级 */
+        delete TA._hot[key];
+        if (tooBig) { return; }
+        var f = TA._inflight[key];
+        TA.status[key] = 'ok';
+        TA.imgs[key] = im;
+        delete TA._inflight[key];
+        if (f) { for (var j = 0; j < f.cbs.length; j += 1) { f.cbs[j]('ok'); } }
+        fireLate(key);
+        return;
+      }
       finish(tooBig ? 'fail' : 'ok');
     };
-    im.onerror = function () { clearTimeout(to); finish('fail'); };
+    im.onerror = function () {
+      delete TA._hot[key];
+      if (done) { delete TA._inflight[key]; delete TA._late[key]; return; }
+      finish('fail');
+    };
     im.src = ent.src;
+  };
+  /* 注册「图晚到」回调：只在该 key 已超时、仍在下载时有效（否则立刻回调）。 */
+  TA.onLate = function (key, cb) {
+    if (TA.status[key] === 'ok') { cb('ok'); return; }
+    if (!TA._inflight[key]) { return; }      /* 没在下载 → 不会有晚到 */
+    (TA._late[key] = TA._late[key] || []).push(cb);
+  };
+  /* 并发受控的批量预热：只排「还没解过」的 key，失败/超时都不阻塞队列。
+   * opt = { conc: 3, done: fn }。与 resolve 共用同一条去重链，重复调用无副作用。 */
+  TA.preload = function (keys, opt) {
+    var q = (keys || []).filter(Boolean), i = 0, live = 0, waiting = false;
+    var conc = Math.max(1, (opt && opt.conc) || 3);
+    var done = opt && opt.done;
+    var tick = opt && opt.tick;   /* 逐项进度：tick(settled, total, key, state) */
+    var settled = 0;
+    function pump() {
+      if (i >= q.length && live === 0) { if (done) { done(settled, q.length); } return; }
+      /* ★让路（2026-11-02）：屏上正有一张图在等 ⇒ 预取暂停，
+       *   否则慢网下预取会和「玩家此刻要看的这张」抢连接（实测 500kbps 时
+       *   预取 3 并发会把当前这张从 1.2s 拖到 3s+）。最多等 200ms 再看一次。 */
+      if (Object.keys(TA._hot).length) {
+        if (!waiting) { waiting = true; setTimeout(function () { waiting = false; pump(); }, 200); }
+        return;
+      }
+      while (live < conc && i < q.length) {
+        var k = q[i]; i += 1;
+        if (!TA.reg[k] || TA.status[k] === 'ok') {
+          settled += 1;
+          if (tick) { tick(settled, q.length, k, TA.status[k] || 'none'); }
+          continue;
+        }
+        live += 1;
+        (function (kk) {
+          TA.resolve(kk, function (stt) {
+            live -= 1; settled += 1;
+            if (tick) { tick(settled, q.length, kk, stt); }
+            pump();
+          });
+        }(k));
+      }
+    }
+    pump();
+  };
+  TA.reset = function (key) {   /* 运维/测试：手动解除失败缓存 */
+    delete TA.status[key]; delete TA.imgs[key]; delete TA._late[key]; delete TA._inflight[key];
   };
 
   TA.image = function (key) { return TA.imgs[key] || null; };
   TA.state = function (key) { return TA.reg[key] ? (TA.status[key] || 'pending') : 'none'; };
+
+  /* ---------- 素材体检（运维/实机排障用） ----------
+   * 返回每个资源键的：登记路径、状态、解码尺寸、已耗时。
+   * `miss` = 真的有问题的（fail / 无图），`okList` = 正常的。
+   * 供「素材自检页」与 ?diag 面板直接消费，**不发新请求**（只看已发生的状态）。 */
+  TA.diag = function (filter) {
+    var okList = [], miss = [], pend = [];
+    Object.keys(TA.reg).forEach(function (k) {
+      if (filter && !filter.test(k)) { return; }
+      var stt = TA.status[k] || 'pending';
+      var im = TA.imgs[k];
+      var row = { key: k, src: TA.reg[k].src, status: stt,
+        w: im ? im.width : 0, h: im ? im.height : 0 };
+      if (stt === 'ok' && im) { okList.push(row); }
+      else if (stt === 'pending') { pend.push(row); }
+      else { miss.push(row); }
+    });
+    return { env: TA.env, mode: TA.assetsMode(), ok: okList, miss: miss, pending: pend,
+      total: okList.length + miss.length + pend.length };
+  };
+
+  /* 环境结论（给加载页做「不支持 WebP」这类明确提示，别再静默占位） */
+  TA.envNote = function () {
+    if (!TA.env) { return ''; }
+    if (!TA.env.webp) { return '当前环境不支持 WebP，写实立绘无法显示'; }
+    if (TA.env.tex2048 === false) { return '当前环境纹理上限不足 2048px'; }
+    return '';
+  };
 
   global.TQA = TA;
 })(window);

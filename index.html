@@ -21,5 +21,9 @@
 <script src="./js/tilt.js"></script>
 <script src="./js/scene-parallax.js"></script>
 <script src="./js/app.js"></script>
+<!-- 瓷片查看器独立模块（2026-11-02 拆分）：放在 app.js 之后 ——
+     app.js 一执行就开始画加载页，viewer.js 的解析不再挡在它前面；
+     查看器只在点击时调用，那时早已解析完成。 -->
+<script src="./js/viewer.js"></script>
 </body>
 </html>
