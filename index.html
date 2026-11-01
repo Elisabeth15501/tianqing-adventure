@@ -16,6 +16,10 @@
 <script src="./js/assets.js"></script>
 <script src="./js/portraits.js"></script>
 <script src="./js/sfx.js"></script>
+<!-- 场景三层视差（S5 首用）：tilt.js 只做「姿态 → tx/ty」，scene-parallax.js 做「三层 + 探针」。
+     两者都不自启，四幕脚本调用 SceneParallax.mount() 才生效；先加载 = 运行时可直接自检。 -->
+<script src="./js/tilt.js"></script>
+<script src="./js/scene-parallax.js"></script>
 <script src="./js/app.js"></script>
 </body>
 </html>
