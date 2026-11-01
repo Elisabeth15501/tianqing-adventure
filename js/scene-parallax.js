@@ -31,6 +31,10 @@
      预览页在 preview/ 子目录 ⇒ 调用方在 mount 前设 SceneParallax.base = '../'。
      注意不能用「相对 js 文件」推导 —— 模块是 <script src> 引入的，路径基准是页面，不是模块。 */
   SP.base = '';
+  /* 内联资产覆盖表：key = _src() 拼出的完整相对路径，value = dataURI。
+     单文件自包含的预览页用它把 webp 嵌进 HTML（托管预览只服务单文件，
+     相对路径 ../assets/ 会 404）。游戏本体不设此表，零影响。 */
+  SP.inline = {};
   var REG = {};
   var INST = {};            // el 的唯一 id -> instance（用属性存，不用 Map，兼容更老内核）
 
@@ -156,14 +160,15 @@
       img = this.layers[l].querySelector('img');
       (function (ll, im) {
         var src = self._src(ll, self.form);
-        if (im.getAttribute('src') === src) {
+        var eff = SP.inline[src] || src;   // 内联覆盖优先（预览页自包含用）
+        if (im.getAttribute('src') === eff) {
           self.loaded[ll] = im.complete && im.naturalWidth > 0;
           return;
         }
         self.loaded[ll] = false;
         im.onload = function () { self.loaded[ll] = im.naturalWidth > 0; };
         im.onerror = function () { self.loaded[ll] = false; };
-        im.setAttribute('src', src);
+        im.setAttribute('src', eff);
       }(l, img));
       this._srcs[l] = this._src(l, this.form);
     }
