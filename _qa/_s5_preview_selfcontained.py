@@ -1,34 +1,34 @@
 # -*- coding: utf-8 -*-
-"""把 preview/s5_zide_layers_tilt.html 重建为完全自包含页。
+"""把 preview/s5_zide_layers_tilt.html 重建为完全自包含页（v3 真·物体分层）。
 
-背景：该页此前用相对路径（../js/*.js + SceneParallax.base='../'）取脚本与 6 张
-webp。在 WorkBuddy 预览面板里页面被托管到 /static-html/<hash>/ 之下，../ 解析
-到托管根之外 ⇒ 脚本与图片全部 404，页面只剩 UI 框架不出图。
+页面可能处于两种状态，本脚本都处理：
+  A. 源状态：引擎用 <script src="../js/*.js"> 引用（首次构建前）
+  B. 自包含状态：引擎已内联（重跑本脚本升级引擎/资产）
 
-修复方式（不漂移，两处改动都是生成式注入而非手抄）：
-  1. <script src="../js/tilt.js"> 与 <script src="../js/scene-parallax.js">
-     → 从仓内 js/ 原文内联（与游戏内共用同一份，避免复制漂移）。
-  2. window.SceneParallax.base = '../' → srcMap：6 个 webp 读字节转 base64
-     data URI 注入（引擎 _src 对 srcMap 缺席时行为逐字节一致）。
+注入内容：
+  1. tilt.js / scene-parallax.js 从仓内 js/ 原文内联（与游戏内共用同一份）
+  2. 6 张 webp（assets/scenes/s5_zide{,_h}/{bg,mg,fg}.webp，v3 物体分层版）
+     以 base64 data URI 注入 SceneParallax.srcMap（引擎 _src 缺席时逐字节一致）
 
 产物无论 file:// 双击、本地 http、还是预览面板静态托管都能出图。
-HTML 模板禁用 % 格式化（CSS 的 % 与 %% 打架），一律 @@key@@ + replace()。
+HTML 模板禁用 % 格式化。
 """
 import base64
 import os
+import re
 import sys
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
 OUT = os.path.join(ROOT, 'preview', 's5_zide_layers_tilt.html')
 
-SRC_MAP = {
-    'assets/scenes/s5_zide_h/bg.webp': None,
-    'assets/scenes/s5_zide_h/mg.webp': None,
-    'assets/scenes/s5_zide_h/fg.webp': None,
-    'assets/scenes/s5_zide/bg.webp': None,
-    'assets/scenes/s5_zide/mg.webp': None,
-    'assets/scenes/s5_zide/fg.webp': None,
-}
+ASSETS = [
+    'assets/scenes/s5_zide_h/bg.webp',
+    'assets/scenes/s5_zide_h/mg.webp',
+    'assets/scenes/s5_zide_h/fg.webp',
+    'assets/scenes/s5_zide/bg.webp',
+    'assets/scenes/s5_zide/mg.webp',
+    'assets/scenes/s5_zide/fg.webp',
+]
 
 
 def datauri(p):
@@ -36,49 +36,60 @@ def datauri(p):
         return 'data:image/webp;base64,' + base64.b64encode(f.read()).decode('ascii')
 
 
-def main():
-    html = open(OUT, encoding='utf-8').read()
+def inline_block(js):
+    return '<script>\n' + js + '\n</script>'
 
-    for p in SRC_MAP:
-        SRC_MAP[p] = datauri(p)
 
-    tilt_js = open(os.path.join(ROOT, 'js', 'tilt.js'), encoding='utf-8').read()
-    sp_js = open(os.path.join(ROOT, 'js', 'scene-parallax.js'), encoding='utf-8').read()
+def replace_inline(html, name, js):
+    """按「<script>…* name…</script>」整块替换（状态 B），或替换 src 引用（状态 A）。"""
+    assert '</script' not in js.lower(), '%s 含 </script，不能直接内联' % name
+    pat = re.compile(r'<script>\s*/\*[^\n]*\n \* ' + re.escape(name) + r'[\s\S]*?</script>')
+    m = pat.search(html)
+    if m:
+        return html[:m.start()] + inline_block(js) + html[m.end():]
+    old = '<script src="../js/%s"></script>' % name
+    if old in html:
+        return html.replace(old, inline_block(js))
+    raise AssertionError('未找到 %s 的内联块或 src 引用' % name)
 
-    # </script> 在 JS 字符串里出现会截断内联 script 块；本仓两份 js 不含该字面量
-    for name, js in (('tilt.js', tilt_js), ('scene-parallax.js', sp_js)):
-        assert '</script' not in js.lower(), '%s 含 </script，不能直接内联' % name
 
-    # ① 脚本内联
-    for tag, js in (('../js/tilt.js', tilt_js), ('../js/scene-parallax.js', sp_js)):
-        old = '<script src="%s"></script>' % tag
-        assert old in html, '未找到 %s 引用' % tag
-        html = html.replace(old, '<script>\n%s\n</script>' % js)
-
-    # ② base → srcMap（注入 6 个 data URI）
-    old_base = "  window.SceneParallax.base = '../';"
-    assert old_base in html, '未找到 base 设置行'
+def replace_srcmap(html, uris):
+    pat = re.compile(r'window\.SceneParallax\.srcMap = \{[\s\S]*?\n  \};')
     lines = ['  /* 自包含：webp 内嵌为 data URI，file:// 与静态托管均可出图。',
              '     引擎 _src 对 srcMap 缺席时行为逐字节一致；此处覆盖全部 6 个路径。 */',
              '  window.SceneParallax.srcMap = {']
-    for p in sorted(SRC_MAP):
+    for p in sorted(uris):
         lines.append("    '%s':" % p)
-        lines.append("      '%s'," % SRC_MAP[p])
+        lines.append("      '%s'," % uris[p])
     lines.append('  };')
-    html = html.replace(old_base, '\n'.join(lines))
+    block = '\n'.join(lines)
+    if pat.search(html):
+        return pat.sub(lambda _: block, html, count=1)
+    old_base = "  window.SceneParallax.base = '../';"
+    assert old_base in html, '既无 srcMap 块也无 base 行'
+    return html.replace(old_base, block)
 
-    # ③ 收尾校验：不得残留相对引用与占位符
+
+def main():
+    html = open(OUT, encoding='utf-8').read()
+    uris = {p: datauri(p) for p in ASSETS}
+    tilt_js = open(os.path.join(ROOT, 'js', 'tilt.js'), encoding='utf-8').read()
+    sp_js = open(os.path.join(ROOT, 'js', 'scene-parallax.js'), encoding='utf-8').read()
+
+    html = replace_inline(html, 'tilt.js', tilt_js)
+    html = replace_inline(html, 'scene-parallax.js', sp_js)
+    html = replace_srcmap(html, uris)
+
+    # 收尾校验
     assert '@@' not in html, '残留 @@ 占位符'
     assert 'src="../js/' not in html, '残留相对脚本引用'
     assert '\n  window.SceneParallax.base' not in html, '残留 base 可执行行'
-    # 注：引擎源码注释里有「…设 SceneParallax.base = '../'」字样（内联后随注释进页），
-    # 属文档性出现，不影响执行，故不按裸字符串断言。
-    for p in sorted(SRC_MAP):
-        assert html.count(SRC_MAP[p]) == 1, '%s 的 data URI 注入次数异常' % p
+    assert 'additive: false' in html, '引擎未启用 v3 物体分层（additive:false）'
+    for p in sorted(uris):
+        assert html.count(uris[p]) == 1, '%s 的 data URI 注入次数异常' % p
 
     with open(OUT, 'w', encoding='utf-8', newline='\n') as f:
         f.write(html)
-
     print('OK  %s  %.1fKB' % (os.path.relpath(OUT, ROOT), os.path.getsize(OUT) / 1024))
     return 0
 

@@ -44,9 +44,12 @@
     '  will-change:transform;pointer-events:none;transform:translate3d(0,0,0)}',
     '.spl img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 50%;',
     '  -webkit-user-drag:none;user-select:none}',
-    /* 加色层：黑=透明。注意 bg 必须保持 normal —— 这是「静止态==原图」的结构前提 */
+    /* 加色层：黑=透明。注意 bg 必须保持 normal —— 这是「静止态==原图」的结构前提。
+       真物体分层（cfg.additive=false）时 mg/fg 是 RGBA 贴片，用 normal + alpha。
+       特异性 (0,3,0) > (0,2,0)，按实例属性覆盖。 */
     '.spl[data-l="mg"],.spl[data-l="fg"]{mix-blend-mode:screen}',
-    '.spl[data-l="bg"]{mix-blend-mode:normal}'
+    '.spl[data-l="bg"]{mix-blend-mode:normal}',
+    '[data-sp-additive="0"] .spl[data-l="mg"],[data-sp-additive="0"] .spl[data-l="fg"]{mix-blend-mode:normal}'
   ].join('');
 
   function injectStyle() {
@@ -62,13 +65,15 @@
   /* ------------------------------------------------------------------ */
   function def(key, cfg) { REG[key] = cfg; return SP; }
 
-  /* S5 滋德殿旧址（750×1080 竖 / 1500×630 横，资产在 assets/scenes/s5_zide{,_h}/） */
+  /* S5 滋德殿旧址（750×1080 竖 / 1500×630 横，资产在 assets/scenes/s5_zide{,_h}/）
+     v3 真·物体分层：bg=补全图（RGB），mg/fg=轮廓贴片（RGBA）⇒ additive:false */
   def('s5_zide', {
     dir: { h: 'assets/scenes/s5_zide_h', v: 'assets/scenes/s5_zide' },
     size: { h: [1500, 630], v: [750, 1080] },
     ks: { bg: 0.30, mg: 0.60, fg: 1.00 },
     lim: 30,          // 单层最大位移 px（k=1 那层）
     bgScale: 0.012,   // bg 额外缩放：|cx| 最大时 +1.2%，补「镜头在推」的错觉
+    additive: false,  // mg/fg 用 normal+alpha（物体贴片），非黑底 screen
     title: 'S5 滋德殿旧址'
   });
 
@@ -89,6 +94,8 @@
     this.form = opts.form || 'h';
     this.base = (typeof opts.base === 'string') ? opts.base : (SP.base || '');
     this.lim = opts.lim || cfg.lim;
+    /* 加色模式（v2 黑底 screen 层）默认开；真·物体分层（RGBA normal）置 false */
+    this.additive = (cfg.additive !== false);
     this.enabled = { bg: true, mg: true, fg: true };
     this.tx = 0; this.ty = 0;      // 目标（来自 tilt）
     this.cx = 0; this.cy = 0;      // 当前（lerp 后）
@@ -96,6 +103,7 @@
     this._lastProbe = null;
     this.el.__sp = this;
     this.el.setAttribute('data-spl-key', key);
+    this.el.setAttribute('data-sp-additive', this.additive ? '1' : '0');
     this._build();
     this._measure();
     var self = this;
@@ -376,7 +384,7 @@
       if (!row.loaded) { out.allLoaded = false; }
       if (!cover) { out.coverOk = false; }
       if (l === 'bg' && row.blend !== 'normal') { out.blendsOk = false; }
-      if (l !== 'bg' && row.blend !== 'screen') { out.blendsOk = false; }
+      if (l !== 'bg' && row.blend !== (this.additive ? 'screen' : 'normal')) { out.blendsOk = false; }
     }
 
     var bg = out.layers[0] || { x: 0 }, mg = out.layers[1] || { x: 0 }, fg = out.layers[2] || { x: 0 };
