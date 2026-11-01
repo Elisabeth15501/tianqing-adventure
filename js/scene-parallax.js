@@ -31,10 +31,6 @@
      预览页在 preview/ 子目录 ⇒ 调用方在 mount 前设 SceneParallax.base = '../'。
      注意不能用「相对 js 文件」推导 —— 模块是 <script src> 引入的，路径基准是页面，不是模块。 */
   SP.base = '';
-  /* 内联资产覆盖表：key = _src() 拼出的完整相对路径，value = dataURI。
-     单文件自包含的预览页用它把 webp 嵌进 HTML（托管预览只服务单文件，
-     相对路径 ../assets/ 会 404）。游戏本体不设此表，零影响。 */
-  SP.inline = {};
   var REG = {};
   var INST = {};            // el 的唯一 id -> instance（用属性存，不用 Map，兼容更老内核）
 
@@ -149,7 +145,11 @@
   };
 
   Parallax.prototype._src = function (l, form) {
-    return this.base + this.cfg.dir[form] + '/' + l + '.webp';
+    var p = this.base + this.cfg.dir[form] + '/' + l + '.webp';
+    /* srcMap：可选的「路径 → 直出 src」映射（预览页内嵌 data URI 用）。
+       map 不存在或未命中时行为与原实现逐字节一致（w=0）。 */
+    if (SP.srcMap && SP.srcMap[p]) { return SP.srcMap[p]; }
+    return p;
   };
 
   Parallax.prototype._load = function () {
@@ -160,15 +160,14 @@
       img = this.layers[l].querySelector('img');
       (function (ll, im) {
         var src = self._src(ll, self.form);
-        var eff = SP.inline[src] || src;   // 内联覆盖优先（预览页自包含用）
-        if (im.getAttribute('src') === eff) {
+        if (im.getAttribute('src') === src) {
           self.loaded[ll] = im.complete && im.naturalWidth > 0;
           return;
         }
         self.loaded[ll] = false;
         im.onload = function () { self.loaded[ll] = im.naturalWidth > 0; };
         im.onerror = function () { self.loaded[ll] = false; };
-        im.setAttribute('src', eff);
+        im.setAttribute('src', src);
       }(l, img));
       this._srcs[l] = this._src(l, this.form);
     }
