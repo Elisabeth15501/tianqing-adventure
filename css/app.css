@@ -666,9 +666,15 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .mem-fig[data-st="on"]{filter:none;z-index:2}
 .mem-fig[data-st="off"]{filter:brightness(.66) saturate(.85);z-index:1}
 /* 镜像按原生朝向（data-mir，JS 依 FACE 表写入）：目标是同框两人脸朝向彼此。
- * 旧规则「右位一律镜像」会让原生朝左的角色在右位变成朝外看，两人背对背。 */
-.mem-fig[data-mir="1"] svg,.mem-fig[data-mir="1"] img{transform:scaleX(-1)}
-.mem-fig svg,.mem-fig img{width:100%;height:100%;object-fit:contain;object-position:bottom}
+ * 旧规则「右位一律镜像」会让原生朝左的角色在右位变成朝外看，两人背对背。
+ * ★2026-11-02：镜像与身高合并成一条 transform —— --mem-sx（±1）与 --mem-s（身高系数，
+ *   与主线双人档同一张 STATURE 表）。分两条规则会互相覆盖（后写的赢），
+ *   所以统一在这里拼成 scale(sx, s)，原点 bottom center ⇒ 脚不动、只压头顶。 */
+.mem-fig svg,.mem-fig img{
+  width:100%;height:100%;object-fit:contain;object-position:bottom;
+  transform-origin:bottom center;
+  transform:scale(var(--mem-sx,1), var(--mem-s,1));
+}
 /* 横屏：竖屏的 44% 双槽会把两人推到屏幕两端（1280 下槽宽 547px）⇒ 收拢到中部，
  * 尺寸略放大补横屏的纵向余量（Chrome 61：只用 max-width，不用 clamp/min）。 */
 @media (min-aspect-ratio:6/5){

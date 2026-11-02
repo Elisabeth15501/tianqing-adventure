@@ -2232,7 +2232,14 @@ function playFolk(cv, hooks, cfg, ui) {
         }
       }
       st.px = p.x; st.py = p.y;
-      var w = Math.min(3, Math.floor(st.acc / (Math.PI * 2) * 3));
+      /* ★一圈手指动作 = 一圈丝（2026-11-02 用户要求「绕三圈」）。
+       *   旧式 `acc / 2π × 3` 是「手指绕一圈就记三圈」——为了好过，但动作与结果对不上，
+       *   玩家看到丝线一次性跳满三道。现在每绕满一个 2π 才记一圈，三道丝要绕三次。
+       * ★TURN_R = 0.92：鼠标/手指按 15° 采样时，一圈实测只累到 0.98π×2（像素取整 +
+       *   起点那一步不计角度，实测 2 圈 12.30 rad、3 圈 18.64 rad ≈ 少 2%）。按裸 2π 判
+       *   会让「明明绕满三圈」停在 2/3，故留 8% 余量 —— 玩家不会数到小数点后两位。 */
+      var TURN_R = Math.PI * 2 * 0.92;
+      var w = Math.min(3, Math.floor(st.acc / TURN_R));
       if (w !== st.wound) { st.wound = w; paint(); hooks.step(prog(), lab()); }
       return;
     }
@@ -2746,16 +2753,22 @@ function playShiFolk(cv, hooks, cfg, ui) {
   function move(p) {
     if (!st.drag) { return; }
     st.moved = (st.moved || 0) + Math.abs(st.sx - p.x);
+    st.travel = (st.travel || 0) + Math.abs(st.sx - p.x);
     st.off = Math.max(0, Math.min(SW - VW, st.so + (st.sx - p.x)));
     if (st.beat === 0) { markSeen(); }
     paint();
     hooks.step(prog(), lab());
-    if (st.beat === 0 && seenAll() && !st._ok) { st._ok = true; hooks.done(false); }
+    if (st.beat === 0 && !st._ok && (seenAll() || st.travel >= VW * 2)) {
+      /* S4 方案 G1：三个观察位各入视口一次；保底＝累计位移 ≥ 2 屏（逛完了全程就算逛过） */
+      st._ok = true;
+      if (!seenAll()) { st.seen = [true, true, true]; }
+      hooks.done(false);
+    }
   }
   function up() {
     if (!guardUp(st, st.beat)) { return; }
-    /* 问俗：几乎没动过就是"点了空处" */
-    if (st.beat === 1 && !st.askHit && (st.moved || 0) < 8) { hooks.tip('这里没人。'); }
+    /* 问俗：几乎没动过就是"点了空处"（S4 方案 §5.3 气泡文案） */
+    if (st.beat === 1 && !st.askHit && (st.moved || 0) < 8) { hooks.tip('桥上人多，摊主在幌子底下。'); }
     st.drag = false; st.moved = 0;
   }
 
@@ -2770,7 +2783,8 @@ function playShiFolk(cv, hooks, cfg, ui) {
     start: function () { }, stop: function () { },
     progress: prog, label: lab,
     state: function () {
-      return { beat: st.beat, off: st.off, asked: st.asked.slice(), notes: st.notes,
+      return { beat: st.beat, off: Math.round(st.off), seen: st.seen.slice(),
+               asked: st.asked.slice(), notes: st.notes,
                pano: !!(pano && pano.ok), panoSrc: pano ? pano.src : null, sw: SW,
                vend: VEND.map(function (v) { return Math.round(v.x); }) };
     }
@@ -3125,10 +3139,12 @@ function playShiFolk(cv, hooks, cfg, ui) {
       if (n === 1) {
         st.lightN = 2; st.tool = p; st.flameK = .55; paint(); sfx('bead');
         if (oilNow() > 131) {
-          /* 油浅：焰起两下自己灭（看得见的后果），零惩罚、不锁死 —— 第三下照样能落罩 */
-          after(620, function () { if (st.dead || st.gate || (st.lightN || 0) < 2) { return; } st.flameK = 0; draw(); hooks.tip('油浅了，芯吸不上——火立不住。'); });
-          after(1060, function () { if (st.dead || st.gate || (st.lightN || 0) < 2) { return; } st.flameK = .45; draw(); });
-          after(1400, function () { if (st.dead || st.gate || (st.lightN || 0) < 2) { return; } st.flameK = 0; draw(); });
+          /* 油浅：焰起两下自己灭（看得见的后果），零惩罚、不锁死 —— 第三下照样能落罩。
+           * ★只在 lightN===2（等着第三下）时演熄灭：第三下已落就不再回头改焰，
+           *   否则残留定时器会把落罩后的成品焰改小（校准页拍子即走没暴露这一层） */
+          after(620, function () { if (st.dead || st.gate || (st.lightN || 0) !== 2) { return; } st.flameK = 0; draw(); hooks.tip('油浅了，芯吸不上——火立不住。'); });
+          after(1060, function () { if (st.dead || st.gate || (st.lightN || 0) !== 2) { return; } st.flameK = .45; draw(); });
+          after(1400, function () { if (st.dead || st.gate || (st.lightN || 0) !== 2) { return; } st.flameK = 0; draw(); });
         }
         return;
       }

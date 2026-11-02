@@ -540,7 +540,9 @@
     'yinchongyi_e2':  { cx: 0.544, ratio: 0.667, headW: 0.180, y0: 0.079, bw: 0.436, y1: 0.976, bwv: 0.437},
     'yinchongyi_e3':  { cx: 0.475, ratio: 0.667, headW: 0.180, y0: 0.079, bw: 0.496, y1: 0.976, bwv: 0.497},
     'yinchongyi_e1':  { cx: 0.544, ratio: 0.667, headW: 0.180, y0: 0.079, bw: 0.443, y1: 0.976, bwv: 0.444},
-    'zhangyongde_a1':  { cx: 0.596, ratio: 0.667, headW: 0.178, y0: 0.075, bw: 0.637, y1: 0.97, bwv: 0.611},
+    /* 2026-11-02：a1 换成重绘版（举觞 + 佩刀，见 _qa/_bak_zyd_regen），bwv 由 0.611 重测为 0.568。
+     * 旧值沿用旧图的张臂姿势，把 kSide 压到 1.40 ⇒ 同框时比郭荣小一圈（用户反馈「张永德太小」）。 */
+    'zhangyongde_a1':  { cx: 0.596, ratio: 0.667, headW: 0.178, y0: 0.075, bw: 0.636, y1: 0.97, bwv: 0.568},
     'zhangyongde_e1': { cx: 0.536, ratio: 0.667, headW: 0.160, y0: 0.081, bw: 0.479, y1: 0.970, bwv: 0.479},
     'zhaokuangyin_a1': { cx: 0.552, ratio: 0.667, headW: 0.199, y0: 0.072, bw: 0.529, y1: 0.971, bwv: 0.502},
     'zhaokuangyin_e3': { cx: 0.539, ratio: 0.667, headW: 0.212, y0: 0.077, bw: 0.523, y1: 0.973, bwv: 0.524},
@@ -599,10 +601,11 @@
     return a ? (FIT[key + '_' + a] || null) : null;
   }
 
-  /* ★双人同框（2026-10-31）
+  /* ★双人同框（2026-10-31 建 · 2026-11-02 改按「身高标准表」驱动）
    * 三条硬规则，顺序即优先级：
-   *  ① 等高：同景别的两个人共用一个缩放 k。同框里「身高差 30%」比「头宽差 15%」刺眼得多，
-   *     而各角色 headW 0.16~0.32 是素材层面的事实，靠逐人缩放去凑头宽会直接把身高拉开。
+   *  ① 身高按 STATURE 表：同景别的两人**不再被拉平**，而是各自落到自己的目标身高。
+   *     v1 的做法是「共用 k + 身高差封顶 6%」，封顶换来的是「人人等高」，与史实身份、
+   *     与用户逐条裁定的身高秩序全都对不上（玩家/张永德 两例即由此而来）。
    *  ② 可见带约束：全身像的衣摆落在对话框后面（看不见），横向只按「上半 60% 的实测宽度」
    *     bwv 约束；用整幅 bw 会把 390 屏上的两个人压到 340px 高（王朴 bw 0.754 全在衣摆上）。
    *     半身像整体在框上方，宽处就是可见处，仍用 bw。
@@ -614,7 +617,29 @@
    * ★只在横版宽屏媒体查询下生效（与 css/app.css 的 .main 断点同条件）——390 竖版 / 768 中屏
    *   的双人中缝基线（30px / 82px）已锁定，额度会把两人往两边推（实测 30→77 / 82→142），不能带过去。 */
   var WIDE_MQ = (typeof matchMedia === 'function') ? matchMedia('(min-aspect-ratio:6/5) and (min-width:900px)') : null;
-  var DUO_HEAD_H = 0.134;/* 双人档头宽占槽高的比例（10-31 实测：390 档 83/622、768 档 103/765）*/
+
+  /* ★身高标准表（2026-11-02 用户逐条裁定；郭荣 = 1.00 为基准）
+   * 量纲是「人物渲染高度 ÷ 郭荣的渲染高度」，**不是缩放比**：各张图在画布里本来就大小不一
+   * （王朴 e2 头顶在 10.9%、范质 a1 在 2.1%，同一 k 出来能差一成），所以落地一律换算成
+   * k = C × S ÷ (1−y0)，C 为两人共用的基准（见 duoPlan）。
+   * 分档刻意留出可读台阶：相若 1.00 / 稍高 1.04 / 稍矮 0.95~0.96 / 矮 0.91~0.92 / 明显矮 0.86。
+   * 4% 在 390 档约 17px 头顶差，一眼读得出「谁略高」；再小就与渲染误差混在一起了。 */
+  var STATURE = {
+    guorong: 1.00,                                              /* 基准 · 官家 */
+    ligu: 1.00, guowei: 1.00,                                   /* 与郭荣身高相若 */
+    zhaokuangyin: 1.04,                                         /* 稍高于郭荣 */
+    fengdao: 0.96, zhangyongde: 0.95, lichongjin: 0.95,         /* 稍矮于郭荣 */
+    fanzhi: 0.92, wangpu: 0.92, wangpu2: 0.92, yinchongyi: 0.92,/* 矮于郭荣 */
+    fuhou: 0.91,                                                /* 矮于郭荣（且为坐姿） */
+    nvguan: 0.86, shiguan: 0.86,                                /* 玩家：明显矮于郭荣 */
+    shaonian: 0.80, zongxun: 0.60,                              /* 少年郭荣 / 六岁宗训 */
+    sizheng: 0.94, shanggong: 0.94, shangshiling: 0.94, qijulang: 0.94   /* 配角（暂无同框） */
+  };
+  var STATURE_DEF = 0.95;
+  function stature(key) {
+    var s = STATURE[key];
+    return (typeof s === 'number' && s > 0) ? s : STATURE_DEF;
+  }
 
   function duoGeom(slot, key, useSlot, stageW) {
     var f = fitRow(key, useSlot);
@@ -637,15 +662,22 @@
               : (DUO_BODY_BLEED && WIDE_MQ && WIDE_MQ.matches) ? Math.round((stageW || W * 2) * DUO_BODY_BLEED) : 0;
     var kTop = H / Math.max(1, baseH * (1 - y0));
     var kSide = (W + bleed - DUO_GAP * 2) / Math.max(1, bwVis * baseW);
-    /* ★头宽归一化（10-31 加）：双人档原来只受「铺满槽高 / 不溢半幅」两个几何约束，
-     *   完全不管 headW ⇒ 头大的角色（跪像、王孙）在高度受限的断点上会大一圈。
-     *   这里补一个 headW 上限：让所有人的头都落在 0.134×槽高。
-     *   只做「压小」不做「放大」——几何约束仍是硬上限，放大只会把头顶切掉。 */
-    var kHeadD = (H * DUO_HEAD_H) / Math.max(1, headW * baseW);
+    /* ★头宽归一化（10-31 加 · 11-02 撤出双人档）
+     *   它曾是双人档的第三道帽：让所有人的头都落在 0.134×槽高。撤掉的理由是它**测错了**——
+     *   FIT.headW 里有一批是自动量测被「举到肩高的觞 / 佩刀 / 张开的袖」污染的值
+     *   （王朴 e2 记 0.315，实测净头宽 0.147；张永德记 0.178，实测 0.138），
+     *   于是「头宽对齐」这件事在不同人身上要求了完全不同的 k：王朴被压到 1.36、
+     *   郭荣被他的 1.06 倍上限拖到 1.08（实测头顶 553 vs 489，郭荣反而矮 22%）。
+     *   现行口径改为信任素材本身的比例（33 张实测头宽 0.13~0.19、六到七头身，彼此差 ≤15%），
+     *   身高只由 STATURE + 几何上限决定 ⇒ 头的大小自动随身高走，物理上也更对。 */
+    var cap = Math.min(kTop * 0.96, kSide);
+    if (!isFinite(cap) || cap <= 0) { cap = 1; }
     return {
       ratio: f.ratio, bw: bwVis, bleed: bleed, kneel: !!f.kneel,
-      head: headW * baseW,               /* k=1 时的头宽（px） */
-      k: Math.min(kTop * 0.96, kSide, Math.max(kHeadD, 0.6))
+      /* hf = 头顶 → 图底 占整幅的比例：底对齐渲染下，它就是「这个人占了多少槽高」 */
+      hf: Math.max(0.5, 1 - y0),
+      head: headW * baseW,               /* k=1 时的头宽（px）· 仅供 QA 打印 */
+      cap: cap
     };
   }
   function duoPlan(slot) {
@@ -657,26 +689,21 @@
     Object.keys(map).forEach(function (k) {
       if (map[k] !== slot && map[k] && map[k]._tqKey) { other = map[k]; }
     });
-    var k = me.k;
+    /* ★一人一个 k（2026-11-02）：两侧共用同一个「基准身高」C，各自 k = C × S ÷ hf。
+     *   渲染高度 = baseH × k × hf = baseH × C × S ⇒ 两人的高度比**恰好**等于 S 之比，
+     *   与各自画布留白、y0 无关；而 C 取两人几何上限的较小者，所以谁也裁不出槽。 */
+    var sMe = stature(slot._tqKey);
+    var C = me.cap * me.hf / sMe;
     if (other) {
       var ot = duoGeom(other, other._tqKey, other._tqSlot, stageW);
-      /* 同景别：各自取自己的上限，但对「身高差」封顶 12%（STAIR_CAP）。
-       *   为什么不直接等高：等高取 min(k)，宽衣摆的一方会把另一方整个拖小；
-       *   为什么不干脆不管：郭威 e3 这类张臂姿势的 k 只有 1.35，与郭荣 1.84 差 27%，
-       *   并排就是大人带小孩。封顶 12% 既保住「高矮有别」的自然感，又不会离谱。
-       * 混景别（胸像 × 全身）：k 不可通约，互不牵制 —— 否则同场里换一个人说话，
-       *   另一个人的尺寸会跟着跳（5-1 夜宴 官家 会忽大忽小），那是硬伤。 */
+      /* 混景别（胸像 × 全身）：k 不可通约，互不牵制 —— 否则同场里换一个人说话，
+       *   另一个人的尺寸会跟着跳（5-1 夜宴 官家 会忽大忽小），那是硬伤。
+       *   同景别则取「谁更吃空间就按谁让」：C 由最紧的那一方决定。 */
       if (ot && Math.abs(ot.ratio - me.ratio) < 0.05) {
-        var kMin = Math.min(me.k, ot.k);
-        /* 跪像豁免（10-31）：跪着的人本来就矮一截，把站着的那位拖下来只会让
-         * 「头宽已经对齐」这件事白做——所以只要有一方是跪像，就不做身高封顶。 */
-        if (!me.kneel && !ot.kneel) {
-          /* 1.12 → 1.06（2026-11-02 用户反馈张永德/殷崇义同框偏大）：
-           * 6% 是「高矮有别」仍可读的下限，再大就把听者压成配角。 */
-          k = Math.min(me.k, kMin * 1.06);
-        }
+        C = Math.min(C, ot.cap * ot.hf / stature(other._tqKey));
       }
     }
+    var k = C * sMe / me.hf;
     if (!isFinite(k) || k <= 0) { k = 1; }
     if (k < 0.55) { k = 0.55; }   /* 兜底：再小就没有可读性了 */
     /* 有外溢额度时把人物往画面外侧推：溢出的落在屏幕边（被裁），中缝交叠减半 */
@@ -684,7 +711,7 @@
     var W = slot.clientWidth || 1;
     var tc = 0.5;
     if (me.bleed > 0) { tc = (side === 'l') ? 0.5 - me.bleed / (2 * W) : 0.5 + me.bleed / (2 * W); }
-    return { k: k, bw: me.bw, bleed: me.bleed, tc: tc };
+    return { k: k, bw: me.bw, bleed: me.bleed, tc: tc, C: C, S: sMe, cap: me.cap };
   }
 
   function fitFor(key, slotW, slotH, fit, useSlot, opt) {
@@ -855,6 +882,10 @@
     meta: function (key) { return FIG[key] || FIG.DEFAULT; },
     /* 原生朝向：'l' 脸朝左 / 'r' 朝右 / '' 正面（回忆舞台镜像也用它，与双人档同一事实源） */
     faceOf: function (key) { return FACE[key] || ''; },
+    /* 身高系数（郭荣=1.00）：双人档与回忆舞台共用同一张表 */
+    statureOf: function (key) { return stature(key); },
+    /* QA 口：把某槽的双人档内部量（cap / hf / C / k）吐出来，验收脚本按它核对身高比 */
+    duoDebug: function (slot) { return duoPlan(slot); },
     /* 名牌文本：speaker 原样优先，缺省用角色称谓 */
     labelOf: function (speaker, selfKey) {
       if (speaker) { return speaker; }
@@ -879,8 +910,28 @@
       var map = TP._sides || (TP._slot ? { main: TP._slot } : {});
       Object.keys(map).forEach(function (k) {
         var n = map[k];
-        if (n && n._tqKey) { applyFit(n, n._tqKey, n._tqSlot); }
+        if (n && n._tqKey) {
+          applyFit(n, n._tqKey, n._tqSlot);
+          /* 记下这次算 k 用的槽尺寸：applyFit 依赖 clientWidth/clientHeight，
+           * 锚点（--fig-dock-lift）一变槽高就变，上一版没有回头重算的机制（见 refitIfResized） */
+          n._tqFitW = n.clientWidth; n._tqFitH = n.clientHeight;
+        }
       });
+    },
+    /* ★槽尺寸变了但没被 refit 覆盖时补一次（2026-11-02 实测到的真 bug）：
+     *   setPortrait 的顺序是 show(l) → show(r) → refit() → reAnchorSoon()，而
+     *   reAnchorSoon 里才写 --fig-dock-lift、才逐槽写 data-anchor —— 也就是 refit 时
+     *   槽高还是「对话框未测量」时的初值（实测 507），之后长到 624 就没人重算了。
+     *   症状：整场第一对同框的 k 停在旧高度上（王朴那对郭荣 1.81，正确值 1.987），
+     *   两人身高比因此偏 1%（王朴反而高），而后续场景全对 —— 最难查的一类错。 */
+    refitIfResized: function () {
+      var map = TP._sides || {}, dirty = false;
+      Object.keys(map).forEach(function (k) {
+        var n = map[k];
+        if (!n || !n._tqKey) { return; }
+        if (n._tqFitW !== n.clientWidth || n._tqFitH !== n.clientHeight) { dirty = true; }
+      });
+      if (dirty) { TP.refit(); }
     },
 
     /* ---- 立绘槽：先画占位，再异步升级真图（永不空槽） ----

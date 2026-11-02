@@ -266,6 +266,9 @@
     /* 兼容：舞台上保留主槽那一份（旧样式/验收脚本仍读 .sp-zone[data-anchor]） */
     var main = map.main || map.r || map.l;
     if (main) { sp.setAttribute('data-anchor', main.getAttribute('data-anchor') || 'stage-bottom'); }
+    /* ★重锚会改槽高（--fig-dock-lift / data-anchor 都直接影响 slot 的 height），
+     *   而 k 是按槽高算的 —— 尺寸真变了就补一次归一化，否则这一场的身高比停在旧高度上。 */
+    if (global.TP && TP.refitIfResized) { TP.refitIfResized(); }
   }
   /* dock 结构变化（换框/尺寸变化）后重锚 */
   function reAnchorSoon() { setTimeout(syncFigAnchor, 0); }
@@ -1369,6 +1372,12 @@
         var nf = global.TP.faceOf(key);
         var mir = (side === 'L') ? (nf === 'l') : (nf === 'r');
         s.setAttribute('data-mir', mir ? '1' : '0');
+        /* 身高标准（2026-11-02）：回忆舞台与主线双人档共用同一张 STATURE 表。
+         * 这里只做「等比缩小 + 底对齐」，缩的是 .mem-fig 内的 img/svg（transform-origin: bottom）
+         * ⇒ 脚不动、只有头顶下沉，读起来才是「这个人矮」，而不是「这张图变小了」。 */
+        var sv = (global.TP.statureOf ? global.TP.statureOf(key) : 1) || 1;
+        s.style.setProperty('--mem-s', sv);
+        s.style.setProperty('--mem-sx', mir ? -1 : 1);
       }
       s.style.display = '';
     }
