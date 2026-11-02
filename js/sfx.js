@@ -23,12 +23,54 @@
     if (!ctx) {
       try { ctx = new AC(); } catch (e) { return null; }
       master = ctx.createGain();
-      master.gain.value = vol * 0.5;
+      /* 2026-11-02 手机实测「听不到音效」：原来 master = vol×0.5 = 0.275，
+       * 手机外放本来就轻，0.275 再乘各类音的 0.1~0.16 就接近听不见。
+       * 提到 vol×0.9（默认 ≈0.50），并把各类音的相对比例保持不变。 */
+      master.gain.value = vol * 0.9;
       master.connect(ctx.destination);
     }
-    if (ctx.state === 'suspended' && ctx.resume) { ctx.resume(); }
+    /* ★必须在用户手势里 resume（iOS/微信/小红书 WebView 都拦自动播放）。
+     * 旧实现只在「要放某个音」时顺手 resume —— 而首次放音往往发生在自动推进
+     * （setTimeout/rAF）里，不是手势，resume 被拒后 ctx 一直 suspended，
+     * 之后所有音都静默。现在额外在 document 上挂一次性手势解锁（见 unlock）。 */
+    if (ctx.state === 'suspended' && ctx.resume) {
+      try { ctx.resume(); } catch (e) {}
+    }
     return ctx;
   }
+
+  /* 手势解锁：document 级监听，第一次真实触摸/点击就把 AudioContext 建起来并 resume。
+   * 只挂一次、只解一次；无 AudioContext 环境静默跳过。 */
+  var unlocked = false, bound = false;
+  function unlock() {
+    if (unlocked) { return; }
+    var c = ensure();
+    if (!c) { return; }
+    if (c.state === 'running') { unlocked = true; return; }
+    if (c.resume) {
+      try {
+        var p = c.resume();
+        if (p && p.then) { p.then(function () { unlocked = (c.state === 'running'); }, function () {}); }
+      } catch (e) {}
+    }
+  }
+  function bindUnlock() {
+    if (bound || typeof document === 'undefined') { return; }
+    bound = true;
+    var opts = false;
+    var once = function () { unlock(); };
+    document.addEventListener('pointerdown', once, true);
+    document.addEventListener('touchstart', once, opts);
+    document.addEventListener('click', once, true);
+    document.addEventListener('keydown', once, true);
+    /* 切回前台可能被系统挂起：再解一次 */
+    if (document.addEventListener) {
+      document.addEventListener('visibilitychange', function () {
+        if (document.visibilityState === 'visible') { unlock(); }
+      });
+    }
+  }
+  bindUnlock();
 
   /* 噪声源：一次性生成 0.5s 衰减白噪，复用作纸页/笔触的基底 */
   var noiseBuf = null;
@@ -132,8 +174,10 @@
     isEnabled: function () { return enabled; },
     setVolume: function (v) {
       vol = Math.max(0, Math.min(1, v));
-      if (master) { master.gain.value = vol * 0.5; }
+      if (master) { master.gain.value = vol * 0.9; }
     },
+    /* 供设定页「试听」与探针调用：解锁 + 放一个短音 */
+    unlock: function () { unlock(); return (ctx && ctx.state) || 'none'; },
     volume: function () { return vol; },
     /* 供探针/调试：不发声音，只报告当前状态 */
     status: function () {

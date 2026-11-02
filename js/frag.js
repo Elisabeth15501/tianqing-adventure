@@ -861,13 +861,12 @@
       });
     }
     function renderBar() {
-      var st0 = steps[si];
-      if (st0 && st0.gest === 'toss') {
-        bar.style.display = 'none';
-      } else {
-        bar.style.display = '';
-        fill.style.width = pctClamp() + '%';
-      }
+      /* ★进度条常显（2026-11-02 手机实测「关掉教学连进度条也没了」）：
+       *   进度条是**状态**，不是教学。旧版在 toss 与 RICH 两处把它 display:none，
+       *   关掉教学后（HUD 也藏了）玩家就彻底看不到自己做到哪一步。
+       *   现在一律显示；只有「本步无可量化进度」时才让 fill 停住。 */
+      bar.style.display = '';
+      fill.style.width = pctClamp() + '%';
       var st = steps[si];
       if (st && st.gest === 'drag') {
         bzone.style.left = '0'; bzone.style.width = '100%';
@@ -1076,7 +1075,8 @@
 
     if (RICH) {
       wrap.classList.add('rich');
-      bar.style.display = 'none';
+      /* 进度条保留（hooks.step 会把真实进度写进 fill），只收起用不上的通用控件 */
+      bar.style.display = '';
       ctrl.style.display = 'none';
       propBox.style.display = 'none';
       gest.style.display = 'none';

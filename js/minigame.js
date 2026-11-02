@@ -1180,6 +1180,13 @@
       var f = pathOf(A, HAND), i, apex = f.pts[0], tc = f.t.cross;
       for (i = 1; i < f.pts.length; i++) { if (f.pts[i].y < apex.y) { apex = f.pts[i]; } }
       var col = A.hit ? '#3F6B58' : '#6B6560';
+      /* ★手指遮挡（2026-11-02 手机实测）：起手在左下，拖拽时拇指正好压住抛物线的前段。
+       *   这里在真弧上方 26 单位再画一条**同形副本**（细、淡、带引线），
+       *   手指压住下半截时仍能看清整条弧的走向；两线同源，不会误导。 */
+      var lift = [], k2;
+      for (k2 = 0; k2 < f.pts.length; k2++) { lift.push({ x: f.pts[k2].x, y: f.pts[k2].y - 26 }); }
+      s += '<polyline points="' + poly(lift) + '" fill="none" stroke="' + col + '" stroke-width="1" ' +
+           'stroke-dasharray="3 5" stroke-linecap="round" opacity=".42"/>';
       s += '<polyline points="' + poly(f.pts) + '" fill="none" stroke="' + col + '" stroke-width="1.6" ' +
            'stroke-dasharray="6 5" stroke-linecap="round" opacity=".9"/>';
       s += '<circle cx="' + n1(apex.x) + '" cy="' + n1(apex.y) + '" r="1.6" fill="' + col + '" opacity=".45"/>';
@@ -2226,7 +2233,7 @@ function playFolk(cv, hooks, cfg, ui) {
             var da = ha - st.lastAng;
             while (da > Math.PI) { da -= 2 * Math.PI; }
             while (da < -Math.PI) { da += 2 * Math.PI; }
-            st.acc += Math.min(Math.abs(da), 0.9);
+            st.acc += Math.min(Math.abs(da), 1.25);   /* 快绕时单步转角可能更大，也别截太狠 */
           }
           st.lastAng = ha;
         }
@@ -2238,7 +2245,12 @@ function playFolk(cv, hooks, cfg, ui) {
        * ★TURN_R = 0.92：鼠标/手指按 15° 采样时，一圈实测只累到 0.98π×2（像素取整 +
        *   起点那一步不计角度，实测 2 圈 12.30 rad、3 圈 18.64 rad ≈ 少 2%）。按裸 2π 判
        *   会让「明明绕满三圈」停在 2/3，故留 8% 余量 —— 玩家不会数到小数点后两位。 */
-      var TURN_R = Math.PI * 2 * 0.92;
+      /* ★2026-11-02 手机实测「绕丝难以顺畅完成」再放宽一档：
+       *   0.92 → 0.62，即「手指绕大约 225° 就记一圈」。理由：手机上囊口只有指甲盖大，
+       *   拇指画一圈实际能落在画布上的采样点常只有十几个，取整与采样丢失会吃掉 10~20%；
+       *   再加上玩家不敢画太大圈，实际弧长本就不足 2π。放宽后动作与结果仍然对得上
+       *   （三个方向各绕一次才满三道丝），不改变"要绕"这件事。 */
+      var TURN_R = Math.PI * 2 * 0.62;
       var w = Math.min(3, Math.floor(st.acc / TURN_R));
       if (w !== st.wound) { st.wound = w; paint(); hooks.step(prog(), lab()); }
       return;
@@ -2730,7 +2742,31 @@ function playShiFolk(cv, hooks, cfg, ui) {
           if (st.asked.indexOf(i) < 0) {
             st.asked.push(i); st.bub = i; sfx('select');
             paint(); hooks.step(prog(), lab()); hooks.tip(VEND[i].name + '：' + VEND[i].say);
-            if (st.asked.length >= 3) { st.bub = -1; hooks.done(false); }   /* 三人齐自动进三拍；过渡条只在本节末尾 */
+            /* ★第三位摊主（2026-11-02 手机实测「问俗缺了第三位回答」）：
+             *   旧实现问满三人**立刻** hooks.done —— 第三句台词只写在 hooks.tip 里，
+             *   而 tip 落在 .iv-hint 上，关掉教学就整条不显示；即便开着，也只是一闪就被
+             *   「落笔」这一拍顶掉。现在：先把第三位的话留在气泡里 1.1 秒，
+             *   再走一张过渡条（把三句乡俗收成一句），玩家点「落笔」才进第三拍。 */
+            if (st.asked.length >= 3) {
+              var last = VEND[i];
+              st.bub = i; paint();
+              var goNext = function () {
+                if (st._askDone) { return; }
+                st._askDone = true;
+                hooks.done(false);
+              };
+              setTimeout(function () {
+                if (st.dead || !cv.svg.isConnected) { return; }
+                st.bub = -1; paint();
+                if (ui && ui.sheet) {
+                  ui.sheet({
+                    title: '三处问过',
+                    body: last.name + '：' + last.say + '　——三句乡俗已记下，可以落笔了。',
+                    go: '落笔'
+                  }, goNext);
+                } else { goNext(); }
+              }, 1100);
+            }
           } else {
             st.rep = i; st.repT = now(); paint();    /* 点到已问：不计数，朱点闪一下 */
           }
@@ -2936,7 +2972,7 @@ function playShiFolk(cv, hooks, cfg, ui) {
              '</g>';
     }
     return LAMP_DEFS + lampBenchHTML() + LAMP_BASE + lampBowlHTML(null) + lampWickHTML() +
-      lampShadeHTML(0, { inner: sms }) + lampSpillHTML() +
+      lampShadeHTML(0, { inner: sms + '<g id="wipetrail"></g>' }) + lampSpillHTML() +
       '<g id="tool" opacity="0"><path d="M134 88 h32 l-3 25 h-26 Z" fill="#E8E0CE" stroke="#B9A67C" stroke-width="1.2"/>' +
       '<path d="M137 96 q7 4 13 0 M137 104 q7 4 13 0" fill="none" stroke="#CBBE9C" stroke-width="1"/>' +
       '<path d="M134 88 h32" stroke="#FFFDF6" stroke-width="1.4"/></g>';
@@ -2980,7 +3016,8 @@ function playShiFolk(cv, hooks, cfg, ui) {
   function playLamp(cv, hooks, cfg, ui) {
     var st = { beat: 0, down: false, tool: null, sm: [1, 1, 1, 1, 1],
       pour: false, oilT0: 0, lightN: 0, flameK: 0, shadeDy: 0, lightDone: false,
-      gate: false, _downBeat: -1, dead: false, live: false, lift: null };
+      gate: false, _downBeat: -1, dead: false, live: false, lift: null,
+      trail: [] };   /* 擦痕：{x,y,t}，0.45s 淡出（#wipetrail 里画） */
     /* 油位跨拍存续：注油定下的那一盂油，点灯要用（数据死在上一拍就穿帮） */
     var RUN = { oilY: LP.botY, spilled: false, sooty: false };
 
@@ -3076,8 +3113,13 @@ function playShiFolk(cv, hooks, cfg, ui) {
         for (i = 0; i < LAMP_SM.length; i++) {
           if (st.sm[i] <= 0) { continue; }
           if (dist(st.tool, LAMP_SM[i]) < LAMP_SM[i].r + 11) {
-            st.sm[i] = Math.max(0, st.sm[i] - 0.05);
-            if (st.sm[i] <= 0) { sfx('brush'); }
+            /* 单帧擦除量 0.05 → 0.09：手机上按住一抹只走 1~2 帧，太细的步进看着"没反应" */
+            var was = st.sm[i];
+            st.sm[i] = Math.max(0, st.sm[i] - 0.09);
+            if (was > 0 && st.sm[i] <= 0) { sfx('brush'); }
+            /* 擦痕：记下这一下的位置，画出"抹布刚抹过"的一道亮痕（0.45s 淡出） */
+            st.trail.push({ x: st.tool.x, y: st.tool.y, t: now() });
+            if (st.trail.length > 10) { st.trail.shift(); }
           }
         }
         for (i = 0; i < LAMP_SM.length; i++) { sum += st.sm[i]; }
@@ -3098,6 +3140,18 @@ function playShiFolk(cv, hooks, cfg, ui) {
           if (cleanN() >= LAMP_SM.length) { hooks.done(false); }
         }
       }
+      /* 擦痕层：最近 0.45s 抹过的地方留一道浅亮弧，读起来就是"灰被抹走了" */
+      var tr = st.trail || (st.trail = []);
+      var tnow = now();
+      var s2 = '';
+      for (var q = 0; q < tr.length; q++) {
+        var age = (tnow - tr[q].t) / 450;
+        if (age >= 1) { continue; }
+        s2 += '<ellipse cx="' + n1(tr[q].x) + '" cy="' + n1(tr[q].y) + '" rx="13" ry="6" ' +
+              'fill="none" stroke="#FFFDF6" stroke-width="2.4" opacity="' + n1(0.45 * (1 - age)) + '"/>';
+      }
+      var tl2 = cv.q('#wipetrail');
+      if (tl2) { tl2.innerHTML = s2; }
     }
     function draw() {
       if (st.dead) { return; }

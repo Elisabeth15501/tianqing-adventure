@@ -142,7 +142,24 @@
     tSfx.appendChild(h('div', 'set-n', '音效'));
     tSfx.appendChild(h('div', 'set-d', '推进、点按、拾得时的轻响。本作无背景音乐；关掉不影响任何流程。'));
     rSfx.appendChild(tSfx);
-    rSfx.appendChild(switchBtn(sfxOn, setSfx));
+    var tryBox = h('div', 'set-minis');
+    var tryBtn = h('button', 'set-mini', '试听');
+    tryBtn.type = 'button';
+    tryBtn.addEventListener('click', function () {
+      if (global.TQSFX && global.TQSFX.unlock) { global.TQSFX.unlock(); }
+      if (!sfxOn()) { setSfx(true); refreshSfx(); }   /* 关了还试听？先打开，再响 */
+      if (global.TQSFX) { try { global.TQSFX.play('bead'); } catch (e) {} }
+    });
+    tryBox.appendChild(tryBtn);
+    rSfx.appendChild(tryBox);
+    var sfxSw = switchBtn(sfxOn, setSfx);
+    rSfx.appendChild(sfxSw);
+    function refreshSfx() {
+      var on = !!sfxOn();
+      sfxSw.textContent = on ? '开' : '关';
+      sfxSw.setAttribute('data-on', on ? '1' : '0');
+      sfxSw.setAttribute('aria-pressed', on ? 'true' : 'false');
+    }
     panel.appendChild(rSfx);
 
     /* --- 操作教学 --- */

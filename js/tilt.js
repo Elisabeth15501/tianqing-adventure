@@ -296,6 +296,15 @@
     if (!this.el) { return; }
     this.el.addEventListener('pointermove', this.onMove);
     this.el.addEventListener('pointerleave', this.onLeave);
+    /* 老 WebView / iOS Safari 13 之前没有 PointerEvent：补 touchmove，保证"手指拖着画面"能动 */
+    if (!global.PointerEvent && this.el.addEventListener) {
+      this.el.addEventListener('touchmove', this.onTouch, { passive: true });
+      this.el.addEventListener('touchend', this.onLeave);
+    }
+  };
+  PointerSource.prototype.onTouch = function (e) {
+    var t = e.touches && e.touches[0];
+    if (t) { this.handle(t); }
   };
 
   PointerSource.prototype.handle = function (e) {
@@ -310,6 +319,10 @@
     if (!this.el) { return; }
     this.el.removeEventListener('pointermove', this.onMove);
     this.el.removeEventListener('pointerleave', this.onLeave);
+    if (this.el.removeEventListener) {
+      this.el.removeEventListener('touchmove', this.onTouch);
+      this.el.removeEventListener('touchend', this.onLeave);
+    }
   };
 
   /* ------------------------------------------------------------------
@@ -383,6 +396,34 @@
               running: this.gyro.running, clientVersion: this.gyro.ver,
               minClient: MIN_CLIENT }
     };
+  };
+
+  /* ★手势内补申请姿态权限（2026-11-02 手机实测）：
+   *   iOS 13+ 的 DeviceOrientationEvent.requestPermission() 必须**在用户手势里**调用。
+   *   场景挂载发生在进入这一幕的点击里，但启动链是异步的（版本探测 → 启动），
+   *   等轮到 orientation.start() 时手势上下文已经丢了 ⇒ 被拒 ⇒ 只剩 pointer，
+   *   手机上表现就是「背景完全不随倾斜动」。
+   *   这里在第一次真实触摸/点击时再申请一次；成功就把输入源切成 orientation。 */
+  TiltController.prototype.retryOnGesture = function (el, onSwitch) {
+    var self = this;
+    var host = el || global;
+    var done = false;
+    function attempt() {
+      if (done) { return; }
+      done = true;
+      if (self.active === 'gyro' || self.active === 'orientation') { return; }
+      self.orientation.start().then(function (ok) {
+        if (!ok) { return; }
+        self.active = 'orientation';
+        if (typeof onSwitch === 'function') { onSwitch('orientation'); }
+      });
+    }
+    if (host && host.addEventListener) {
+      host.addEventListener('touchend', attempt, { passive: true });
+      host.addEventListener('click', attempt);
+      host.addEventListener('pointerup', attempt);
+    }
+    return this;
   };
 
   TiltController.prototype.recenter = function () {

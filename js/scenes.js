@@ -232,7 +232,19 @@
       '.tqs-stage img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 50%;',
       '  -webkit-user-drag:none;user-select:none}',
       '.tqs-pano{position:absolute;left:0;top:0;height:100%;will-change:transform}',
-      '.tqs-pano img{width:100%;height:100%;object-fit:fill}'
+      '.tqs-pano img{width:100%;height:100%;object-fit:fill}',
+      /* 单层场景：主图放大兜住位移，前景层反向慢移（程序化，无资源） */
+      '.tqs-solo img{transform-origin:50% 50%;will-change:transform}',
+      '.tqs-solo-fg{position:absolute;left:-6%;top:-4%;width:112%;height:108%;pointer-events:none;',
+      '  will-change:transform;',
+      '  background:'
+      /* 上沿檐影：压住顶部天空，让"门楼在远处" */
+      + 'linear-gradient(to bottom,rgba(8,12,14,.42) 0%,rgba(8,12,14,.12) 14%,rgba(8,12,14,0) 28%),'
+      /* 四角暗角：把视线收进中轴 */
+      + 'radial-gradient(120% 90% at 50% 58%,rgba(0,0,0,0) 52%,rgba(0,0,0,.38) 100%),'
+      /* 低位浮尘：三簇极淡暖点，位移时能看出"近景在动" */
+      + 'radial-gradient(38% 30% at 18% 82%,rgba(233,201,143,.10) 0%,rgba(233,201,143,0) 70%),'
+      + 'radial-gradient(30% 26% at 76% 88%,rgba(233,201,143,.08) 0%,rgba(233,201,143,0) 72%)}'
     ].join('');
     var s = document.createElement('style');
     s.id = CSS_ID;
@@ -243,19 +255,67 @@
   /* 页面在仓库根时 base 为空；preview/ 下调用方设 TQScenes.base = '../' */
   function path(src) { return (SC_.base || '') + src; }
 
-  /* 单层：铺满 */
+  /* 单层：铺满 + 陀螺仪微视差 + 程序化前景
+   * ★2026-11-02 手机实测：S1 竖版是单层（门楼一张图），既没有前景、也不会随倾斜动，
+   *   与三层场景的观感差一截。单层没有第二张素材可用，但**不需要**再要一张图：
+   *   主图放大 1.06 倍后按倾斜做 ≤1.6% 位移（余量够，永不露边），
+   *   再叠一层**程序化前景**（檐角暗影 + 低位浮尘，纯 CSS 渐变）反向位移 2 倍——
+   *   一近一远就有了景深，且零新增资源、零新增请求。 */
   function mountSingle(el, cfg) {
     injectStyle();
-    el.classList.add('tqs-stage');
+    el.classList.add('tqs-stage', 'tqs-solo');
     var im = el.querySelector('img');
     if (!im) { im = document.createElement('img'); el.appendChild(im); }
     im.setAttribute('alt', '');
+    im.setAttribute('draggable', 'false');
     im.src = path(cfg.files.main);
+
+    var fg = el.querySelector('.tqs-solo-fg');
+    if (!fg) { fg = document.createElement('div'); fg.className = 'tqs-solo-fg'; el.appendChild(fg); }
+
+    var tx = 0, ty = 0, cx = 0, cy = 0, raf = 0, dead = false, ctrl = null;
+    function paint() {
+      raf = 0;
+      if (dead) { return; }
+      cx += (tx - cx) * 0.14;
+      cy += (ty - cy) * 0.14;
+      var moving = Math.abs(tx - cx) > 0.0015 || Math.abs(ty - cy) > 0.0015;
+      if (!moving) { cx = tx; cy = ty; }
+      im.style.transform = 'translate3d(' + (cx * -1.6).toFixed(2) + '%,' + (cy * -1.1).toFixed(2) + '%,0) scale(1.06)';
+      fg.style.transform = 'translate3d(' + (cx * 2.6).toFixed(2) + '%,' + (cy * 1.8).toFixed(2) + '%,0)';
+      if (moving) { schedule(); }
+    }
+    function schedule() {
+      if (raf || dead) { return; }
+      raf = (global.requestAnimationFrame || function (f) { return setTimeout(f, 16); })(paint);
+    }
+    /* 输入源与三层场景同一条链（陀螺仪 → 设备姿态 → 指针），失败就静静不动 */
+    if (global.TiltController) {
+      ctrl = new global.TiltController({
+        onUpdate: function (a, b) { tx = a; ty = b; schedule(); }
+      });
+      ctrl.attachPointer(el);
+      ctrl.start(null).then(function (kind) {
+        if (!dead) { el.setAttribute('data-spl-input', kind); }
+        if (ctrl && ctrl.retryOnGesture) { ctrl.retryOnGesture(el, function (k2) { el.setAttribute('data-spl-input', k2); }); }
+      });
+    }
     return {
       kind: 'single', el: el,
       src: im.src,
       loaded: function () { return im.complete && im.naturalWidth > 0; },
-      destroy: function () { el.innerHTML = ''; el.classList.remove('tqs-stage'); }
+      inputStatus: function () {
+        return { kind: el.getAttribute('data-spl-input') || 'none',
+                 detail: ctrl && ctrl.status ? ctrl.status() : null };
+      },
+      destroy: function () {
+        dead = true;
+        if (raf) { (global.cancelAnimationFrame || clearTimeout)(raf); raf = 0; }
+        if (ctrl) { try { ctrl.stop(); } catch (e) {} ctrl = null; }
+        el.innerHTML = '';
+        el.classList.remove('tqs-stage', 'tqs-solo');
+        el.removeAttribute('data-spl-input');
+      }
     };
   }
 

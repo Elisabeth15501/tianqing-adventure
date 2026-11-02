@@ -130,6 +130,15 @@
   function sfx(name) {
     if (global.TQSFX) { try { global.TQSFX.play(name); } catch (e) {} }
   }
+  /* 长按 → 系统「分享图片/复制图片」菜单（2026-11-02 手机实测）：
+   * 安卓 WebView 走 contextmenu 这条路（iOS 走 -webkit-touch-callout，见 css）。
+   * 游戏里没有任何"长按复制"的需求，一律拦掉；输入框不拦。 */
+  document.addEventListener('contextmenu', function (e) {
+    var t = e.target;
+    if (t && t.tagName && /^(INPUT|TEXTAREA)$/.test(t.tagName)) { return; }
+    e.preventDefault();
+  }, false);
+
   /* 启动即应用上次的音效开关（默认开） */
   (function initSfx() {
     if (!global.TQSFX) { return; }
@@ -1191,9 +1200,17 @@
     /* 占台即 lat-long 全方位旋转档（F.spin3d）：拖动自由旋转（俯仰＋环视）＋
      * 双指/双击缩放＋惯性；LL 缺失自动回退 12 帧转台，再降级内壁静态帧（永不白屏）。
      * 「内壁细看」按钮切到静态内壁帧（看釉下笔触），再点回旋转。 */
-    var onInner = false;
+    /* ★2026-11-02 手机实测（「女官线拾得瓷片不显示」「瓷片模糊」「3D 交互卡」）：
+     *   默认改成**内壁静态帧**。三个问题一根因：拾得界面首屏走的是 12 向图集（每帧 160px），
+     *   ① 慢网下图集没到 → 画布空着，看着就是"瓷片不显示"；
+     *   ② 160px 铺到 200px 画布再乘 DPR，本来就软；
+     *   ③ 进来就跑 60fps 自转，低端机一开就卡。
+     *   内壁帧是 700~1000px 的整幅画（assets/shards/shard_XX_inner.webp），
+     *   清晰、必定有图、且是静态绘制——首屏稳。想看立体再按「转动看看」。
+     *   默认值仍按材质能取到的档位来：内壁画缺失时自动退回转台（shardInner 内部处理）。 */
+    var onInner = true;
     var innerBtn = null;
-    function syncInnerBtn() { if (innerBtn) { innerBtn.textContent = onInner ? '回到旋转' : '内壁细看'; } }
+    function syncInnerBtn() { if (innerBtn) { innerBtn.textContent = onInner ? '转动看看' : '回到内壁'; } }
     function renderSpin() { if (window.F) { F.spin3d(stage, id); } onInner = false; syncInnerBtn(); }
     function renderInner() { if (window.F) { F.shardInner(stage, id); } onInner = true; syncInnerBtn(); }
     if (first) { sfx('bead'); }  /* 首次拾得：三音上行的获得音 */
@@ -1212,12 +1229,23 @@
      * 三条路都通：内壁细看按钮（看笔触）＋细看按钮（全屏大图查看器）＋在转台上轻点（手势）。
      * 判据用位移与时长：旋转档本身要拖拽，抬手时刻不能和拖动混淆。 */
     var acts = el('div', 'shard-acts');
-    innerBtn = btn('内壁细看', 'ghost', function () { if (onInner) { renderSpin(); } else { renderInner(); } });
+    innerBtn = btn('转动看看', 'ghost', function () { if (onInner) { renderSpin(); } else { renderInner(); } });
     acts.appendChild(innerBtn);
     acts.appendChild(btn('细看', 'ghost', function () { openShardViewer(id); }));
     acts.appendChild(btn('收下瓷片', '', function () { done(); }));
     wrap.appendChild(acts);
-    renderSpin();
+    /* ★例外：#11 / #14 的内壁画本身有生成瑕疵（一道贯穿的拖影/错位带，见
+     *   _qa/_seam11.png），放大后比"模糊"更碍眼。这两张默认走转台（图集干净），
+     *   并在下面标一句"内壁待重绘"，把问题摆在明处而不是让玩家以为是自己屏幕坏了。
+     *   重出这两张 inner 图后，把编号从这张表里删掉即可恢复默认内壁。 */
+    var BAD_INNER = { '11': 1, '14': 1 };
+    if (BAD_INNER[String(id)]) {
+      renderSpin();
+      var tip = el('div', 'inner-badge', '内壁待重绘');
+      stage.parentNode.insertBefore(tip, stage.nextSibling);
+    } else {
+      renderInner();   /* 首屏＝内壁静态帧（清晰、必定有图、不跑 60fps） */
+    }
     var px0 = 0, py0 = 0, pt0 = 0;
     stage.addEventListener('pointerdown', function (e) {
       px0 = e.clientX; py0 = e.clientY; pt0 = Date.now();
@@ -1747,15 +1775,13 @@
     var inner = el('div', 'ending-wrap');
     inner.appendChild(el('div', 'ending-title', E.title));
     var svgBox = el('div', 'ending-vessel');
-    if (window.F) {
-      /* 终幕合瓮：用 3D 纸槌瓶（vessel-LL 多向图集）替代 2D 矢量瓶 ——
-       * 贴合「合瓮」这一动作，且给出可拖动 / 自转的实体感。
-       * 不做合瓷动画，仅以 3D 实瓶作为合瓮完成后的「成品」呈现。 */
-      var v3d = el('div', 'ending-vessel-3d');
-      svgBox.appendChild(v3d);
-      F.spin3d(v3d, 'vessel');
-    } else {
-      svgBox.innerHTML = '<svg viewBox="0 0 220 320">'
+    /* ★结算瓶换回 2D 纸槌瓶（2026-11-02 手机实测）：
+     *   3D 版（F.spin3d + vessel-LL 图集）在真机上两个问题——
+     *   ① 女官线那一屏常常只剩空画布（图集在慢网下取不到，回退又把容器清空）；
+     *   ② 结算页是「静态收束」的场合，能拖动的瓶子反而不像成品。
+     *   统一走 2D 矢量瓶（原 else 分支），两条支线都一样，且零网络依赖。 */
+    {
+      svgBox.innerHTML = '<svg viewBox="0 0 220 320" class="vessel2d">'
         + '<defs><radialGradient id="eGlow" cx=".5" cy=".5" r=".5"><stop offset="0" stop-color="#E9C98F" stop-opacity=".4"/><stop offset="1" stop-color="#E9C98F" stop-opacity="0"/></radialGradient>'
         + '<linearGradient id="eGlz" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8CAAA6"/><stop offset=".3" stop-color="#AFC7C1"/><stop offset=".6" stop-color="#9DB9B3"/><stop offset="1" stop-color="#77948F"/></linearGradient></defs>'
         + '<circle cx="110" cy="160" r="120" fill="url(#eGlow)"/>'
