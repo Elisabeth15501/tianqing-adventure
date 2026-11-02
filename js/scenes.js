@@ -91,7 +91,7 @@
 
   /* S4 汴州桥市：单层横向长卷（2026-11-02 裁定不分层，B2/B3 不入包） */
   def('s4_pano', {
-    title: 'S4 汴州桥市（午时·可拖长卷）',
+    title: 'S4 汴桥桥市（午时·可拖长卷）',
     forms: {
       h: { kind: 'pano', size: [2880, 720], world: 2880,
            files: { main: 'assets/scenes/s4_pano/pano_l4.webp' },
@@ -102,9 +102,9 @@
     }
   });
 
-  /* S5 滋德殿旧址：v3 真物体分层（bg 补全图 / mg 柱列供桌 / fg 烛台木箱） */
+  /* S5 滋德殿：v3 真物体分层（bg 补全图 / mg 柱列供桌 / fg 烛台木箱） */
   def('s5_zide', {
-    title: 'S5 滋德殿旧址（酉时暗釉）',
+    title: 'S5 滋德殿（酉时暗釉）',
     forms: {
       h: {
         kind: 'parallax', size: [1500, 630],
@@ -268,6 +268,7 @@
     if (!im) { im = document.createElement('img'); el.appendChild(im); }
     im.setAttribute('alt', '');
     im.setAttribute('draggable', 'false');
+    im.setAttribute('decoding', 'async');
     im.src = path(cfg.files.main);
 
     var fg = el.querySelector('.tqs-solo-fg');
@@ -327,6 +328,8 @@
     box.className = 'tqs-pano';
     var im = document.createElement('img');
     im.setAttribute('alt', '');
+    im.setAttribute('draggable', 'false');
+    im.setAttribute('decoding', 'async');
     im.src = path(cfg.files.main);
     box.appendChild(im);
     el.appendChild(box);
@@ -427,6 +430,49 @@
         im.src = path(it.src);
       });
     });
+  };
+
+  /* ---------- 场景预热（2026-11-02 真机「切景卡一下」） ----------
+   * 根因：场景图是**挂载那一刻才设 src** 的（mountSingle / mountPano / parallax 三处都是），
+   *   于是每次切景都要从零下一张 200~400KB 的底图 ⇒ 慢网 1~3s 的空场。
+   *   预热把「下一场要用的图」提前下进 HTTP 缓存，挂载时命中缓存即近乎瞬开。
+   * 纪律：①只预热**当前形态**（横/竖不互相浪费）；②并发 1~2，不抢屏上那张；
+   *      ③失败静默——预热失败不影响任何流程，只是没快而已。 */
+  var PRE = {};
+  function filesOf(key, form) {
+    var c = SC_[key];
+    if (!c) { return []; }
+    var f = c.forms && (c.forms[form] || c.forms.h || c.forms.v);
+    if (!f || !f.files) { return []; }
+    if (f.files.main) { return [path(f.files.main)]; }
+    var out = [f.files.bg, f.files.mg, f.files.fg].filter(Boolean).map(path);
+    return out;
+  }
+  SC_.filesOf = filesOf;
+  SC_.preload = function (list, opt) {
+    opt = opt || {};
+    var defForm = opt.form || 'h', q = [];
+    (list || []).forEach(function (it) {
+      var key = (typeof it === 'string') ? it : it.key;
+      var form = (typeof it === 'string') ? defForm : (it.form || defForm);
+      filesOf(key, form).forEach(function (src) { q.push(src); });
+    });
+    var conc = Math.max(1, opt.conc || 2), i = 0, live = 0, done = opt.done;
+    function pump() {
+      if (i >= q.length && live === 0) { if (done) { done(); } return; }
+      while (live < conc && i < q.length) {
+        var u = q[i]; i += 1;
+        if (PRE[u]) { continue; }
+        PRE[u] = 1;
+        live += 1;
+        (function (src) {
+          var im = new Image();
+          im.onload = im.onerror = function () { live -= 1; pump(); };
+          im.src = src;
+        }(u));
+      }
+    }
+    pump();
   };
 
   global.TQScenes = SC_;

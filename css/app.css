@@ -1192,6 +1192,38 @@ body.shv-open .main{overflow:hidden}
 .iv-stage,.iv-stage canvas,.shard-stage,.shard-ll,.ending-vessel,
 .mg-sheet,.bead-stage{-webkit-touch-callout:none;touch-action:none}
 
+/* ============================================================================
+ * 【★2026-11-02 真机 P0】「动手小节长按道具＝长按图片」的**结构性**根治
+ *
+ * 症状：手指按住道具（面团/墨条/笔/卷轴/矢）不放 → 手机弹出「保存图片／识别图片」
+ *       之类的系统菜单，动手小节被打断，玩家描述成「一定卡」。
+ *
+ * 为什么之前几次都没修掉：此前只在**事件层**做拦截（contextmenu 的 preventDefault、
+ * `.app *` 的 -webkit-touch-callout:none）。这两招管得住「页面对长按的反应」，
+ * 管不住「宿主认出了手指底下是一张图片」—— 系统菜单是 WebView/宿主在原生层弹的，
+ * js 的 preventDefault 根本收不到。
+ *
+ * 真正管用的做法只有一条：**让图片节点退出命中测试**。
+ * 手指底下永远不是 <img> / <image>，宿主就无从判定「按到了图片」。
+ * 本作所有图片都是「背景/装饰」，没有任何一处需要直接点图或拖图：
+ *   · 场景三层视差 → 手势挂在 .tqs-stage 容器（div）上
+ *   · S4 长卷拖动   → 手势挂在 .tqs-pano 容器（div）上
+ *   · 立绘          → 纯展示，手势在 .sp-zone / .slot
+ *   · 瓷片/瓶       → 全部是 canvas（canvas 不是图片节点，不受此影响）
+ *   · 印鉴、拓样    → 纯展示
+ * 因此 img / svg image 一律 pointer-events:none 是安全的，且是唯一彻底的一刀。
+ * ★纪律：以后任何新图都不要再挂点击/拖拽监听；要交互就包一层 div 去接。
+ * ========================================================================== */
+.app img,.app svg image{
+  pointer-events:none;
+  -webkit-touch-callout:none;
+  -webkit-user-drag:none;
+  user-select:none;
+}
+/* canvas 不是「图片节点」，长按不会弹保存菜单；只关掉 callout 与拖拽即可，
+   千万不要给它 pointer-events:none —— 瓷片旋转、涂写、投壶全靠它接手势。 */
+.app canvas{-webkit-touch-callout:none;-webkit-user-drag:none}
+
 /* 【10】桌面端暂不套用横版：首版沿用中屏版布局，边界尺寸按中屏（≤900px 居中）。
  * 横版媒体查询的条件已统一改成 min-aspect-ratio:99/1（永假），此处只补「桌面上看起来
  * 像一块中屏画布」，避免 1280 宽的窗口把手机版拉成一条。 */
@@ -1236,8 +1268,36 @@ body.shv-open .main{overflow:hidden}
 
 /* 【3/5】拾得瓷片：默认内壁静态帧 ⇒ 给它足够的展示面积，别再挤成 168px 的小方块 */
 .shard-stage{min-height:236px}
-.shard-stage .shard-ll{width:236px;height:236px;margin:0}
+/* ★2026-11-02 真机 P0：「#11/#13/#15 在拾得界面不显示 / 被挤出屏幕」的真因就在这里。
+ *   `.shard-ll`（内壁静态帧）有固定 236px，但 **`.shard-sprite`（12 帧转台）没有**。
+ *   canvas 没有 CSS 尺寸时按 **backing store** 显示，而 backing = 160×DPR
+ *   ⇒ DPR2 的手机上就是一个 320×320 的 canvas，DPR3 上是 480×480 ——
+ *   塞进 212px 高的舞台里，上下各溢出一大截，被 .vn-doc 裁掉，
+ *   看上去就是「瓷片被移出屏幕 / 只剩一条边」。
+ *   #1/#13/#15/#16 走的是内壁帧（.shard-ll，有尺寸）所以正常，
+ *   #11/#14 走转台（.shard-sprite，没尺寸）所以必然出问题 —— 与玩家报的编号完全对上。
+ *   修法：把两种 canvas 一起定尺寸，谁都不会再按 backing 撑开。 */
+.shard-stage .shard-ll,
+.shard-stage canvas.shard-sprite{width:236px;height:236px;margin:0;display:block}
 @media (max-width:430px){
-  .shard-stage .shard-ll{width:212px;height:212px}
+  .shard-stage .shard-ll,
+  .shard-stage canvas.shard-sprite{width:212px;height:212px}
   .shard-stage{min-height:212px}
+}
+
+/* ★2026-11-02 真机：360×640 这类矮屏上，「收下瓷片」按钮被顶到可视区外面
+ *   （实测 acts 底边 708 > 视口 640），玩家以为卡住了。
+ *   矮屏把瓷片舞台与史料卡一起收一档，保证「瓷片 + 史料卡 + 三个按钮」一屏放得下；
+ *   史料卡超出时在卡内滚动，不把按钮挤走。 */
+@media (max-height:720px){
+  .shard-stage{min-height:168px}
+  .shard-stage .shard-ll,
+  .shard-stage canvas.shard-sprite{width:168px;height:168px}
+  .shard-occ .shiliao{margin:8px 0;padding:10px 12px}
+  .shard-occ .shiliao .quote{max-height:4.6em;overflow-y:auto;-webkit-overflow-scrolling:touch}
+  .shard-occ .shard-toast{padding:9px 12px;margin:8px 0}
+  /* 三个按钮原本各占一行（约 150px）；矮屏改成「回到内壁 / 细看」并排、
+     「收下瓷片」独占一行 —— 两行省下约 50px，正好把主按钮收回屏内。 */
+  .shard-acts .btn{flex:1 1 44%;min-width:0;width:auto;margin:3px 3px;padding:9px 6px;font-size:13px}
+  .shard-acts .btn:nth-child(3){flex:1 1 100%}
 }
