@@ -54,6 +54,14 @@ def main():
 
     # index.html
     shutil.copy(os.path.join(ROOT, 'index.html'), os.path.join(DIST, 'index.html'))
+    # 素材自检页（2026-11-02）：真机排障时要在手机上直接看「哪张图没下来、解码尺寸多少」，
+    # 之前它只躺在仓库根目录、从没进过 dist，线上访问是 404。它只依赖 ./js/assets.js
+    # 与 ./assets/**（本包都已带），所以原样拷到根就行。
+    chk = os.path.join(ROOT, 'assets-check.html')
+    if os.path.exists(chk):
+        shutil.copy(chk, os.path.join(DIST, 'assets-check.html'))
+    else:
+        print('WARN missing assets-check.html')
     # css
     shutil.copy(os.path.join(ROOT, 'css', 'app.css'),
                 os.path.join(DIST, 'css', 'app.css'))
