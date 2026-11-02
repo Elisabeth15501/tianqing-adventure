@@ -1205,9 +1205,21 @@ body.shv-open .main{overflow:hidden}
    *   结算页 .ending-scene 自带径向渐变（深色是设计），用 :not() 排除，别被覆盖。
    *   act 场景不受影响：.bg-scene 是 .app 内 z-index:-1 的子层，按绘制顺序
    *   它画在"父元素背景之上、正文之下"，所以补了底色也不会把场景挡住（已实测）。 */
-  .app:not(.ending-scene){background:#D9E3DF}
+  /* 加载页 .app.load 自带深色渐变（文字是纸白色），结算页自带径向渐变 —— 两者都要排除，
+   * 否则浅底压白字，加载页会变成"白底白字"（2026-11-02 实测）。 */
+  .app:not(.ending-scene):not(.load){background:#D9E3DF}
   .app{max-width:900px;margin:0 auto;height:100%;
     box-shadow:0 0 48px rgba(0,0,0,.55)}
+  /* ★2026-11-02 桌面：背景要与界面**等长**。
+   *   .bg-scene 的宿主被 fitSceneCover 放大成"cover"尺寸（横版素材在 900×800 上会算成
+   *   1905×800），而 .app 没有裁切 ⇒ 底图溢出到画框外，桌面就成了"背景比界面宽一截"。
+   *   这里给画布列加裁切：底图、立绘外溢、浮层都被收进 900px 这条边界里，
+   *   与顶栏（topbar 也在同一列内）自然等长。 */
+  .app{overflow:hidden}
+  /* 加载页：原来是「按内容收缩」的窄竖条（实测 302px），改为铺满中屏画布 */
+  .app.load{width:100%}
+  /* 瓷片舞台：桌面 .shard-occ 有 640px 宽，200px 的瓷片居中会"飘"在大片空行里 */
+  .shard-stage{max-width:320px;margin-left:auto;margin-right:auto}
 }
 
 /* 【8】结算页 2D 纸槌瓶：静态收束，只留极轻的浮起呼吸（不用 3D、零网络依赖） */

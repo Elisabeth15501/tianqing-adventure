@@ -1140,12 +1140,22 @@
     },
     /* 把真立绘画进任意节点（回忆舞台 mem-fig 等自定义容器）：
      * 未注册返回 false，调用方的矢量占位保留。node._tqTok 防「快速连点换人」时旧图后到。 */
-    realInto: function (node, key, slot) {
+    /* 有没有真素材（= 已注册到 TQA.reg）。回忆舞台据此决定「先留空」还是「画矢量」，
+     * 与 realInto 用同一个键规则，避免两处判断漂移。 */
+    hasAsset: function (key, slot) {
+      if (!TQA || !key || key === 'DEFAULT') { return false; }
+      var a = pickSlot(key, slot);
+      if (!a) { return false; }
+      return !!TQA.reg['char-' + key + (a !== CHAR_ASSETS[key] ? '-' + a : '')];
+    },
+    /* opts.fallback：真图失败/超时时画矢量占位（只在"回退"时调用，不在首帧调用） */
+    realInto: function (node, key, slot, opts) {
       if (!node || !TQA) { return false; }
       var a = pickSlot(key, slot);
       if (!a) { return false; }
       var ak = 'char-' + key + (a !== CHAR_ASSETS[key] ? '-' + a : '');
       if (!TQA.reg[ak]) { return false; }
+      var fb = opts && typeof opts.fallback === 'function' ? opts.fallback : null;
       var tok = (node._tqTok || 0) + 1;
       node._tqTok = tok;
       function put(im) {
@@ -1161,13 +1171,15 @@
       TQA.resolve(ak, function (stt) {
         if (node._tqTok !== tok) { return; }
         if (stt === 'timeout') {
+          /* 慢网：先补一张矢量兜住（此时是"回退"，不是首帧闪现），图到即换真图 */
+          if (fb && !node.querySelector('img.mem-fig-real')) { fb(); }
           TQA.onLate(ak, function (st2) {
             if (st2 !== 'ok' || node._tqTok !== tok) { return; }
             if (TQA.imgs[ak]) { put(TQA.imgs[ak]); }
           });
           return;
         }
-        if (stt !== 'ok') { return; }
+        if (stt !== 'ok') { if (fb) { fb(); } return; }
         var im = TQA.image(ak);
         if (!im) { return; }
         put(im);

@@ -257,19 +257,25 @@
       mount.innerHTML = '';
       var cv = h('canvas', 'shard-ll');
       var d = dprOf();
+      /* ★2026-11-02 桌面实测「收到瓷片时显示异常（拉成一块怪形状）」：
+       *   旧代码按 `mount.clientWidth/clientHeight` 定 backing —— mount 是 .shard-stage，
+       *   桌面上它是整列宽的 flex 容器（≈852×236），而 canvas 的**显示尺寸**由 CSS
+       *   .shard-ll 固定为 200×200 ⇒ 按 852×236 画、再压进 200×200，纵向被压扁。
+       *   改成：先把 canvas 挂进去，按它自己的 CSS 显示尺寸（×DPR）定 backing，
+       *   两者同源，任何断点都不会变形。 */
+      mount.appendChild(cv);
       /* ★ 清晰度修复（2026-11-02）：旧 backing = img.width*d/2 ≈146px 且固定，
        *   zoom 只是把这块 146px 拉伸到 ~320px 显示 ⇒ 放大永远只有 ~146px 有效像素（糊）。
        *   现 backing 一次开到「显示区尺寸 × dpr」（z=1 满分辨率）。draw() 仍用
        *   cv.width*zoom 作目标矩形 —— dest 超出 backing 即被画布裁切，等价于「放大看局部」，
        *   而源图始终按真实分辨率绘制 ⇒ 任意倍率都见真实像素，不再凭空拉伸。
        *   配合 1024px 高分辨率内壁帧（旧 292px），放大细节提升约 3.5×。 */
-      var dispW = mount.clientWidth || 320, dispH = mount.clientHeight || 420;
+      var dispW = cv.clientWidth || 200, dispH = cv.clientHeight || 200;
       cv.width = Math.round(dispW * d);
       cv.height = Math.round(dispH * d);
       cv.style.touchAction = 'none';
       cv.setAttribute('role', 'img');
       cv.setAttribute('aria-label', '瓷片内壁（静态·可缩放）');
-      mount.appendChild(cv);
       var badge = h('div', 'prop-badge inner-badge',
         '内壁 ' + Math.round((ent.innerRatio || 0) * 100) + '%');
       mount.appendChild(badge);

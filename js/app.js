@@ -655,8 +655,16 @@
    * ★生命周期：竖版 WebView 换幕会 clear(app) 拆 DOM，若不先 destroy，
    *   SceneParallax 的 rAF 与陀螺仪监听会留在后台空转（小红书规范要求业务结束即清理）。 */
   var SCENE = { key: null, form: null, inst: null, el: null };
+  /* 场景形态（2026-11-02 桌面版）：
+   * 原来按**窗口**比判定 ⇒ 1280×800 取横版素材（1500×630），再由 fitSceneCover 按
+   * 「cover」放大到 1905×800 铺出 900px 画布之外，桌面就成了"背景比界面宽一截"。
+   * 桌面已经把窗口切出一块中屏画布（.app，max-width 900），形态必须按**画布比**判定：
+   * 画布 900×800 = 1.13 ⇒ 竖版（750×1080）；手机横屏 844×390 = 2.16 ⇒ 横版。
+   * 阈值 1.35：竖版素材 0.69、横版 2.38，两者差得远，取中间值不会误判。 */
   function sceneForm() {
-    return (global.innerWidth > global.innerHeight) ? 'h' : 'v';
+    var w = app.clientWidth || global.innerWidth || 390;
+    var h = app.clientHeight || global.innerHeight || 844;
+    return (w / Math.max(1, h) >= 1.35) ? 'h' : 'v';
   }
   function dropScene() {
     if (SCENE.inst && SCENE.inst.destroy) { try { SCENE.inst.destroy(); } catch (e) {} }
@@ -1494,10 +1502,24 @@
       var ent = castOf(side);
       var s = slotOf(side);
       if (!ent || ent.key !== key || ent.slot !== slotArt) {
-        s.innerHTML = global.TP.figure(key);
+        /* ★2026-11-02 手机/桌面实测「先出占位立绘，再变真人」：
+         *   旧写法无条件 `innerHTML = TP.figure(key)` 画矢量，再交给 realInto 异步换真图 ⇒
+         *   慢网下矢量会停留几百毫秒（回忆里尤其明显，实测 39/109 帧）。
+         *   现按主线同一口径分三态：
+         *     有素材（已注册）⇒ **先留空**，真图到了再上；失败/超时才回退矢量；
+         *     无素材（纯矢量角色）⇒ 直接画矢量。
+         *   判据用 TP.hasAsset()（等价于 TQA.reg 里有这个键），与 realInto 同一来源。 */
         s.className = 'mem-fig mem-fig-' + side.toLowerCase()
           + (key === 'DEFAULT' ? ' mem-fig-any' : ' mem-fig-' + key);
-        if (global.TP.realInto) { global.TP.realInto(s, key, slotArt); }
+        var canReal = !!(global.TP.hasAsset && global.TP.hasAsset(key, slotArt));
+        s.innerHTML = '';
+        if (canReal) {
+          if (global.TP.realInto) {
+            global.TP.realInto(s, key, slotArt, { fallback: function () { s.innerHTML = global.TP.figure(key); } });
+          } else { s.innerHTML = global.TP.figure(key); }
+        } else {
+          s.innerHTML = global.TP.figure(key);
+        }
         setCast(side, { key: key, slot: slotArt });
       }
       /* 面向彼此（2026-11-02 三版）：按原生朝向判定 —— 左位要朝右（原生朝左的翻），
