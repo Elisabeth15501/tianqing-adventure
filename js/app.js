@@ -280,7 +280,13 @@
     var t = 0;
     function later() {
       if (t) { clearTimeout(t); }
-      t = setTimeout(function () { if (global.TP && TP.refit) { TP.refit(); } syncFigAnchor(); }, 160);
+      t = setTimeout(function () {
+        if (global.TP && TP.refit) { TP.refit(); }
+        syncFigAnchor();
+        /* 旋屏/改窗口比 ⇒ 场景要换形态（竖 750×1080 ↔ 横 1500×630），否则会糊成拉伸 */
+        if (SCENE.key && SCENE.form !== sceneForm()) { mountScene(SCENE.key); }
+        else if (SCENE.el) { fitSceneCover(SCENE.el, SCENE.key, SCENE.form); }
+      }, 160);
     }
     window.addEventListener('resize', later);
     window.addEventListener('orientationchange', later);
@@ -336,7 +342,7 @@
     bar.appendChild(btns);
     return bar;
   }
-  function clear(node) { while (node.firstChild) { node.removeChild(node.firstChild); } node.classList.remove('ending-scene'); node.classList.remove('with-foot'); }
+  function clear(node) { dropScene(); while (node.firstChild) { node.removeChild(node.firstChild); } node.classList.remove('ending-scene'); node.classList.remove('with-foot'); }
   function persist() {
     if (save) {
       save.updated = Date.now();
@@ -617,12 +623,75 @@
     return out;
   }
 
+  /* ---------- 背景：AI 场景素材（2026-11-02 接入） ----------
+   * 之前全库 7 套场景图只「躺在 assets/scenes/」里，游戏正文一直用 D.bg 的矢量 SVG 垫底
+   * （16% 透明度，几乎看不出画面）。这里按幕挂真图，矢量图退为兜底。
+   * 形态：竖屏取 v（750×1080 系）、横屏取 h（1500×630 系）；三层走视差引擎，单层直接铺。
+   * ★生命周期：竖版 WebView 换幕会 clear(app) 拆 DOM，若不先 destroy，
+   *   SceneParallax 的 rAF 与陀螺仪监听会留在后台空转（小红书规范要求业务结束即清理）。 */
+  var SCENE = { key: null, form: null, inst: null, el: null };
+  function sceneForm() {
+    return (global.innerWidth > global.innerHeight) ? 'h' : 'v';
+  }
+  function dropScene() {
+    if (SCENE.inst && SCENE.inst.destroy) { try { SCENE.inst.destroy(); } catch (e) {} }
+    if (SCENE.el && SCENE.el.parentNode) { SCENE.el.parentNode.removeChild(SCENE.el); }
+    SCENE = { key: null, form: null, inst: null, el: null };
+  }
+  /* ★三层视差是「按舞台比画的」（1500×630 / 750×1080），引擎把层图 object-fit:fill
+   *   铺满宿主 ⇒ 宿主比与素材不一致时会被拉伸（1280×800 实测纵向拉 50%）。
+   *   这里给宿主做 background-size:cover 式的等比放大 + 居中，画面回到正确的形变。 */
+  function fitSceneCover(host, key, form) {
+    if (!host) { return; }
+    var cfg = (global.TQScenes && global.TQScenes.form) ? global.TQScenes.form(key, form) : null;
+    if (!cfg || cfg.kind !== 'parallax' || !cfg.size) {
+      host.style.width = ''; host.style.height = ''; host.style.left = ''; host.style.top = '';
+      return;
+    }
+    var W = app.clientWidth || 1, H = app.clientHeight || 1;
+    var k = Math.max(W / cfg.size[0], H / cfg.size[1]);
+    var w = Math.round(cfg.size[0] * k), h = Math.round(cfg.size[1] * k);
+    host.style.width = w + 'px'; host.style.height = h + 'px';
+    host.style.left = Math.round((W - w) / 2) + 'px';
+    host.style.top = Math.round((H - h) / 2) + 'px';
+    if (SCENE.inst && SCENE.inst._measure) { SCENE.inst._measure(); }
+  }
+
+  function mountScene(key) {
+    if (!key || !global.TQScenes) { return false; }
+    var form = sceneForm();
+    if (SCENE.key === key && SCENE.form === form) { return true; }
+    dropScene();
+    var host = el('div', 'bg-scene');
+    host.setAttribute('data-scene', key);
+    host.setAttribute('data-form', form);
+    app.appendChild(host);
+    try {
+      SCENE.inst = global.TQScenes.mount(host, key, { form: form, input: 'auto' });
+      SCENE.key = key; SCENE.form = form; SCENE.el = host;
+      fitSceneCover(host, key, form);
+      return true;
+    } catch (e) {
+      /* 素材缺失/引擎没加载：静默退回矢量底图，不打断剧情 */
+      if (host.parentNode) { host.parentNode.removeChild(host); }
+      SCENE = { key: null, form: null, inst: null, el: null };
+      return false;
+    }
+  }
+
   function buildActShell(act, idx, fromStep) {
     clear(app);
     CUR_ACT = idx;
     app.appendChild(topbarAct(act.name));
     app.appendChild(F.timebar(ACT_NODES, idx));
-    if (act.bg && D.bg[act.bg]) {
+    /* ★中途续玩要按「存档点之前最后一个 scene」挂景：
+     *   终幕前半在广德殿（S3）、「翌日玉津园」起换 S6；若从第 8 步继续，不能还停在 S3。 */
+    var seq = expandSteps(act.steps, save.role);
+    var sk = act.scene || null;
+    var upto = Math.min(fromStep || 0, seq.length - 1);
+    for (var q = 0; q <= upto; q++) { if (seq[q] && seq[q].scene) { sk = seq[q].scene; } }
+    /* 真场景优先，矢量图兜底（矢量图降到 .06，只当纹理） */
+    if (!mountScene(sk) && act.bg && D.bg[act.bg]) {
       var bg = el('div', 'bg-art wash');
       bg.innerHTML = D.bg[act.bg];
       app.appendChild(bg);
@@ -654,7 +723,6 @@
     vnMain.appendChild(doc);
     main.appendChild(vnMain);
     app.appendChild(main);
-    var seq = expandSteps(act.steps, save.role);
     runSteps(act, idx, doc, fromStep || 0, seq);
     /* ★滚动预取（2026-11-02）：立绘是**按需下载**的，旧版只有角色开口那一帧才发请求
      *   （实测 4G 340~420ms、慢 3G 1.7~3.1s 的占位窗口）。这里只提前拉「接下来 3 个」，
@@ -884,6 +952,9 @@
 
     function handleStep(st) {
       busy = true;
+      /* 步级换景（终幕：广德殿夜宴 S3 → 翌日玉津园 S6）。同一幕只换一次，
+       * 之后各步沿用（data.js 只在那一步写 scene）。 */
+      if (st.scene) { mountScene(st.scene); }
       /* 只对「会露脸」的步骤滚动预取：narr/交互小节不改变 cast，预取也是白拉 */
       if (st.type === 'card') { prefetchAhead(i, 4); }
       if (st.type === 'narr') {
@@ -1101,7 +1172,14 @@
     var wrap = el('div', 'shard-occ');
     var stage = el('div', 'shard-stage');
     wrap.appendChild(stage);
-    F.shardViewer(stage, id); /* 轨③：可拖动擦洗的转台（P1 后内含暗纹）；失败自动降级到内壁静态帧 */
+    /* 占台即 lat-long 全方位旋转档（F.spin3d）：拖动自由旋转（俯仰＋环视）＋
+     * 双指/双击缩放＋惯性；LL 缺失自动回退 12 帧转台，再降级内壁静态帧（永不白屏）。
+     * 「内壁细看」按钮切到静态内壁帧（看釉下笔触），再点回旋转。 */
+    var onInner = false;
+    var innerBtn = null;
+    function syncInnerBtn() { if (innerBtn) { innerBtn.textContent = onInner ? '回到旋转' : '内壁细看'; } }
+    function renderSpin() { if (window.F) { F.spin3d(stage, id); } onInner = false; syncInnerBtn(); }
+    function renderInner() { if (window.F) { F.shardInner(stage, id); } onInner = true; syncInnerBtn(); }
     if (first) { sfx('bead'); }  /* 首次拾得：三音上行的获得音 */
     var toast = el('div', 'shard-toast');
     toast.appendChild(el('div', 'got', (first ? '拾得瓷片' : '瓷片在手') + ' · 共 ' + countShards() + '/16'));
@@ -1115,12 +1193,15 @@
     card.appendChild(el('div', 'source', '——' + sh.source));
     wrap.appendChild(card);
     /* 细看入口（P1-6）：拾得时就能拉近看釉下笔触，不必先收下再翻手札。
-     * 两条路都通：显式按钮（可发现性）+ 在转台上轻点一下（手势）。
-     * 判据用位移与时长：转台本身要拖拽擦洗，抬手时刻不能和拖动混淆。 */
+     * 三条路都通：内壁细看按钮（看笔触）＋细看按钮（全屏大图查看器）＋在转台上轻点（手势）。
+     * 判据用位移与时长：旋转档本身要拖拽，抬手时刻不能和拖动混淆。 */
     var acts = el('div', 'shard-acts');
+    innerBtn = btn('内壁细看', 'ghost', function () { if (onInner) { renderSpin(); } else { renderInner(); } });
+    acts.appendChild(innerBtn);
     acts.appendChild(btn('细看', 'ghost', function () { openShardViewer(id); }));
     acts.appendChild(btn('收下瓷片', '', function () { done(); }));
     wrap.appendChild(acts);
+    renderSpin();
     var px0 = 0, py0 = 0, pt0 = 0;
     stage.addEventListener('pointerdown', function (e) {
       px0 = e.clientX; py0 = e.clientY; pt0 = Date.now();
@@ -1316,6 +1397,15 @@
     if (VNC.stop) { VNC.stop(); } /* 回忆自带节奏：主线自动/跳过不介入 */
     var k = 0;
     var ov = el('div', 'mem-stage');
+    /* 瓷心空间（S7）作回忆背景：素材就是为这一段画的（黑底加色层，screen 混合）。
+     * 失败不影响观感，只是退回到原来的径向渐变。 */
+    var memBg = el('div', 'mem-bg');
+    ov.appendChild(memBg);
+    var memScene = null;
+    if (global.TQScenes) {
+      try { memScene = global.TQScenes.mount(memBg, 's7_cixin', { form: sceneForm(), input: 'auto' }); }
+      catch (e) { memScene = null; }
+    }
     var head = el('div', 'mem-stage-h');
     var tl = el('div', 'mem-stage-t', m.title);
     tl.appendChild(el('span', 'prov', m.prov));
@@ -1439,6 +1529,7 @@
     function finish() {
       if (finished) { return; }
       finished = true;
+      if (memScene && memScene.destroy) { try { memScene.destroy(); } catch (e) {} }
       if (ov.parentNode) { ov.parentNode.removeChild(ov); }
       document.removeEventListener('keydown', keyH);
       save.memories[id] = true;

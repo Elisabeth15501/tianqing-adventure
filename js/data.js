@@ -130,7 +130,7 @@ window.TQ_DATA = {
 
   acts: [
     {
-      id: 'yin', name: '寅时 · 万寿门', unlocked: true, bg: 'yin',
+      id: 'yin', name: '寅时 · 万寿门', unlocked: true, bg: 'yin', scene: 's1_wanshou',
       steps: [
         { type: 'narr', text: '天未亮，宫灯次第亮起。万寿门内，今日仪注已铺满长案。' },
         { type: 'narr', text: '显德五年九月廿四，天清节。官家的三十八岁生日。' },
@@ -184,7 +184,7 @@ window.TQ_DATA = {
       ]
     },
     {
-      id: 'chen', name: '辰时 · 广德殿', unlocked: true, bg: 'chen',
+      id: 'chen', name: '辰时 · 广德殿', unlocked: true, bg: 'chen', scene: 's3_banquet',
       steps: [
         { type: 'tasks' },
         { type: 'narr', text: '晨光落进广德殿的檐角，鸱尾的影子压在金砖上。教坊乐起，群臣鱼贯而入。' },
@@ -245,7 +245,7 @@ window.TQ_DATA = {
       ]
     },
     {
-      id: 'wu', name: '午时 · 汴桥', unlocked: true, bg: 'wu',
+      id: 'wu', name: '午时 · 汴桥', unlocked: true, bg: 'wu', scene: 's4_pano',
       steps: [
         { type: 'tasks' },
         { type: 'narr', text: '午时，宫门开半扉。今日赐民宴乐，依唐千秋节旧制（演绎）——金吾不禁，汴桥上下人声如沸。' },
@@ -294,7 +294,7 @@ window.TQ_DATA = {
       ]
     },
     {
-      id: 'you', name: '酉时 · 滋德殿旧址', unlocked: true, bg: 'you',
+      id: 'you', name: '酉时 · 滋德殿旧址', unlocked: true, bg: 'you', scene: 's5_zide',
       steps: [
         { type: 'tasks' },
         { type: 'narr', text: '酉时，滋德殿旧址。殿已空置两年，廊下只有风。烛是你自己点的——这里如今没有别人当值。' },
@@ -331,7 +331,7 @@ window.TQ_DATA = {
       ]
     },
     {
-      id: 'final', name: '终幕 · 广德殿与合瓮', unlocked: true, bg: 'chen',
+      id: 'final', name: '终幕 · 广德殿与合瓮', unlocked: true, bg: 'chen', scene: 's3_banquet',
       steps: [
         { type: 'tasks' },
         { type: 'narr', text: '九月廿四，夜。白日的寿宴散了又开——官家命再设一席，只言「尚有一物，与诸卿共观」。满殿烛火，比辰时更亮。' },
@@ -344,7 +344,8 @@ window.TQ_DATA = {
         { type: 'card', speaker: '赵匡胤', text: '殿前诸班，为官家千秋再饮一觞。', slot: 'e3', pair: '官家' },
         { type: 'card', speaker: '殷崇义', text: '外臣忝陪盛筵。归国之日，必告江南国主：中朝之寿，礼备乐和。', slot: 'e3', pair: '官家' },
         { type: 'narr', text: '酒过三巡，官家抬手止了乐声，目光落在你身上——该呈上了。' },
-        { type: 'narr', text: '翌日，玉津园。献瓮之前，官家命先设壶——「今日之乐未足，再添一局。」群臣相顾而笑：该礼官先投。' },
+        /* scene：这一幕前半在广德殿夜宴（S3），「翌日玉津园」起改挂 S6 玉津园 */
+        { type: 'narr', text: '翌日，玉津园。献瓮之前，官家命先设壶——「今日之乐未足，再添一局。」群臣相顾而笑：该礼官先投。', scene: 's6_yujin' },
         { type: 'touhu' },
         { type: 'narr', text: '园中笑音未落，官家起身：「好了，呈上来吧。」你捧出合瓮的天青瓷——烛下釉光一转，满园皆静。' },
         { type: 'narr', text: '十六片碎瓷，经良工修补，此刻在天青里重圆。碎过的东西，被人一片片收着、记着，终于重圆——旧痕未掩，天青未改。（演义）' },

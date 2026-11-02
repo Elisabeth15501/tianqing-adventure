@@ -13,6 +13,29 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .bg-art{position:absolute;left:0;right:0;top:0;bottom:0;opacity:.42;pointer-events:none;z-index:-1}
 .bg-art svg{width:100%;height:100%}
 .bg-art.wash{opacity:.16}
+/* ===== AI 场景底图（2026-11-02 接入）=====
+ * 与 .bg-art 同层（z-index:-1，压在所有正文之下），但铺满且不透明。
+ * ★选择器必须比场景引擎注入的 `.tqs-stage{position:relative}` 更强：
+ *   那套样式是运行时 append 到 <head> 末尾的，同权重会盖掉这里的 absolute。
+ * 竖版 v（750×1080）/ 横版 h（1500×630）由 app.js 按窗口比切换。 */
+.app .bg-scene{
+  position:absolute;left:0;right:0;top:0;bottom:0;
+  z-index:-1;overflow:hidden;background:#100E0C;
+  pointer-events:none;   /* 底图不吃手势（长卷 S4 自己开拖动时才由引擎接管） */
+}
+.app .bg-scene[data-scene="s4_pano"].tqs-stage{pointer-events:auto}
+/* S1 竖版只有门楼一层，天幕是**透明**的（原设计由引擎渐变+矢量栏柱补），
+ * 直接铺会露出底色黑 —— 这里补一道拂晓天幕，接住素材的透明区。 */
+.app .bg-scene[data-scene="s1_wanshou"]{
+  background:linear-gradient(to bottom,
+    #141C24 0%, #22303A 26%, #3C4A4E 46%, #6E6250 66%, #8C7554 84%, #6A5A46 100%);
+}
+/* 立绘要有落点：底图下方压一条极淡的暗角，避免人物脚底"浮"在亮地面上 */
+.app .bg-scene.tqs-stage::after{
+  content:'';position:absolute;left:0;right:0;bottom:0;height:42%;
+  background:linear-gradient(to top, rgba(18,14,10,.55), rgba(18,14,10,0));
+  pointer-events:none;
+}
 .title-wrap{margin:auto;text-align:center;padding:24px 8px}
 /* 首屏标题屏：标题组贴底（直接位于按钮组/footbar 上方 · 用户 10-22 设计改动） */
 .title-bottom{display:flex;flex-direction:column;justify-content:flex-end}
@@ -891,6 +914,8 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .shv-b[data-on="1"]{background:var(--qing);color:#fff;border-color:var(--qing)}
 .shv-b[data-off="1"]{opacity:.42}
 .shv-b-wide{min-width:64px}
+/* 静态内壁档：俯视/平视/仰视/自动旋转 与旋转无关，隐藏避免点到无效按钮 */
+.shv-bar[data-inner="1"] .shv-b-rot{display:none}
 
 .shv-tip{font-size:11px;color:var(--muted);text-align:center;margin:6px 0 0;line-height:1.6;padding:0 6px}
 .shv-quote{margin-top:10px;font-size:13px;line-height:1.9;color:var(--ink);max-height:24vh;overflow-y:auto;
@@ -1059,3 +1084,8 @@ body.shv-open .main{overflow:hidden}
   .main.act-vn .sp-zone[data-anchor="dock-left"] .slot.sp-fig[data-body="bust"],
   .main.act-vn .sp-zone[data-anchor="dock-right"] .slot.sp-fig[data-body="bust"]{ height:64% !important; max-height:64% !important; }
 }
+
+/* 回忆舞台的瓷心背景层（S7 三层视差）：压在渐变之上、正文之下 */
+.mem-stage .mem-bg{position:absolute;left:0;right:0;top:0;bottom:0;z-index:0;overflow:hidden;
+  opacity:.85;pointer-events:none}
+.mem-stage > *:not(.mem-bg){position:relative;z-index:1}

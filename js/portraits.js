@@ -621,25 +621,26 @@
    *   多出来的是外侧的袖子/衣摆，落在屏幕边被裁，观感是"贴边"而不是"交叠"。 */
   var WIDE_MQ = (typeof matchMedia === 'function') ? matchMedia('(min-aspect-ratio:6/5) and (min-width:900px)') : null;
 
-  /* ★身高标准表（2026-11-02 上午用户逐条裁定 · 同日下午**停用**）
-   * 停工原因：用户看过实机后改口径 —— 同框人物要**大小一致**，以「郭荣 × 范质」那一场
-   * 的观感为基准；逐人 0.86~1.04 的差异反而读成"一大一小"。
-   * 代码保留（USE_STATURE 开关），要切回「论身份高矮」只改这一个布尔。
+  /* ★身高标准表（2026-11-02 用户第二次裁定 · **现行**）
    * 量纲是「人物渲染高度 ÷ 郭荣的渲染高度」，不是缩放比：各张图在画布里本来就大小不一
-   * （王朴 e2 头顶在 10.9%、范质 a1 在 2.1%，同一 k 出来能差一成）。 */
-  var USE_STATURE = false;
+   * （王朴 e2 头顶在 10.9%、范质 a1 在 2.1%，同一 k 出来能差一成）。
+   * 分档留出可读台阶：相若 1.00 / 稍高 1.05 / 稍矮 0.94~0.95 / 矮 0.89~0.90 / 明显矮 0.86。
+   * 390 档下 5% ≈ 24px、10% ≈ 49px 头顶差，一眼能排序；再小就与素材误差混在一起。
+   * ★同日中午曾改口径为「同框大小一致」（DUO_K_REF 那套），下午用户又裁定回到本表 ——
+   *   开关就是 USE_STATURE，两套都保留，切换只改一个布尔。 */
+  var USE_STATURE = true;
   var STATURE = {
     guorong: 1.00,                                              /* 基准 · 官家 */
     ligu: 1.00, guowei: 1.00,                                   /* 与郭荣身高相若 */
-    zhaokuangyin: 1.04,                                         /* 稍高于郭荣 */
-    fengdao: 0.96, zhangyongde: 0.95, lichongjin: 0.95,         /* 稍矮于郭荣 */
-    fanzhi: 0.92, wangpu: 0.92, wangpu2: 0.92, yinchongyi: 0.92,/* 矮于郭荣 */
-    fuhou: 0.91,                                                /* 矮于郭荣（且为坐姿） */
+    zhaokuangyin: 1.05,                                         /* 稍高于郭荣 */
+    fengdao: 0.95, zhangyongde: 0.94, lichongjin: 0.94,         /* 稍矮于郭荣 */
+    wangpu: 0.90, fanzhi: 0.90, wangpu2: 0.90, yinchongyi: 0.90,/* 矮于郭荣 */
+    fuhou: 0.89,                                                /* 矮于郭荣（且为坐姿） */
     nvguan: 0.86, shiguan: 0.86,                                /* 玩家：明显矮于郭荣 */
     shaonian: 0.80, zongxun: 0.60,                              /* 少年郭荣 / 六岁宗训 */
     sizheng: 0.94, shanggong: 0.94, shangshiling: 0.94, qijulang: 0.94   /* 配角（暂无同框） */
   };
-  var STATURE_DEF = 0.95;
+  var STATURE_DEF = 0.94;
   function stature(key) {
     var s = STATURE[key];
     return (typeof s === 'number' && s > 0) ? s : STATURE_DEF;
@@ -659,10 +660,11 @@
   /* 参照身长：郭荣 a1 的「头顶→图底」占比（0.921）。全库以它为 1 个"标准身高"。 */
   var REF_HF = 1 - ((FIT.guorong_a1 && FIT.guorong_a1.y0) || 0.079);
 
-  function duoGeom(slot, key, useSlot, stageW) {
+  /* 双人档几何：只依赖「槽宽高」的纯函数 —— 验收页/对照图要离线算同一份 k，
+   * 不能靠临时造 DOM 去量（那是另一条会漂移的实现）。 */
+  function duoGeomWH(key, useSlot, W, H, stageW) {
     var f = fitRow(key, useSlot);
     if (!f) { return null; }
-    var W = slot.clientWidth, H = slot.clientHeight;
     if (!W || !H) { return null; }
     var baseW = Math.min(W, H * f.ratio);
     var baseH = baseW / f.ratio;
@@ -698,6 +700,34 @@
       cap: cap
     };
   }
+  function duoGeom(slot, key, useSlot, stageW) {
+    return duoGeomWH(key, useSlot, slot.clientWidth, slot.clientHeight, stageW);
+  }
+  /* 离线算一对的 k（对照图/验收页用）：与 duoPlan 同一份数学，不经 DOM。 */
+  function duoKFor(key, useSlot, otherKey, otherSlot, W, H, stageW) {
+    var me = duoGeomWH(key, useSlot, W, H, stageW);
+    if (!me) { return null; }
+    var ot = otherKey ? duoGeomWH(otherKey, otherSlot, W, H, stageW) : null;
+    var sameCam = !!(ot && Math.abs(ot.ratio - me.ratio) < 0.05);
+    var cutMe = (me.kneel && ot && !ot.kneel) ? KNEE_K : 1;
+    var cutOt = (ot && ot.kneel && !me.kneel) ? KNEE_K : 1;
+    var C;
+    if (USE_STATURE) {
+      /* 身高口径：把「郭荣的身长」当 1 个单位（= baseH × DUO_K_REF × REF_HF，与统一口径的
+       * 尺寸一致），各人 k = C × REF_HF × S ÷ hf ⇒ 渲染高度 = 基准 × S，顺序即表里的顺序。
+       * ★C 仍受 DUO_K_REF 封顶：不封顶时几何上限会把最高的一位顶到「几乎占满槽高」
+       *   （实测郭荣 599/624），同框两人各自都有单人像那么大，画面立刻拥挤。 */
+      var sMe = stature(key);
+      C = Math.min(DUO_K_REF, me.cap * me.hf / (REF_HF * sMe));
+      if (sameCam) { C = Math.min(C, ot.cap * ot.hf / (REF_HF * stature(otherKey))); }
+      return { k: C * REF_HF * sMe / me.hf * cutMe, C: C, S: sMe, cut: cutMe,
+               hf: me.hf, cap: me.cap, kneel: me.kneel, bw: me.bw };
+    }
+    C = Math.min(DUO_K_REF, me.cap * me.hf / (REF_HF * cutMe));
+    if (sameCam) { C = Math.min(C, ot.cap * ot.hf / (REF_HF * cutOt)); }
+    return { k: C * REF_HF / me.hf * cutMe, C: C, S: cutMe, cut: cutMe,
+             hf: me.hf, cap: me.cap, kneel: me.kneel, bw: me.bw };
+  }
   function duoPlan(slot) {
     var stageW = (slot.parentNode && slot.parentNode.clientWidth) || slot.clientWidth * 2;
     var me = duoGeom(slot, slot._tqKey, slot._tqSlot, stageW);
@@ -707,33 +737,13 @@
     Object.keys(map).forEach(function (k) {
       if (map[k] !== slot && map[k] && map[k]._tqKey) { other = map[k]; }
     });
-    /* ★统一尺寸（现行）：两人落到同一「渲染高度」，并让最紧的一方定基准 C。
-     *   高度 = baseH × k × hf，要让它 = baseH × C × REF_HF ⇒ k = C × REF_HF ÷ hf。
-     *   C 的上限 = 各方 cap 折算到 REF_HF 口径后的较小值 ⇒ 谁都不会被裁出槽。
+    /* 数学全在 duoKFor 里（与对照图/验收页同一份实现），这里只负责取对手 + 外溢推位。
      * ★跪姿折扣要先折进上限（÷cut）：王朴跪坐档 cap 只有 1.73，若不折算，他会把
-     *   站着的郭荣一起拖小（C 被压到 1.63）—— 明明他自己要乘 0.75，本来就占不满。 */
-    var ot = other ? duoGeom(other, other._tqKey, other._tqSlot, stageW) : null;
-    var sameCam = !!(ot && Math.abs(ot.ratio - me.ratio) < 0.05);
-    var cutMe = (me.kneel && ot && !ot.kneel) ? KNEE_K : 1;
-    var cutOt = (ot && ot.kneel && !me.kneel) ? KNEE_K : 1;
-    var C;
-    if (USE_STATURE) {
-      /* 旧口径（停用，保留可切回）：每人各自的身高系数 S，C 取双方 cap×hf÷S 的较小值 */
-      var sMe0 = stature(slot._tqKey);
-      C = me.cap * me.hf / sMe0;
-      if (sameCam) { C = Math.min(C, ot.cap * ot.hf / stature(other._tqKey)); }
-      var k = C * sMe0 / me.hf * cutMe;
-      if (!isFinite(k) || k <= 0) { k = 1; }
-      if (k < 0.55) { k = 0.55; }
-      var tcS = 0.5, Ws = slot.clientWidth || 1;
-      if (me.bleed > 0) { tcS = (slot.getAttribute('data-side') === 'l') ? 0.5 - me.bleed / (2 * Ws) : 0.5 + me.bleed / (2 * Ws); }
-      return { k: k, bw: me.bw, bleed: me.bleed, tc: tcS, C: C, S: cutMe, cap: me.cap };
-    }
-    C = Math.min(DUO_K_REF, me.cap * me.hf / (REF_HF * cutMe));
-    /* 混景别（胸像 × 全身）：k 不可通约，互不牵制 —— 否则同场里换一个人说话，
-     *   另一个人的尺寸会跟着跳（5-1 夜宴 官家 会忽大忽小），那是硬伤。 */
-    if (sameCam) { C = Math.min(C, ot.cap * ot.hf / (REF_HF * cutOt)); }
-    var k = C * REF_HF / me.hf * cutMe;
+     *   站着的郭荣一起拖小 —— 明明他自己要乘 0.75，本来就占不满。 */
+    var r = duoKFor(slot._tqKey, slot._tqSlot,
+                    other ? other._tqKey : null, other ? other._tqSlot : null,
+                    slot.clientWidth, slot.clientHeight, stageW);
+    var k = r ? r.k : me.cap;
     if (!isFinite(k) || k <= 0) { k = 1; }
     if (k < 0.55) { k = 0.55; }   /* 兜底：再小就没有可读性了 */
     /* 有外溢额度时把人物往画面外侧推：溢出的落在屏幕边（被裁），中缝交叠减半 */
@@ -741,7 +751,8 @@
     var W = slot.clientWidth || 1;
     var tc = 0.5;
     if (me.bleed > 0) { tc = (side === 'l') ? 0.5 - me.bleed / (2 * W) : 0.5 + me.bleed / (2 * W); }
-    return { k: k, bw: me.bw, bleed: me.bleed, tc: tc, C: C, S: cutMe, cap: me.cap };
+    return { k: k, bw: me.bw, bleed: me.bleed, tc: tc,
+             C: r ? r.C : null, S: r ? r.S : 1, cut: r ? r.cut : 1, cap: me.cap };
   }
 
   function fitFor(key, slotW, slotH, fit, useSlot, opt) {
@@ -937,6 +948,11 @@
     },
     /* QA 口：把某槽的双人档内部量（cap / hf / C / k）吐出来，验收脚本按它核对身高比 */
     duoDebug: function (slot) { return duoPlan(slot); },
+    /* 离线算 k：对照图/验收页用（与 duoPlan 同一份数学，不经过 DOM） */
+    duoKFor: duoKFor,
+    stature: STATURE,
+    useStature: function () { return USE_STATURE; },
+    kneeK: function () { return KNEE_K; },
     /* 名牌文本：speaker 原样优先，缺省用角色称谓 */
     labelOf: function (speaker, selfKey) {
       if (speaker) { return speaker; }
