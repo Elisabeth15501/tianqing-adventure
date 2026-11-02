@@ -1,0 +1,205 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>素材自检 · 天清往事</title>
+<style>
+  :root{--ink:#1F3B3A;--yue:#EFF5F3;--qing:#7FA9A4;--warn:#B4552F;--paper:#F4F8F5}
+  *{box-sizing:border-box}
+  body{margin:0;background:#E6EDE9;color:var(--ink);
+    font:14px/1.5 -apple-system,BlinkMacSystemFont,"PingFang SC","Microsoft YaHei",sans-serif;
+    padding:18px 14px 60px}
+  h1{margin:0 0 4px;font-size:19px;letter-spacing:3px;font-weight:600}
+  .sub{font-size:12px;opacity:.62;letter-spacing:1px}
+  .bar{display:flex;flex-wrap:wrap;align-items:center;margin:14px 0}
+  /* flex gap 是 Chrome 84+，宿主 WebView（Chrome 61）不认 ⇒ 用 margin 兜底 */
+  .bar>*{margin:0 8px 8px 0}
+  .stat{background:var(--paper);border:1px solid #D3DFD9;border-radius:8px;padding:6px 11px;font-size:12px}
+  .stat b{font-size:15px;margin-right:3px}
+  .stat.bad{border-color:#E0B9A6;color:var(--warn)}
+  button{font:inherit;font-size:13px;padding:7px 16px;border-radius:16px;cursor:pointer;
+    border:1px solid var(--ink);background:var(--ink);color:var(--yue);letter-spacing:1px}
+  button:disabled{opacity:.42;cursor:default}
+  #grid{display:grid;gap:10px;grid-template-columns:repeat(auto-fill,minmax(148px,1fr));margin-top:8px}
+  .card{background:var(--paper);border:1px solid #D3DFD9;border-radius:10px;overflow:hidden}
+  .card.bad{border-color:#D98D6B;background:#FBEFE9}
+  .thumb{height:150px;display:flex;align-items:flex-end;justify-content:center;
+    background-color:#EBF1ED;
+    background-image:linear-gradient(45deg,#E2EAE5 25%,transparent 25%,transparent 75%,#E2EAE5 75%),linear-gradient(45deg,#E2EAE5 25%,transparent 25%,transparent 75%,#E2EAE5 75%);
+    background-size:16px 16px;background-position:0 0,8px 8px}
+  .thumb img{max-width:100%;max-height:150px;display:block}
+  .thumb .ph{font-size:11px;opacity:.4;align-self:center;letter-spacing:1px}
+  .meta{padding:7px 9px 9px;font-size:11px;line-height:1.55}
+  .k{font-weight:600;font-size:12px;letter-spacing:.3px}
+  .st{display:inline-block;padding:1px 6px;border-radius:9px;font-size:10px;margin-left:4px}
+  .st.ok{background:#D6E8DE;color:#1F5E43}
+  .st.wait{background:#E3E9E6;color:#5C6B66}
+  .st.bad{background:#F3D3C4;color:#963F1C}
+  .dim{opacity:.6;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .note{margin-top:22px;font-size:12px;opacity:.6;line-height:1.7;max-width:640px}
+  code{background:#DCE6E1;padding:1px 4px;border-radius:3px;font-size:11px}
+</style>
+</head>
+<body>
+<h1>素材自检</h1>
+<div class="sub">天清往事 · 立绘资产落图体检（33 个资源键 / 20 个角色）</div>
+
+<div class="bar">
+  <span class="stat" id="env">环境探测中…</span>
+  <span class="stat" id="cnt">0 / 0</span>
+  <span class="stat bad" id="bad" style="display:none"></span>
+  <button id="run">逐张加载</button>
+</div>
+
+<div id="grid"></div>
+
+<div class="note">
+  <p><b>怎么读这一页：</b>每张卡片是一次真实的 <code>&lt;img&gt;</code> 加载，和游戏里走的是同一条路径。
+  全部显示「正常」而游戏里仍看不到立绘 ⇒ 问题在渲染层（槽尺寸/层级），不在资源。<br>
+  出现「失败」的项目，下方会写出浏览器给的原因（404 / 解码失败 / 超时）。</p>
+  <p><b>整页全失败</b>最常见两种：①资源没随包发布（部署时漏了 <code>assets/chars/</code>）；
+  ②当前 WebView 不支持 WebP（看左上「环境探测」是否报 WebP 不可用）。</p>
+</div>
+
+<script src="./js/assets.js"></script>
+<script src="./js/portraits.js"></script>
+<script>
+(function () {
+  'use strict';
+  var grid = document.getElementById('grid');
+  var runBtn = document.getElementById('run');
+  var cntEl = document.getElementById('cnt');
+  var badEl = document.getElementById('bad');
+
+  /* 环境探测复用 assets.js 的同一套判据（1×1 WebP + 2048 纹理） */
+  var envDone = false;
+  TQA.probeEnv(function (env) {
+    envDone = true;
+    var bits = ['WebP ' + (env.webp ? '可用' : '不可用'), '纹理上限 ' + (env.tex2048 ? '≥2048' : '<2048')];
+    document.getElementById('env').textContent = bits.join(' · ');
+    if (!env.webp) {
+      document.getElementById('env').className = 'stat bad';
+      document.getElementById('env').textContent += ' ← 立绘全部无法解码';
+    }
+  });
+
+  /* 清单：TQA 注册表里所有 char-* 键（默认槽 + 派生槽），带中文名 */
+  var nameOf = {}, base = {};
+  var plist = [];
+  try { plist = (window.TP && TP.list()) ? TP.list() : []; } catch (e) { plist = []; }
+  plist.forEach(function (r) {
+    nameOf['char-' + r.key] = r.label;
+    base[r.key] = r.label;
+    (r.slots || []).forEach(function (sl) { nameOf['char-' + r.key + '-' + sl] = r.label; });
+  });
+  /* 派生槽：名字沿用角色名，槽号单独显示在副行 */
+  function labelOf(k) {
+    if (nameOf[k]) { return nameOf[k]; }
+    var m = k.match(/^char-(.+?)-([a-z]\d+)$/);
+    if (m && base[m[1]]) { return base[m[1]]; }
+    return k;
+  }
+  function slotOf(k) {
+    var m = k.match(/^char-(.+?)-([a-z]\d+)$/);
+    return m ? m[2] : '';
+  }
+
+  var keys = Object.keys(TQA.reg).filter(function (k) { return /^char-/.test(k); }).sort();
+  var cards = {}, doneN = 0, okN = 0, badN = 0;
+
+  keys.forEach(function (k) {
+    var ent = TQA.reg[k];
+    var card = document.createElement('div');
+    card.className = 'card';
+    card.innerHTML =
+      '<div class="thumb"><span class="ph">待加载</span></div>' +
+      '<div class="meta">' +
+        '<div class="k">' + labelOf(k) + (slotOf(k) ? ' · ' + slotOf(k) : '') + '<span class="st wait">待载</span></div>' +
+        '<div class="dim">' + k + '</div>' +
+        '<div class="dim file"></div>' +
+        '<div class="dim dimx"></div>' +
+      '</div>';
+    grid.appendChild(card);
+    card.querySelector('.file').textContent = ent.src.split('/').pop();
+    cards[k] = card;
+  });
+
+  function setStat(n) {
+    cntEl.textContent = n.done + ' / ' + keys.length + ' 已检';
+    if (n.bad) { badEl.style.display = ''; badEl.textContent = n.bad + ' 项失败'; }
+  }
+  setStat({ done: 0, bad: 0 });
+
+  function loadOne(k, cb) {
+    var card = cards[k];
+    var st = card.querySelector('.st');
+    var dim = card.querySelector('.dimx');
+    var t0 = performance.now();
+    var im = new Image();
+    var fin = false;
+    var to = setTimeout(function () {
+      if (fin) { return; }
+      fin = true;
+      st.className = 'st bad'; st.textContent = '超时';
+      dim.textContent = '8s 内未返回';
+      card.className = 'card bad';
+      cb('timeout');
+    }, 8000);
+    im.onload = function () {
+      if (fin) { return; }
+      fin = true; clearTimeout(to);
+      var ms = Math.round(performance.now() - t0);
+      var box = card.querySelector('.thumb');
+      box.innerHTML = '';
+      box.appendChild(im);
+      st.className = 'st ok'; st.textContent = '正常';
+      dim.textContent = im.naturalWidth + '×' + im.naturalHeight + ' · ' + ms + 'ms';
+      cb('ok');
+    };
+    im.onerror = function () {
+      if (fin) { return; }
+      fin = true; clearTimeout(to);
+      var ms = Math.round(performance.now() - t0);
+      st.className = 'st bad'; st.textContent = '失败';
+      dim.textContent = '加载失败（404 / 解码 / 被拦截）· ' + ms + 'ms';
+      card.className = 'card bad';
+      cb('fail');
+    };
+    im.src = TQA.reg[k].src;
+  }
+
+  function runAll() {
+    runBtn.disabled = true;
+    runBtn.textContent = '加载中…';
+    var i = 0, live = 0;
+    var CONC = 4;
+    function pump() {
+      if (i >= keys.length && live === 0) {
+        runBtn.disabled = false;
+        runBtn.textContent = doneN < keys.length ? '继续加载' : '重新加载';
+        if (!doneN) { runBtn.textContent = '逐张加载'; }
+        return;
+      }
+      while (live < CONC && i < keys.length) {
+        var k = keys[i]; i += 1;
+        if (cards[k].className.indexOf('bad') >= 0) { continue; }
+        if (cards[k].querySelector('.st').className.indexOf('ok') >= 0) { continue; }
+        live += 1;
+        loadOne(k, function (r) {
+          live -= 1; doneN += 1;
+          if (r === 'ok') { okN += 1; } else { badN += 1; }
+          setStat({ done: doneN, bad: badN });
+          pump();
+        });
+      }
+    }
+    pump();
+  }
+
+  runBtn.addEventListener('click', runAll);
+  runAll();
+})();
+</script>
+</body>
+</html>
