@@ -14,11 +14,11 @@
 (function (global) {
   'use strict';
   global.TQ_VERSION = {
-    ver: '1.1.2',
-    build: '2026-11-02 18:00',
+    ver: '1.1.3',
+    build: '2026-11-02 22:20',
     stage: '内测',
-    note: '音效修复 · 陀螺仪补 S1/S2 · 教学与进度条解耦',
+    note: '桌面版修复 · 按画布切景 · 瓷片不压扁 · 立绘首帧真图',
     /* 对应 git 提交在发布时补记（留空则设定页只显示版本与构建时间） */
-    commit: ''
+    commit: 'afc9e95'
   };
 }(window));
