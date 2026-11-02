@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>tilt.js 非容器路径（GitHub Pages）验证</title>
+</head>
+<body>
+<pre id="out">RUNNING</pre>
+<script src="../js/tilt.js"></script>
+<script>
+/* 非容器环境（无 window.xhs）= GitHub Pages / 桌面浏览器：
+ * 期望 gyro 判 unsupported → 动态加载 tilt-web.js → 走 orientation（拿不到数据时也只影响观感）
+ * 关键断言：容器内绝不产生 tilt-web 的 script 标签；非容器内必须能加载到。 */
+(function () {
+  var R = [];
+  function ok(n, c, e) { R.push({ name: n, pass: !!c, extra: e }); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  (async function () {
+    var el = document.createElement('div');
+    el.style.cssText = 'position:fixed;left:0;top:0;width:300px;height:200px';
+    document.body.appendChild(el);
+
+    ok('T1 非容器环境', !window.xhs, typeof window.xhs);
+    ok('T2 初始未加载 tilt-web', typeof window.OrientationSource === 'undefined', typeof window.OrientationSource);
+
+    var c = new window.TiltController({ onUpdate: function () {} });
+    c.attachPointer(el);
+    var kind = await c.start(null);
+    var st = c.status();
+
+    ok('T3 gyro 判 unsupported', st.gyro.state === 'unsupported', st.gyro.state);
+    ok('T4 已动态加载 tilt-web', typeof window.OrientationSource === 'function', typeof window.OrientationSource);
+    var tags = [].filter.call(document.querySelectorAll('script'), function (s) {
+      return s.src && s.src.indexOf('tilt-web') >= 0;
+    });
+    ok('T5 只加载一次', tags.length === 1, tags.length);
+    ok('T6 最终源=orientation', kind === 'orientation', kind);
+    ok('T7 status.container=false', st.container === false, st.container);
+
+    var detach = c.retryOnGesture(el, function () {});
+    ok('T8 retryOnGesture 有挂载（非容器）', typeof detach === 'function', typeof detach);
+    detach();
+
+    await c.stop();
+    ok('T9 停后 active=none', c.status().active === 'none', c.status().active);
+
+    /* 再跑一次确认 webPromise 缓存不会重复插入 script */
+    var c2 = new window.TiltController({ onUpdate: function () {} });
+    c2.attachPointer(el);
+    await c2.start(null);
+    var tags2 = [].filter.call(document.querySelectorAll('script'), function (s) {
+      return s.src && s.src.indexOf('tilt-web') >= 0;
+    });
+    ok('T10 第二个实例不重复加载', tags2.length === 1, tags2.length);
+    await c2.stop();
+
+    var pass = R.filter(function (x) { return x.pass; }).length;
+    document.getElementById('out').textContent = JSON.stringify({
+      pass: pass, total: R.length, fails: R.filter(function (x) { return !x.pass; })
+    }, null, 1);
+  })()['catch'](function (e) {
+    document.getElementById('out').textContent = JSON.stringify({ fatal: String(e && e.stack || e) });
+  });
+})();
+</script>
+</body>
+</html>

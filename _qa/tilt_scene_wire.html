@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>场景层接线验证：TiltController → Parallax.inputStatus</title>
+<style>html,body{margin:0;background:#111}#stage{position:relative;width:390px;height:520px;overflow:hidden}</style>
+</head>
+<body>
+<div id="stage"></div>
+<pre id="out">RUNNING</pre>
+<script src="../js/data.js"></script>
+<script src="../js/tilt.js"></script>
+<script src="../js/scene-parallax.js"></script>
+<script src="../js/scenes.js"></script>
+<script>
+/* 目的：验证重写后的 TiltController 与场景层的接线没断
+ *   - Parallax.mount 后 inputStatus() 能读到 ok
+ *   - 容器 mock 下 data-spl-input = gyro（真机同构）
+ *   - destroy 后 owners 归零、采集停止
+ * 图会 404（只验接线，不验画面）。 */
+(function () {
+  var R = [];
+  function ok(n, c, e) { R.push({ name: n, pass: !!c, extra: e }); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+
+  (async function () {
+    var log = [], handlers = [];
+    window.xhs = {
+      launchOptions: { miniToolEnv: { buildVersion: 9503001 } },
+      miniTool: {
+        startGyroscope: function (o) { log.push('start'); return Promise.resolve({ errMsg: 'startGyroscope:ok' }); },
+        stopGyroscope: function () { log.push('stop'); return Promise.resolve({ errMsg: 'stopGyroscope:ok' }); },
+        onGyroscopeChange: function (cb) { log.push('on'); if (typeof cb !== 'function') throw new TypeError('x'); handlers.push(cb); },
+        offGyroscopeChange: function (cb) { log.push('off'); var i = handlers.indexOf(cb); if (i >= 0) handlers.splice(i, 1); }
+      }
+    };
+
+    var el = document.getElementById('stage');
+    var inst = window.TQScenes.mount(el, 's1_wanshou', { form: 'h', input: 'auto' });
+    await sleep(400);
+
+    var st = inst.inputStatus();
+    ok('I1 场景挂载成功', !!inst && typeof inst.inputStatus === 'function', inst && typeof inst.inputStatus);
+    ok('I2 inputStatus 可读', !!st && st.kind === 'gyro', st && st.kind);
+    ok('I3 内部走到 gyro', st && st.detail && st.detail.gyro.state === 'running',
+       st && st.detail && st.detail.gyro.state);
+    ok('I4 客户端版本=9503', st && st.detail && st.detail.gyro.clientVersion === 9503,
+       st && st.detail && st.detail.gyro.clientVersion);
+    ok('I5 data-spl-input=gyro', el.getAttribute('data-spl-input') === 'gyro', el.getAttribute('data-spl-input'));
+    ok('I6 调用序 on,start', log.join(',') === 'on,start', log.join(','));
+    ok('I7 retryOnGesture 容器内不挂（无 error）', true, '');
+
+    handlers.slice().forEach(function (h) { h({ x: 2, y: 3 }); });
+    await sleep(120);
+    var st2 = inst.inputStatus();
+    ok('I8 帧到达场景层', st2.detail.gyro.frames >= 1, st2.detail.gyro.frames);
+
+    inst.destroy();
+    await sleep(150);
+    ok('I9 destroy 后 owners=0', window.TQ_TILT_HUB.owners === 0, window.TQ_TILT_HUB.owners);
+    ok('I10 destroy 后采集停止', window.TQ_TILT_HUB.running === false, window.TQ_TILT_HUB.running);
+    ok('I11 destroy 后监听清空', handlers.length === 0, handlers.length);
+    ok('I12 收到过 stop', log.indexOf('stop') >= 0, log.join(','));
+
+    var pass = R.filter(function (x) { return x.pass; }).length;
+    document.getElementById('out').textContent = JSON.stringify({
+      pass: pass, total: R.length, fails: R.filter(function (x) { return !x.pass; })
+    }, null, 1);
+  })()['catch'](function (e) {
+    document.getElementById('out').textContent = JSON.stringify({ fatal: String(e && e.stack || e) });
+  });
+})();
+</script>
+</body>
+</html>

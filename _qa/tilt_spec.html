@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<title>tilt.js 规范符合性验证（§3.14 / §3.6 / §4.1）</title>
+</head>
+<body>
+<pre id="out">RUNNING</pre>
+<script src="../js/tilt.js"></script>
+<script>
+/* 验证桩：mock 严格按官方文档 §3.14 的形状造
+ *   - startGyroscope({interval}) 只接受 interval 一个字段，值是字符串
+ *   - stopGyroscope() 无参，返回 Promise
+ *   - onGyroscopeChange(fn) / offGyroscopeChange(fn?) 同步、返回 undefined、非函数抛 TypeError
+ *   - 版本号只在 launchOptions.miniToolEnv.buildVersion
+ *   - 无硬件：start 失败 errCode 10002
+ */
+(function () {
+  'use strict';
+  var R = [];
+  function ok(name, cond, extra) { R.push({ name: name, pass: !!cond, extra: extra }); }
+  function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  function reset() { var H = window.TQ_TILT_HUB; H.owners = 0; H.running = false; H.chain = Promise.resolve(); }
+
+  function mock(cfg) {
+    cfg = cfg || {};
+    var log = [], handlers = [];
+    var mt = {
+      startGyroscope: function (o) {
+        log.push({ api: 'start', arg: o });
+        if (cfg.startFail) { return Promise.reject(cfg.startFail); }
+        return Promise.resolve({ errMsg: 'startGyroscope:ok' });
+      },
+      stopGyroscope: function () {
+        log.push({ api: 'stop' });
+        return Promise.resolve({ errMsg: 'stopGyroscope:ok' });
+      },
+      onGyroscopeChange: function (cb) {
+        log.push({ api: 'on', type: typeof cb });
+        if (typeof cb !== 'function') { throw new TypeError('onGyroscopeChange expects function'); }
+        if (handlers.indexOf(cb) < 0) { handlers.push(cb); }
+        return undefined;
+      },
+      offGyroscopeChange: function (cb) {
+        log.push({ api: 'off', type: typeof cb });
+        if (cb !== undefined && typeof cb !== 'function') { throw new TypeError('bad cb'); }
+        if (cb === undefined) { handlers.length = 0; }
+        else { var i = handlers.indexOf(cb); if (i >= 0) { handlers.splice(i, 1); } }
+        return undefined;
+      },
+      getLaunchOptions: cfg.getLaunchOptions
+    };
+    var xhs = { miniTool: mt };
+    if (cfg.launchOptions !== null) { xhs.launchOptions = cfg.launchOptions; }
+    window.xhs = xhs;
+    return {
+      log: log,
+      handlers: handlers,
+      mt: mt,
+      emit: function (f) { handlers.slice().forEach(function (h) { try { h(f); } catch (e) {} }); },
+      apiSeq: function () { return log.map(function (x) { return x.api; }).join(','); },
+      count: function (a) { return log.filter(function (x) { return x.api === a; }).length; }
+    };
+  }
+
+  function host() {
+    var el = document.createElement('div');
+    el.style.cssText = 'position:fixed;left:0;top:0;width:300px;height:200px';
+    document.body.appendChild(el);
+    return el;
+  }
+
+  (async function run() {
+    var el, c, kind, st, m;
+
+    /* ---------- S1 完全合规范的 9.50 容器 ---------- */
+    m = mock({ launchOptions: { miniToolEnv: { buildVersion: 9500001 } } });
+    reset();
+    el = host();
+    c = new window.TiltController({ onUpdate: function () {} });
+    c.attachPointer(el);
+    kind = await c.start(null);
+    st = c.status();
+    ok('S1 选源=gyro', kind === 'gyro', kind);
+    ok('S1 state=running', st.gyro.state === 'running', st.gyro.state);
+    ok('S1 客户端版本=9500（已去掉末 3 位）', st.gyro.clientVersion === 9500, st.gyro.clientVersion);
+    ok('S1 调用序 = on,start', m.apiSeq() === 'on,start', m.apiSeq());
+    ok('S1 on 传的是函数', m.log[0] && m.log[0].type === 'function', m.log[0] && m.log[0].type);
+    var sc = m.log.filter(function (x) { return x.api === 'start'; })[0];
+    ok('S1 interval 是字符串 "ui"', !!(sc && sc.arg && sc.arg.interval === 'ui'), sc && JSON.stringify(sc.arg));
+    ok('S1 未传声明外字段', !!(sc && sc.arg && Object.keys(sc.arg).length === 1 && Object.keys(sc.arg)[0] === 'interval'),
+       sc && Object.keys(sc.arg).join('|'));
+
+    for (var i = 0; i < 8; i += 1) { m.emit({ x: 1.5, y: 2.0, z: 0.2 }); await sleep(20); }
+    st = c.status();
+    ok('S1 帧计数=8', st.gyro.frames === 8, st.gyro.frames);
+    ok('S1 首帧耗时已记录', st.gyro.firstFrameMs >= 0, st.gyro.firstFrameMs);
+    ok('S1 角速度→位移生效', Math.abs(st.tx) > 0.01 && Math.abs(st.ty) > 0.01, st.tx + '/' + st.ty);
+
+    /* 帧字段类型异常：字符串 / NaN 不得污染弹簧（否则 pos=NaN，画面永久不动） */
+    m.emit({ x: '0.3', y: NaN });
+    await sleep(20);
+    st = c.status();
+    ok('S1 异常帧不产生 NaN', isFinite(st.tx) && isFinite(st.ty), st.tx + '/' + st.ty);
+    m.emit(null); m.emit({}); m.emit(undefined);
+    await sleep(20);
+    st = c.status();
+    ok('S1 空帧不崩', isFinite(st.tx) && isFinite(st.ty), st.tx + '/' + st.ty);
+
+    /* ---------- S5 共享协调（两个场景同时挂） ---------- */
+    var c2 = new window.TiltController({ onUpdate: function () {} });
+    c2.attachPointer(host());
+    var kind2 = await c2.start(null);
+    ok('S5 第二个实例也认到 gyro', kind2 === 'gyro', kind2);
+    ok('S5 采集只启动一次', m.count('start') === 1, m.count('start'));
+    ok('S5 两个来源各自注册了监听', m.handlers.length === 2, m.handlers.length);
+    ok('S5 on 被调用两次', m.count('on') === 2, m.count('on'));
+    ok('S5 owners=2', window.TQ_TILT_HUB.owners === 2, window.TQ_TILT_HUB.owners);
+
+    await c.stop();
+    st = c2.status();
+    ok('S5 一方退场不停采集', window.TQ_TILT_HUB.running === true && st.gyro.collecting === true,
+       'hub.running=' + window.TQ_TILT_HUB.running + ' st.collecting=' + st.gyro.collecting);
+    ok('S5 一方退场只摘自己监听', m.handlers.length === 1, m.handlers.length);
+    ok('S5 owners=1', window.TQ_TILT_HUB.owners === 1, window.TQ_TILT_HUB.owners);
+
+    await c2.stop();
+    ok('S5 全部退场才 stop（一次）', m.count('stop') === 1, m.count('stop'));
+    ok('S5 owners 归零', window.TQ_TILT_HUB.owners === 0, window.TQ_TILT_HUB.owners);
+    ok('S5 collecting=false', window.TQ_TILT_HUB.running === false, window.TQ_TILT_HUB.running);
+
+    /* ---------- S2 旧客户端 9.49 ---------- */
+    m = mock({ launchOptions: { miniToolEnv: { buildVersion: 9490001 } } });
+    reset();
+    c = new window.TiltController({ onUpdate: function () {} });
+    c.attachPointer(host());
+    kind = await c.start(null);
+    st = c.status();
+    ok('S2 旧客户端 state=old-client', st.gyro.state === 'old-client', st.gyro.state);
+    ok('S2 不调用 startGyroscope', m.count('start') === 0, m.count('start'));
+    ok('S2 回落到 pointer', kind === 'pointer', kind);
+
+    /* ---------- S3 版本两路都取不到 ---------- */
+    m = mock({ launchOptions: null });
+    reset();
+    c = new window.TiltController({ onUpdate: function () {} });
+    c.attachPointer(host());
+    kind = await c.start(null);
+    st = c.status();
+    ok('S3 取不到版本 state=version-unknown', st.gyro.state === 'version-unknown', st.gyro.state);
+    ok('S3 不硬上 startGyroscope', m.count('start') === 0, m.count('start'));
+
+    /* ---------- S4 只有异步版本（getLaunchOptions） ---------- */
+    m = mock({
+      launchOptions: null,
+      getLaunchOptions: function () { return Promise.resolve({ miniToolEnv: { buildVersion: 9510002 } }); }
+    });
+    reset();
+    c = new window.TiltController({ onUpdate: function () {} });
+    c.attachPointer(host());
+    kind = await c.start(null);
+    st = c.status();
+    ok('S4 异步版本可用 → running', st.gyro.state === 'running', st.gyro.state);
+    ok('S4 异步版本=9510', st.gyro.clientVersion === 9510, st.gyro.clientVersion);
+    await c.stop();
+
+    /* ---------- S6 无陀螺仪硬件 errCode 10002 ---------- */
+    m = mock({ launchOptions: { miniToolEnv: { buildVersion: 9505001 } }, startFail: { errMsg: 'startGyroscope:fail no sensor', errCode: 10002 } });
+    reset();
+    c = new window.TiltController({ onUpdate: function () {} });
+    c.attachPointer(host());
+    kind = await c.start(null);
+    st = c.status();
+    ok('S6 state=no-hardware', st.gyro.state === 'no-hardware', st.gyro.state);
+    ok('S6 启动失败回滚监听', m.count('off') >= 1, m.count('off'));
+    ok('S6 回落到 pointer', kind === 'pointer', kind);
+    ok('S6 owners 未泄漏', window.TQ_TILT_HUB.owners === 0, window.TQ_TILT_HUB.owners);
+
+    /* ---------- S7 启动成功但零帧（权限被拒/传感器被占用） ---------- */
+    m = mock({ launchOptions: { miniToolEnv: { buildVersion: 9505001 } } });
+    reset();
+    c = new window.TiltController({ onUpdate: function () {} });
+    c.attachPointer(host());
+    await c.start(null);
+    ok('S7 启动即 running', c.status().gyro.state === 'running', c.status().gyro.state);
+    await sleep(1250);                       // 看门狗 1000ms
+    st = c.status();
+    ok('S7 零帧 → no-frames', st.gyro.state === 'no-frames', st.gyro.state);
+    ok('S7 零帧 → 降级 pointer', st.active === 'pointer', st.active);
+    ok('S7 零帧已停采集', window.TQ_TILT_HUB.running === false, window.TQ_TILT_HUB.running);
+
+    /* ---------- S8 容器内不得请求浏览器姿态脚本（§4.1） ---------- */
+    var webTag = Array.prototype.slice.call(document.querySelectorAll('script'))
+      .filter(function (s) { return s.src && s.src.indexOf('tilt-web') >= 0; });
+    ok('S8 容器内未加载 tilt-web.js', webTag.length === 0, webTag.length);
+    ok('S8 全局无 OrientationSource', typeof window.OrientationSource === 'undefined',
+       typeof window.OrientationSource);
+    ok('S8 门面 isSupported=false', c.orientation.isSupported() === false, c.orientation.isSupported());
+
+    /* ---------- S9 常量与自检字段 ---------- */
+    ok('S9 INTERVAL=ui', window.TQ_TILT_INFO.INTERVAL === 'ui', window.TQ_TILT_INFO.INTERVAL);
+    ok('S9 MIN_CLIENT=9500', window.TQ_TILT_INFO.MIN_CLIENT === 9500, window.TQ_TILT_INFO.MIN_CLIENT);
+    var st9 = c.status();
+    ok('S9 status 报 container=true', st9.container === true, st9.container);
+    ok('S9 status 带 frames/firstFrameMs',
+       'frames' in st9.gyro && 'firstFrameMs' in st9.gyro, Object.keys(st9.gyro).join('|'));
+
+    var pass = R.filter(function (x) { return x.pass; }).length;
+    document.getElementById('out').textContent = JSON.stringify({
+      pass: pass, total: R.length,
+      fails: R.filter(function (x) { return !x.pass; }),
+      all: R
+    }, null, 1);
+  })()['catch'](function (e) {
+    document.getElementById('out').textContent = JSON.stringify({ fatal: String(e && e.stack || e) });
+  });
+})();
+</script>
+</body>
+</html>
