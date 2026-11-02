@@ -109,7 +109,47 @@
     var self = this;
     global.addEventListener('resize', function () { self._measure(); });
     this._start();
+    this._inputKind = 'none';
+    this._ctrl = null;
+    /* 输入源：默认自动（陀螺仪 → 设备姿态 → 指针）。
+       opts.input = false 关闭；'pointer' 强制只走指针（桌面调试）。
+       ★ 生命周期按小红书规范「业务结束时主动清理」：mount 即启，destroy 即停，
+         不依赖卸载阶段的异步调用。 */
+    if (opts.input !== false && global.TiltController) {
+      var ctrl = new global.TiltController({
+        onUpdate: function (a, b) { self.setInput(a, b); }
+      });
+      ctrl.attachPointer(this.el);
+      this._ctrl = ctrl;
+      ctrl.start(opts.input === 'pointer' ? 'pointer' : null).then(function (kind) {
+        self._inputKind = kind;
+        self.el.setAttribute('data-spl-input', kind);
+      });
+    }
   }
+
+  /* 拆场：停输入源（含陀螺仪采集与监听）+ 停帧 + 摘引用 */
+  Parallax.prototype.destroy = function () {
+    if (this._ctrl) {
+      try { this._ctrl.stop(); } catch (e) { /* noop */ }
+      this._ctrl = null;
+      this._inputKind = 'none';
+    }
+    if (this.raf) { cancelAnimationFrame(this.raf); this.raf = 0; }
+    if (this.el) {
+      try { delete this.el.__sp; } catch (e) { this.el.__sp = null; }
+      this.el.removeAttribute('data-spl-ready');
+      this.el.removeAttribute('data-spl-input');
+    }
+    return true;
+  };
+
+  /* 输入源自检：界面/控制台一行就能问「现在是谁在驱动、陀螺仪卡在哪」 */
+  Parallax.prototype.inputStatus = function () {
+    var st = { kind: this._inputKind, hasController: !!this._ctrl };
+    if (this._ctrl && typeof this._ctrl.status === 'function') { st.detail = this._ctrl.status(); }
+    return st;
+  };
 
   /* 舞台尺寸 → 实际可用位移。
    * 层四边各溢 7%（114% 层），所以「k=1 那层的位移」必须小于 舞台宽×0.07，
@@ -153,7 +193,10 @@
   };
 
   Parallax.prototype._src = function (l, form) {
-    var p = this.base + this.cfg.dir[form] + '/' + l + '.webp';
+    /* files 覆盖表：允许「层名 ≠ 文件名」的场景（S1 的 l1/l3/l5、S2 的 l3v 等）。
+       未提供时与旧实现逐字节一致：dir + '/' + 层名 + '.webp' */
+    var fm = this.cfg.files && this.cfg.files[form];
+    var p = this.base + ((fm && fm[l]) ? fm[l] : (this.cfg.dir[form] + '/' + l + '.webp'));
     /* srcMap：可选的「路径 → 直出 src」映射（预览页内嵌 data URI 用）。
        map 不存在或未命中时行为与原实现逐字节一致（w=0）。 */
     if (SP.srcMap && SP.srcMap[p]) { return SP.srcMap[p]; }
@@ -465,9 +508,31 @@
     if (el.__sp) { return el.__sp; }
     var inst = new Parallax(el, key, opts);
     uid += 1;
+    inst._uid = uid;
     INST['i' + uid] = inst;
     el.setAttribute('data-spl-ready', '1');
     return inst;
+  };
+
+  /* 手动拆场（owner 是元素或其选择器）；SP.destroyAll() 一次收全部 */
+  SP.destroy = function (el) {
+    if (typeof el === 'string') { el = document.querySelector(el); }
+    var i = el && el.__sp;
+    if (!i) { return false; }
+    if (i._uid) { delete INST['i' + i._uid]; }
+    return i.destroy();
+  };
+
+  SP.destroyAll = function () {
+    var n = 0, k;
+    for (k in INST) { if (INST.hasOwnProperty(k) && INST[k]) { INST[k].destroy(); delete INST[k]; n += 1; } }
+    return n;
+  };
+
+  /* 输入源总览（排查「为什么不动」时先看这里） */
+  SP.inputStatus = function (el) {
+    var i = SP.instance(el || '.spl-stage');
+    return i ? i.inputStatus() : { kind: 'none', hasController: false };
   };
 
   SP.instance = function (el) {
