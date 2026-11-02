@@ -184,11 +184,14 @@ window.TQ_DATA = {
       ]
     },
     {
-      id: 'chen', name: '辰时 · 广德殿', unlocked: true, bg: 'chen', scene: 's3_banquet',
+      /* ★S2（广德殿外景）2026-11-02 接回剧情：它此前只作为素材存在、从未被挂载，
+       *   而这一步的原文写的正是「檐角、鸱尾、金砖」——殿外。进殿那句再换 S3，
+       *   一场戏里「殿外 → 殿内」的位移是本来就写好的，只是底图没跟上。 */
+      id: 'chen', name: '辰时 · 广德殿', unlocked: true, bg: 'chen', scene: 's2_guangde',
       steps: [
         { type: 'tasks' },
         { type: 'narr', text: '晨光落进广德殿的檐角，鸱尾的影子压在金砖上。教坊乐起，群臣鱼贯而入。' },
-        { type: 'narr', text: '今日仪注第一条：执觞上寿。礼不可错，你先替众臣习一遍。' },
+        { type: 'narr', text: '今日仪注第一条：执觞上寿。礼不可错，你先替众臣习一遍。', scene: 's3_banquet' },
         { type: 'iv', cfg: 'shang', deco: 'jinzang', decoName: '金觞' },
         { type: 'narr', text: '习礼毕。钟磬一响，上寿开始——你退到廊下，看着满殿朱紫。' },
         { type: 'card', speaker: '范质', text: '陛下临御五年，《大周刑统》二十一卷颁行天下，狱讼有章——臣谨奉千觞，为陛下寿。' },

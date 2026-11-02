@@ -19,15 +19,22 @@
   function AC() { return global.AudioContext || global.webkitAudioContext; }
 
   function ensure() {
-    if (!AC()) { return null; }
+    var Ctor = AC();
+    if (!Ctor) { return null; }
     if (!ctx) {
-      try { ctx = new AC(); } catch (e) { return null; }
-      master = ctx.createGain();
-      /* 2026-11-02 手机实测「听不到音效」：原来 master = vol×0.5 = 0.275，
-       * 手机外放本来就轻，0.275 再乘各类音的 0.1~0.16 就接近听不见。
-       * 提到 vol×0.9（默认 ≈0.50），并把各类音的相对比例保持不变。 */
-      master.gain.value = vol * 0.9;
-      master.connect(ctx.destination);
+      /* ★★2026-11-02 手机实测「整局没有一点音效」的**真根因**：
+       *   AC() 是个「返回构造器」的函数，写成 `new AC()` 时 JS 会把 AC 当类来 new，
+       *   而构造器返回的是对象（函数也是对象）⇒ 得到的是 **AudioContext 构造函数本身**，
+       *   不是实例。于是 ctx.state === undefined、ctx.createGain === undefined，
+       *   下一行 master = ctx.createGain() 直接抛 TypeError；这个异常又被 sfx() 与
+       *   play() 的 try/catch 吞掉 ⇒ 每一次放音都"成功返回、零声音"，日志里一片安静。
+       *   正解是先取构造器再 new：`new (AC())()`。 */
+      try { ctx = new (Ctor)(); } catch (e) { ctx = null; return null; }
+      try {
+        master = ctx.createGain();
+        master.gain.value = vol * 0.9;   /* 见下：外放偏轻，0.5 太保守 */
+        master.connect(ctx.destination);
+      } catch (e2) { ctx = null; master = null; return null; }
     }
     /* ★必须在用户手势里 resume（iOS/微信/小红书 WebView 都拦自动播放）。
      * 旧实现只在「要放某个音」时顺手 resume —— 而首次放音往往发生在自动推进

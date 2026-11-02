@@ -284,7 +284,11 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .cs-fine{text-align:center;font-size:9px;color:var(--muted);margin-top:6px;letter-spacing:1px}
 .vn-main{flex:1;overflow:hidden;padding:0;position:relative;z-index:1}
 .sp-zone{position:absolute;left:0;right:0;top:5%;display:flex;flex-direction:column;align-items:center}
-.sp-zone .slot{width:154px;height:206px;background:rgba(239,245,243,.72)}
+.sp-zone .slot{width:154px;height:206px;background:transparent}
+/* ★立绘槽的纸色底板（原 rgba(239,245,243,.72)）在纯色底上几乎看不见，
+ *   但场景底图铺满后它就是一块**硬边浅色矩形**，糊在人物身后 ——
+ *   手机实测（「立绘仍带透明背景」）看到的正是它，不是素材本身。
+ *   槽只负责取景，不负责打底：底板一律去掉，对比度交给场景自己的暗角。 */
 .sp-zone .pname{margin-top:8px;font-size:12px;font-weight:600;color:var(--deep);background:rgba(221,233,229,.82);padding:2px 12px;border-radius:10px}
 .dlg-dock{position:absolute;left:0;right:0;bottom:0;padding:14px 14px calc(12px + var(--tq-bottom-inset))}
 .dlg-box{position:relative;background:rgba(243,238,227,.92);border:1.5px solid var(--deep);border-radius:12px;padding:16px 16px 12px;box-shadow:0 8px 22px rgba(31,59,58,.22)}
@@ -434,7 +438,7 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   .cs-fold{width:170px;font-size:13px;padding:9px 0}
   .act-vn .vn-main{flex:1;display:flex;flex-direction:row;min-height:0}
   .act-vn .sp-zone{position:relative;top:auto;left:auto;right:auto;width:38%;max-width:460px;min-width:300px;flex-shrink:0;border-right:1px solid rgba(94,140,138,.35);justify-content:flex-end;padding:20px 18px}
-  .act-vn .sp-zone .slot{width:100%;max-width:300px;height:58%;min-height:240px;background:rgba(239,245,243,.72)}
+  .act-vn .sp-zone .slot{width:100%;max-width:300px;height:58%;min-height:240px;background:transparent}
   .act-vn .sp-zone .pname{font-size:13px;background:var(--deep);color:var(--yue)}
   .act-vn .dlg-dock{position:relative;left:auto;right:auto;bottom:auto;flex:1;min-width:0;margin:-18px -26px 0;padding:18px 26px calc(14px + var(--tq-dock-lift,45px));display:flex;flex-direction:column}
   .act-vn .dlg-box{margin-top:auto;width:86%}

@@ -140,15 +140,32 @@
     var rSfx = h('div', 'set-row');
     var tSfx = h('div', 'set-txt');
     tSfx.appendChild(h('div', 'set-n', '音效'));
-    tSfx.appendChild(h('div', 'set-d', '推进、点按、拾得时的轻响。本作无背景音乐；关掉不影响任何流程。'));
+    var sfxNote = h('div', 'set-d', '推进、点按、拾得时的轻响。本作无背景音乐；关掉不影响任何流程。');
+    tSfx.appendChild(sfxNote);
     rSfx.appendChild(tSfx);
     var tryBox = h('div', 'set-minis');
     var tryBtn = h('button', 'set-mini', '试听');
     tryBtn.type = 'button';
+    /* 试听兼「自检」：iPhone 静音键、系统音量、WebView 未解锁音频，
+     * 三者表现都是"没声"，只看按钮分不清。这里把 AudioContext 的真实状态回显出来：
+     *   running   = 音频通路已通（没声就是音量/静音键）
+     *   suspended = 被系统拦下（再点一次，或先点一下屏幕任意处）
+     *   none      = 当前环境没有 WebAudio（老 WebView） */
     tryBtn.addEventListener('click', function () {
-      if (global.TQSFX && global.TQSFX.unlock) { global.TQSFX.unlock(); }
       if (!sfxOn()) { setSfx(true); refreshSfx(); }   /* 关了还试听？先打开，再响 */
-      if (global.TQSFX) { try { global.TQSFX.play('bead'); } catch (e) {} }
+      var st = null;
+      if (global.TQSFX && global.TQSFX.unlock) { global.TQSFX.unlock(); }
+      if (global.TQSFX) {
+        try { global.TQSFX.play('bead'); } catch (e) {}
+        st = global.TQSFX.status ? global.TQSFX.status() : null;
+      }
+      var label = !st ? '不可用' : (st.state === 'running' ? '已连接' : (st.state === 'suspended' ? '待解锁' : '无音频'));
+      tryBtn.textContent = '试听 · ' + label;
+      if (st && st.state !== 'running') {
+        sfxNote.textContent = '音频通路未就绪：苹果设备检查侧边静音键与媒体音量；仍不行就再点一次「试听」。';
+      } else {
+        sfxNote.textContent = '推进、点按、拾得时的轻响。本作无背景音乐；关掉不影响任何流程。';
+      }
     });
     tryBox.appendChild(tryBtn);
     rSfx.appendChild(tryBox);
