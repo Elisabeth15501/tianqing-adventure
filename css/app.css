@@ -294,7 +294,7 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .dlg-box .cont-ind{position:absolute;right:12px;bottom:8px;color:var(--deep);font-size:13px}
 .log-strip{display:flex;margin-top:8px}
 .log-key{font-size:10px;color:var(--deep);background:rgba(243,238,227,.85);border:1px solid var(--qing);border-radius:11px;padding:3px 11px;margin-right:8px}
-@media (min-width:700px) and (max-aspect-ratio:119/100){
+@media (min-width:700px){
   body{background:#D9E3DF}
   .app{max-width:780px;margin:0 auto;min-height:100%;box-shadow:0 0 48px rgba(31,59,58,.16)}
   .main{padding:24px 32px}
@@ -333,7 +333,7 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   .cr-name{font-size:13.5px}
   .cr-src{font-size:12px}
 }
-@media (min-aspect-ratio:6/5) and (min-width:900px){
+@media (min-aspect-ratio:99/1) and (min-width:900px){
   .load{background:linear-gradient(100deg,#22383C 0%,#3E5B5E 30%,#5E7F7C 58%,#7FA29D 78%,#9DB6B0 100%)}
   .load .vessel-wm{display:none}
   .app.load .yupi .col{display:inline;margin:0}
@@ -457,11 +457,11 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .title-meta .credits-btn:hover{color:var(--deep);border-color:var(--deep)}
 .cs-fold{min-height:32px}
 .credits-btn{min-height:32px}
-@media (min-aspect-ratio:6/5) and (max-width:899px){
+@media (min-aspect-ratio:99/1) and (max-width:899px){
   body{background:#D9E3DF}
   .app{max-width:620px;margin:0 auto;min-height:100%;box-shadow:0 0 40px rgba(31,59,58,.14)}
 }
-@media (min-aspect-ratio:6/5) and (min-width:900px){
+@media (min-aspect-ratio:99/1) and (min-width:900px){
   .footbar{ position:absolute; right:calc(36px + var(--tq-right-inset)); bottom:calc(32px + var(--tq-bottom-inset)); width:300px; z-index:5;
     background:transparent; border-top:none; padding:0 }
   .fb-ending{ right:auto; left:50%; transform:translateX(-50%); width:320px }
@@ -470,7 +470,7 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   .title-wrap .tr .btn{ width:240px }
   .fb-title{ display:none }
 }
-@media (min-aspect-ratio:6/5) and (min-width:900px) and (max-height:640px){
+@media (min-aspect-ratio:99/1) and (min-width:900px) and (max-height:640px){
   .topbar{padding:8px 24px}
   .dlg-col{padding:14px 22px 12px}
   .portrait-zone{padding:14px}
@@ -533,7 +533,7 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .main.act-vn.act-op .sp-zone,
 .vn-main.act-op .sp-zone{display:none}
 .vn-main.act-op .vn-doc{flex:1;min-height:0;max-height:none}
-@media not all and (min-aspect-ratio:6/5) and (min-width:900px){
+@media not all and (min-aspect-ratio:99/1) and (min-width:900px){
   .act-vn .vn-main{flex:1;display:flex;flex-direction:column;min-height:0}
   .act-vn .vn-doc{margin-top:auto;flex-shrink:0;max-height:46%;min-height:120px;overflow-y:auto;padding:0 16px}
   .vn-main.act-op .vn-doc{padding:0 16px 12px}
@@ -572,7 +572,7 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 /* 占台小节容器（史料卡/回忆等独占舞台） */
 .shard-occ .shard-toast{margin-top:0}
 .mem-occ .panel{margin-top:0}
-@media (min-aspect-ratio:6/5) and (min-width:900px){
+@media (min-aspect-ratio:99/1) and (min-width:900px){
   .log-panel{max-width:560px;margin:0 auto 18px;border-radius:16px}
   .log-item{font-size:14px}
 }
@@ -708,7 +708,7 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 }
 /* 横屏：竖屏的 44% 双槽会把两人推到屏幕两端（1280 下槽宽 547px）⇒ 收拢到中部，
  * 尺寸略放大补横屏的纵向余量（Chrome 61：只用 max-width，不用 clamp/min）。 */
-@media (min-aspect-ratio:6/5){
+@media (min-aspect-ratio:99/1){
   /* 横屏：竖向余量少、横向余量多 ⇒ 盒宽收窄、两人往中间靠，盒高仍交给容器，
    * 人物高度由 JS 按「正文同款」算，不随这个宽度变。 */
   .mem-figs[data-n="1"] .mem-fig{width:38%}
@@ -721,7 +721,7 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .mem-line.mem-in{animation:memIn .28s ease}
 @keyframes memIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 .mem-stage-hint{flex-shrink:0;text-align:center;font-size:11px;letter-spacing:2px;color:rgba(191,214,207,.55)}
-@media (min-width:700px) and (max-aspect-ratio:119/100){
+@media (min-width:700px){
   /* 高度不再写死：盒高交给容器，人物高度由 JS 算（height:100% 已在基规则里） */
   .mem-figs[data-n="1"] .mem-fig{width:42%}
   .mem-line{font-size:18px}
@@ -747,8 +747,8 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
  * 放在文件末尾：同特异性下覆盖上面各媒体查询里的 .topbar padding 简写。 */
 :root{--tq-tb-pad-r:16px}
 .topbar{padding-right:calc(var(--tq-tb-pad-r) + var(--tq-topbar-right))}
-@media (min-width:700px) and (max-aspect-ratio:119/100){:root{--tq-tb-pad-r:32px}}
-@media (min-aspect-ratio:6/5) and (min-width:900px){:root{--tq-tb-pad-r:28px}}
+@media (min-width:700px){:root{--tq-tb-pad-r:32px}}
+@media (min-aspect-ratio:99/1) and (min-width:900px){:root{--tq-tb-pad-r:28px}}
 @media (max-height:740px){:root{--tq-tb-pad-r:14px}}
 @media (max-height:668px){:root{--tq-tb-pad-r:12px}}
 
@@ -840,12 +840,12 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .main.act-vn .dlg-dock{ z-index:2; }
 
 /* —— 中屏（竖版 UI，文本列 620）：单人给到 460，避免在 620 宽舞台上显得又瘦又小 —— */
-@media (min-width:700px) and (max-aspect-ratio:119/100){
+@media (min-width:700px){
   .main.act-vn .sp-fig[data-side="main"]{ max-width:460px; }
 }
 
 /* —— 宽屏（左立绘 / 右文本双栏）：立绘列自带高度，脚贴列底 —— */
-@media (min-aspect-ratio:6/5) and (min-width:900px){
+@media (min-aspect-ratio:99/1) and (min-width:900px){
   .main.act-vn .sp-zone{
     position:relative; left:auto; right:auto; top:auto; bottom:auto;
     width:42%; max-width:520px; min-width:320px; flex-shrink:0;
@@ -1027,7 +1027,7 @@ body.shv-open .main{overflow:hidden}
   .as-next{margin-top:12px; padding-top:10px; font-size:11.5px}
 }
 /* —— 宽屏：卡片放宽、字号提一档；位置仍居中，不参与左右分栏 —— */
-@media (min-aspect-ratio:6/5) and (min-width:900px){
+@media (min-aspect-ratio:99/1) and (min-width:900px){
   .as-card{max-width:520px; padding:32px 34px 28px}
   .as-title{font-size:24px}
   .as-body{font-size:15px; line-height:2}
@@ -1173,3 +1173,46 @@ body.shv-open .main{overflow:hidden}
 .iv-guide .iv-hint{margin-top:4px}
 /* 小屏顶栏：与「手札」同一档内边距，否则两个按钮高度差 5px，看着像没对齐 */
 @media (max-height:740px){ .topbar .set-btn{padding:3px 10px;font-size:12px} }
+
+/* ==================== 手机实测修复（2026-11-02 夜） ==================== */
+
+/* 【9】长按道具被系统识别成 haptic touch（弹出「分享图片 / 复制图片」）
+ * 根因：长按（500ms 左右）在 iOS/部分安卓 WebView 里会触发 callout 菜单，canvas 上尤其明显。
+ * 处理：游戏区一律关掉 callout 与文本选择（本作没有需要长按复制的正文）；
+ *       输入框例外。再配 app.js 的 contextmenu 拦截（安卓走这条）。 */
+.app{-webkit-tap-highlight-color:transparent}
+.app *{-webkit-touch-callout:none;
+  -webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}
+.app input,.app textarea{-webkit-user-select:text;-moz-user-select:text;user-select:text}
+/* 会吃长按手势的交互面：关掉滚动接管，交给我们自己的 pointer 逻辑 */
+.iv-stage,.iv-stage canvas,.shard-stage,.shard-ll,.ending-vessel,
+.mg-sheet,.bead-stage{-webkit-touch-callout:none;touch-action:none}
+
+/* 【10】桌面端暂不套用横版：首版沿用中屏版布局，边界尺寸按中屏（≤900px 居中）。
+ * 横版媒体查询的条件已统一改成 min-aspect-ratio:99/1（永假），此处只补「桌面上看起来
+ * 像一块中屏画布」，避免 1280 宽的窗口把手机版拉成一条。 */
+@media (min-width:900px){
+  html,body{background:#0E1A19}
+  .app{max-width:900px;margin:0 auto;height:100%;
+    box-shadow:0 0 48px rgba(0,0,0,.55)}
+}
+
+/* 【8】结算页 2D 纸槌瓶：静态收束，只留极轻的浮起呼吸（不用 3D、零网络依赖） */
+.ending-vessel svg.vessel2d{animation:vessel2dFloat 6s ease-in-out infinite}
+@keyframes vessel2dFloat{
+  0%,100%{transform:translateY(0)}
+  50%{transform:translateY(-6px)}
+}
+
+/* 【6】动手小节进度条常显：加粗一档、底色提亮，关掉教学后也一眼看到进度 */
+.iv-bar{height:13px;background:#FFFDF6}
+.iv-bar .fill{background:linear-gradient(90deg,#7FA8A2,#5E8C8A)}
+.iv.rich .iv-bar{margin-top:9px}
+
+/* 【3/5】拾得瓷片：默认内壁静态帧 ⇒ 给它足够的展示面积，别再挤成 168px 的小方块 */
+.shard-stage{min-height:236px}
+.shard-stage .shard-ll{width:236px;height:236px;margin:0}
+@media (max-width:430px){
+  .shard-stage .shard-ll{width:212px;height:212px}
+  .shard-stage{min-height:212px}
+}

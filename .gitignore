@@ -110,3 +110,6 @@ artdraft/props3d/shards/_bak_pre_irregular/
 #   否则新 clone 下来的开发者无从得知 preview/ 该放什么、该不该提交。
 /preview/*
 !/preview/README.md
+
+# 素材修补前的原图备份（一次性工具产物，不入库）
+assets/_fixbak/

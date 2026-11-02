@@ -634,8 +634,10 @@
     ligu: 1.00, guowei: 1.00,                                   /* 与郭荣身高相若 */
     zhaokuangyin: 1.05,                                         /* 稍高于郭荣 */
     fengdao: 0.95, zhangyongde: 0.94, lichongjin: 0.94,         /* 稍矮于郭荣 */
-    wangpu: 0.90, fanzhi: 0.90, wangpu2: 0.90, yinchongyi: 0.90,/* 矮于郭荣 */
-    fuhou: 0.89,                                                /* 矮于郭荣（且为坐姿） */
+    fanzhi: 0.90, yinchongyi: 0.90,                             /* 矮于郭荣 */
+    /* 2026-11-02 手机实测定档：王朴要「接近张永德」（0.94）⇒ 0.93；王溥同为四相取 0.92 */
+    wangpu: 0.93, wangpu2: 0.92,
+    fuhou: 0.97,                                                /* 符后调大：原 0.89 偏小（坐姿另乘 KNEE_K） */
     nvguan: 0.86, shiguan: 0.86,                                /* 玩家：明显矮于郭荣 */
     shaonian: 0.80, zongxun: 0.60,                              /* 少年郭荣 / 六岁宗训 */
     sizheng: 0.94, shanggong: 0.94, shangshiling: 0.94, qijulang: 0.94   /* 配角（暂无同框） */
@@ -1060,11 +1062,25 @@
        *   命中时直接上图，并打 data-instant 关掉入场动画（见 css .fig-real[data-instant]）。 */
       var hot = !!(TQA && TQA.reg[ak] && TQA.status[ak] === 'ok' && TQA.imgs[ak]);
       var canReal = !!(TQA && TQA.reg[ak]);
+      /* ★占位闪现（2026-11-02 手机实测）：旧逻辑「没命中热路径就先画矢量剪影」，
+       *   于是每次换人都先冒一张代码绘像，几十毫秒后再被真图顶掉 —— 玩家看到的是闪一下。
+       *   现在分三种：
+       *     hot       已在内存 ⇒ 直接上图；
+       *     canReal   真图可期（已注册、没被设成 vector）⇒ **先留空**，图到即上；
+       *               404 / 超时 / 解码失败时再补矢量占位（那时是"回退"，不是"闪现"）；
+       *     其余      没有素材（纯矢量角色）⇒ 直接画矢量。 */
+      function paintVector() {
+        slot.innerHTML = figure(key, opts && opts.fill ? 'fill' : null);
+        slot.removeAttribute('data-fit');
+        applyFit(slot, key, useSlot);
+      }
       if (hot) {
         slot.innerHTML = '';
         slot.removeAttribute('data-fit');
+      } else if (!canReal) {
+        paintVector();
       } else {
-        slot.innerHTML = figure(key, opts && opts.fill ? 'fill' : null);
+        slot.innerHTML = '';           /* 真空窗：宁可空一瞬，也不要先给假图 */
         slot.removeAttribute('data-fit');
       }
       applyFit(slot, key, useSlot);
@@ -1095,7 +1111,8 @@
         TQA.resolve(ak, function (stt) {
           if (slot._tqGen !== gen || slot._tqKey !== key || slot._tqSlot !== useSlot) { return; }
           if (stt === 'timeout') {
-            /* 只是慢：占位先留着，图一到就在原位升级（旧版这里等于放弃，占位留到天荒地老） */
+            /* 只是慢：先补一张矢量占位兜住，图一到就地换成真图 */
+            if (!slot.querySelector('.fig-real')) { paintVector(); }
             TQA.onLate(ak, function (st2) {
               if (st2 !== 'ok' || slot._tqGen !== gen || slot._tqKey !== key || slot._tqSlot !== useSlot) { return; }
               if (TQA.imgs[ak]) { paintReal(TQA.imgs[ak].src, true); }
@@ -1106,6 +1123,7 @@
             /* 真失败（404 / 解码失败 / 矢量模式）：在槽角上挂一个可见角标。
              * 以前这里只是静默 `return`，玩家看到的是「一张矢量剪影」，
              * 分不清是「设计如此」还是「素材没载入」——实机排障全靠猜。 */
+            if (!slot.querySelector('.fig-real')) { paintVector(); }
             markMissing(slot, stt);
             return;
           }

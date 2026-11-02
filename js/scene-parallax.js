@@ -124,6 +124,14 @@
       ctrl.start(opts.input === 'pointer' ? 'pointer' : null).then(function (kind) {
         self._inputKind = kind;
         self.el.setAttribute('data-spl-input', kind);
+        /* 手机上姿态权限要在手势里申请：挂载时的异步链会丢掉手势上下文，
+         * 这里等玩家第一次触摸再补一次（成功即切成 orientation）。 */
+        if (ctrl.retryOnGesture) {
+          ctrl.retryOnGesture(self.el, function (k2) {
+            self._inputKind = k2;
+            self.el.setAttribute('data-spl-input', k2);
+          });
+        }
       });
     }
   }
