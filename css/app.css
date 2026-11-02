@@ -1,0 +1,1100 @@
+:root{--qing:#8FB5B0;--deep:#5E8C8A;--fen:#DDE9E5;--yue:#EFF5F3;--ink:#1F3B3A;--tu:#A67C52;--gold:#D9B36C;--zhi:#B96A62;--muted:#5F7A77}
+:root{--paper:#F3EFE2;--tq-top-inset:0px;--tq-bottom-inset:0px;--tq-left-inset:0px;--tq-right-inset:0px;--tq-topbar-right:0px}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang SC","Noto Sans SC","Microsoft YaHei",sans-serif;-webkit-font-smoothing:antialiased}
+.app{height:100%;display:flex;flex-direction:column;position:relative;z-index:0;
+  padding-top:var(--tq-top-inset);padding-bottom:var(--tq-bottom-inset);
+  padding-left:var(--tq-left-inset);padding-right:var(--tq-right-inset)}
+.topbar{padding:10px 16px 8px;background:var(--deep);color:var(--yue);display:flex;justify-content:space-between;align-items:center;flex-shrink:0}
+.topbar .act-name{font-size:15px;font-weight:500}
+.topbar .memo-btn{font-size:13px;color:var(--fen);background:transparent;border:1px solid var(--qing);border-radius:14px;padding:4px 12px}
+.main{flex:1;min-height:0;overflow-y:auto;padding:16px;position:relative;z-index:1}
+.bg-art{position:absolute;left:0;right:0;top:0;bottom:0;opacity:.42;pointer-events:none;z-index:-1}
+.bg-art svg{width:100%;height:100%}
+.bg-art.wash{opacity:.16}
+/* ===== AI 场景底图（2026-11-02 接入）=====
+ * 与 .bg-art 同层（z-index:-1，压在所有正文之下），但铺满且不透明。
+ * ★选择器必须比场景引擎注入的 `.tqs-stage{position:relative}` 更强：
+ *   那套样式是运行时 append 到 <head> 末尾的，同权重会盖掉这里的 absolute。
+ * 竖版 v（750×1080）/ 横版 h（1500×630）由 app.js 按窗口比切换。 */
+.app .bg-scene{
+  position:absolute;left:0;right:0;top:0;bottom:0;
+  z-index:-1;overflow:hidden;background:#100E0C;
+  pointer-events:none;   /* 底图不吃手势（长卷 S4 自己开拖动时才由引擎接管） */
+}
+.app .bg-scene[data-scene="s4_pano"].tqs-stage{pointer-events:auto}
+/* S1 竖版只有门楼一层，天幕是**透明**的（原设计由引擎渐变+矢量栏柱补），
+ * 直接铺会露出底色黑 —— 这里补一道拂晓天幕，接住素材的透明区。 */
+.app .bg-scene[data-scene="s1_wanshou"]{
+  background:linear-gradient(to bottom,
+    #141C24 0%, #22303A 26%, #3C4A4E 46%, #6E6250 66%, #8C7554 84%, #6A5A46 100%);
+}
+/* 立绘要有落点：底图下方压一条极淡的暗角，避免人物脚底"浮"在亮地面上 */
+.app .bg-scene.tqs-stage::after{
+  content:'';position:absolute;left:0;right:0;bottom:0;height:42%;
+  background:linear-gradient(to top, rgba(18,14,10,.55), rgba(18,14,10,0));
+  pointer-events:none;
+}
+.title-wrap{margin:auto;text-align:center;padding:24px 8px}
+/* 首屏标题屏：标题组贴底（直接位于按钮组/footbar 上方 · 用户 10-22 设计改动） */
+.title-bottom{display:flex;flex-direction:column;justify-content:flex-end}
+.title-bottom .title-wrap{margin-left:auto;margin-right:auto}
+.title-main{font-size:34px;font-weight:500;letter-spacing:6px}
+.title-sub{margin-top:10px;font-size:14px;color:var(--muted);letter-spacing:2px}
+.title-note{margin-top:26px;font-size:12px;color:var(--tu)}
+.title-actions{margin-top:32px}
+/* 首屏按钮双渲染：竖版隐藏 .tr 走 footbar；横版反之（见 6/5+900 块） */
+.title-wrap .tr{display:none}
+/* 竖版 footbar 按钮限宽居中（修「入宫当值太长」；双类特异性压过 .footbar .btn 的 margin shorthand） */
+.footbar.fb-title .btn{width:220px;margin-left:auto;margin-right:auto}
+.btn{display:block;width:100%;box-sizing:border-box;margin:10px 0;padding:13px 16px;min-height:44px;font-size:15px;font-weight:500;text-align:center;border-radius:10px;background:var(--deep);color:var(--yue);border:none;font-family:inherit;cursor:pointer}
+.btn.ghost{background:var(--yue);color:var(--deep);border:1px solid var(--qing)}
+.card{background:var(--fen);border:1px solid var(--qing);border-radius:12px;padding:14px 16px;margin:12px 0}
+.card .speaker{font-size:13px;font-weight:500;color:var(--deep);margin-bottom:6px}
+.card .text{font-size:15px;line-height:1.7}
+.narr{font-size:14px;line-height:1.8;margin:10px 2px}
+.shiliao{background:var(--fen);border:1px solid var(--qing);border-radius:12px;padding:14px 16px;margin:12px 0;position:relative}
+.shiliao .head{font-size:13px;font-weight:500;color:var(--deep)}
+.shiliao .quote{margin-top:8px;font-size:14px;line-height:1.7}
+.shiliao .source{margin-top:8px;font-size:12px;color:var(--muted)}
+.prov{display:inline-block;margin-left:8px;padding:1px 8px;font-size:11px;border-radius:8px;background:var(--qing);color:var(--yue);vertical-align:1px}
+.shard-toast{background:var(--deep);color:var(--yue);border-radius:12px;padding:12px 16px;margin:12px 0}
+.shard-toast .got{font-size:12px;opacity:.85}
+.shard-toast .name{font-size:16px;font-weight:500;margin-top:2px}
+.choice-box{background:var(--fen);border:1px solid var(--qing);border-radius:12px;padding:14px 16px;margin:12px 0}
+.memo-head{font-size:14px;font-weight:500;margin:6px 2px}
+.memo-sub{font-size:12px;color:var(--muted);margin:4px 2px 12px}
+.role-item{display:block;width:100%;text-align:left}
+.role-item .desc{display:block;font-size:12px;font-weight:400;margin-top:4px;opacity:.85}
+.timebar{margin:0 16px 8px;background:rgba(221,233,229,.55);border:1px solid var(--qing);border-radius:12px;padding:10px 6px 6px;flex-shrink:0}
+.tb-line{position:relative;height:26px}
+.tb-line .base{position:absolute;left:8%;right:8%;top:12px;height:3px;background:var(--deep)}
+.tb-line .prog{position:absolute;left:8%;top:12px;height:3px;background:var(--gold);width:50%}
+.tb-nodes{display:flex;justify-content:space-between;margin-top:-14px;padding:0 2%}
+.tb-node{text-align:center;position:relative;padding-top:14px}
+.tb-dot{width:11px;height:11px;border-radius:50%;background:var(--yue);border:2.5px solid var(--deep);margin:0 auto}
+.tb-node.cur .tb-dot{width:16px;height:16px;background:var(--gold);border-color:var(--deep)}
+.tb-t{font-size:13px;font-weight:600;margin-top:3px;color:var(--ink)}
+.tb-n{font-size:10px;color:var(--muted);margin-top:1px}
+/* 合瓷归位图（手札拼合进度盘） */
+.merger-map{margin:8px 2px 14px;text-align:center}
+.merger-svgbox{width:150px;margin:0 auto}
+.merger-svg{width:100%;height:auto;display:block;filter:drop-shadow(0 6px 12px rgba(31,59,58,.18))}
+.merger-cap{font-size:11px;color:var(--muted);margin-top:2px;letter-spacing:.5px}
+.memo-grid{display:flex;flex-wrap:wrap}
+.memo-cell{width:21%;margin:2%;height:52px;border-radius:10px;background:var(--fen);border:1px solid var(--qing);display:flex;align-items:center;justify-content:center;font-size:12px;color:var(--muted);text-align:center;padding:2px}
+.memo-cell.got{background:var(--deep);color:var(--yue);border-color:var(--deep)}
+.memo-cell.got svg{width:22px;height:22px}
+.panel{background:var(--fen);border:1px solid var(--qing);border-radius:12px;padding:14px 16px;margin:12px 0}
+.beat-label{font-size:20px;font-weight:500;color:var(--deep);text-align:center;margin:6px 0 12px;letter-spacing:6px}
+.meter{position:relative;height:36px;border-radius:12px;background:var(--yue);border:1px solid var(--qing);overflow:hidden}
+.meter-zone{position:absolute;top:0;bottom:0;left:38%;width:24%;background:rgba(143,181,176,.45);border-left:1px solid var(--deep);border-right:1px solid var(--deep)}
+.meter-cursor{position:absolute;top:0;bottom:0;left:62%;width:3px;margin-left:-1.5px;background:var(--deep)}
+.hit-tip{font-size:13px;color:var(--deep);text-align:center;margin-top:10px;font-weight:500}
+.mode-jie .panel{border-color:#8A6B45}
+.mode-jie .memo-head{color:#633806}
+.mode-jie .meter{background:#EFE7D6;border-color:#8A6B45;height:44px}
+.mode-jie .meter-zone{background:rgba(138,107,69,.32);border-left:1px solid #8A6B45;border-right:1px solid #8A6B45}
+.mode-jie .meter-cursor{width:5px;margin-left:-2.5px;background:#633806;border-radius:2px 2px 0 0}
+.meter-ticks{position:absolute;top:0;bottom:0;left:0;right:0}
+.meter-ticks i{position:absolute;top:2px;bottom:2px;width:1px;background:rgba(99,56,6,.35)}
+.jie-chip{display:inline-block;font-size:10px;font-weight:500;color:#633806;border:1px solid #8A6B45;border-radius:8px;padding:1px 7px;margin-left:8px;letter-spacing:2px}
+.jie-row{display:flex;align-items:center;justify-content:center;margin-top:12px;font-size:11px;color:var(--muted)}
+.jie-row .op{border:1px solid var(--qing);border-radius:9px;padding:3px 12px;margin:0 4px;color:var(--deep)}
+.jie-row .op.on{background:var(--deep);color:var(--yue);border-color:var(--deep)}
+.jie-note{font-size:10px;color:var(--muted);text-align:center;margin-top:8px;line-height:1.6}
+.slot{border:2px dashed var(--deep);border-radius:14px;background:rgba(221,233,229,.5);display:flex;flex-direction:column;align-items:center;justify-content:center;color:var(--deep);text-align:center;padding:8px}
+.slot .tag{font-size:11px;font-weight:600;letter-spacing:1px}
+.slot .sub{font-size:10px;color:var(--muted);margin-top:3px;line-height:1.5}
+.slot .ico{width:44%;max-width:120px;opacity:.55;margin-bottom:6px}
+/* ===== 立绘槽 · 程序化绘像（js/portraits.js：speaker → 一幅代码画出的像，永不空槽） =====
+ * 纪律：先由 portraits.js 画出占位像，真实 webp 经 TQA 侦测后以 <img> 原位覆盖（cover + top 对齐，
+ * 观感与半身占位一致）；素材缺失时保留绘像，不再显示虚线空框。 */
+.slot{position:relative;overflow:hidden}
+.slot .fig-art,.slot .fig-real{position:absolute;left:0;top:0;width:100%;height:100%;display:block}
+.slot .fig-real{object-fit:cover;object-position:top center}
+.slot .fig-meta{position:absolute;left:0;right:0;bottom:0;padding:14px 8px 7px;background:linear-gradient(to top,rgba(30,42,42,.86),rgba(30,42,42,0));pointer-events:none}
+.slot .fig-meta .tag{color:#F1EADA;font-size:12px;font-weight:700;text-shadow:0 1px 2px rgba(0,0,0,.45)}
+.slot .fig-meta .sub{color:rgba(241,234,218,.82);font-size:9.5px;margin-top:2px;line-height:1.45;text-shadow:0 1px 2px rgba(0,0,0,.4)}
+.slot.has-real{border-style:solid;border-color:rgba(201,162,39,.75)}
+.slot .fig-meta~*{position:relative}
+.sil{width:46%;max-width:110px;opacity:.5}
+.load{height:100%;position:relative;overflow:hidden;background:radial-gradient(circle at 50% 38%,#9DB6B0,#5E7F7C 52%,#22383C)}
+.app.load{justify-content:center;align-items:center}
+.quote-wrap{position:relative;z-index:0;display:flex;justify-content:center}
+.load .vessel-wm{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);height:370px;width:auto;margin-top:-10px;z-index:-1;pointer-events:none}
+.load .vessel-wm svg{height:100%;width:auto;display:block}
+.yupi{display:flex;position:relative;z-index:1}
+.yupi .col{display:flex;flex-direction:column;align-items:center}
+.yupi .col + .col,.yupi .comma + .col{margin-left:36px}
+.yupi span{font-family:"KaiTi","STKaiti","SimSun",serif;font-size:31px;color:var(--yue);opacity:.92;line-height:1.18}
+/* 竖版：两列即一联，不设分隔号 */
+.load .yupi .comma{display:none}
+.yline{width:64px;height:1.6px;background:var(--gold);opacity:.5;margin-top:63px}
+.load .seal{width:46px;margin-top:16px;filter:drop-shadow(0 2px 6px rgba(0,0,0,.3))}
+.load .seal img{width:100%;display:block}
+.load .snote{margin-top:14px;font-size:13px;color:var(--yue);opacity:.55;letter-spacing:2px;text-align:center}
+.load .lt{text-align:center;margin-top:34px}
+.load .lt .m{font-size:34px;font-weight:500;letter-spacing:8px;color:var(--yue)}
+.load .lt .s{font-size:14px;color:var(--yue);opacity:.85;margin-top:10px;letter-spacing:3px}
+.load .lt .btn{width:200px;margin:26px auto 0;background:transparent;border:1px solid var(--yue);color:var(--yue);border-radius:22px}
+/* 素材加载：真进度条 + 失败可见（11-02）。失败态是**可点的**，点一下重试。 */
+.load .ld-bar{width:200px;height:2px;margin:20px auto 0;background:rgba(239,245,243,.16);border-radius:2px;overflow:hidden}
+.load .ld-bar i{display:block;height:100%;width:0;background:var(--yue);opacity:.85;transition:width .3s ease}
+.load .ld-bar.fail i{background:#E9C083}
+.load .ld-note{margin-top:9px;font-size:12px;letter-spacing:1.5px;color:var(--yue);opacity:.6;min-height:17px}
+.load .ld-note.err{opacity:.95;color:#E9C083;cursor:pointer;text-decoration:underline;text-underline-offset:3px}
+.load .ld-diag{display:inline-block;margin-top:7px;font-size:11px;letter-spacing:1px;color:var(--yue);opacity:.5;
+  text-decoration:underline;text-underline-offset:3px}
+.load .lt .btn[disabled]{opacity:.42}
+.credits-btn{position:absolute;left:calc(14px + var(--tq-left-inset));top:calc(10px + var(--tq-top-inset));bottom:auto;z-index:6;font-size:12px;letter-spacing:2px;color:var(--muted);background:var(--yue);border:1px solid var(--qing);border-radius:12px;padding:5px 12px;opacity:.88}
+.credits-btn:active{transform:translateY(1px)}
+.load .credits-btn{color:rgba(239,245,243,.8);background:rgba(239,245,243,.07);border-color:rgba(239,245,243,.4);
+  /* 加载页的 .app.load 嵌套在外层 .app 之内，已处于安全区内 ⇒ top 不再叠加 --tq-top-inset */
+  top:12px;left:calc(14px + var(--tq-left-inset))}
+.cr-overlay{position:absolute;left:0;right:0;top:0;bottom:0;z-index:40;background:rgba(31,59,58,.55);overflow-y:auto;
+  padding:calc(24px + var(--tq-top-inset)) calc(14px + var(--tq-right-inset)) calc(24px + var(--tq-bottom-inset)) calc(14px + var(--tq-left-inset));display:flex;align-items:flex-start;justify-content:center}
+.cr-panel{background:var(--paper);border:1px solid var(--tu);border-radius:14px;width:100%;max-width:560px;padding:22px 18px;max-height:100%;overflow-y:auto;box-shadow:0 10px 32px rgba(31,59,58,.28);flex-shrink:0}
+.cr-title{font-size:18px;font-weight:600;letter-spacing:4px;color:var(--tu);text-align:center}
+.cr-sub{margin-top:6px;font-size:12px;color:var(--muted);text-align:center}
+.cr-statement{margin:14px 0 2px;font-size:13px;line-height:1.9;color:var(--ink)}
+.cr-sec{margin:18px 0 8px;font-size:13px;font-weight:600;color:var(--tu);letter-spacing:2px;border-bottom:1px solid rgba(166,124,82,.4);padding-bottom:5px}
+.cr-row{margin:8px 0}
+.cr-name{display:block;font-size:13px;color:var(--ink)}
+.cr-src{display:block;font-size:11.5px;line-height:1.7;color:var(--muted);margin-top:1px}
+.cr-note{margin:10px 0 0;font-size:11.5px;line-height:1.8;color:var(--muted)}
+.cr-more{margin:10px 0 0;font-size:11.5px;color:var(--tu);text-align:center;letter-spacing:1px}
+.cr-close{display:block;width:100%;margin:18px 0 0;padding:11px 16px;font-size:14px;font-weight:500;text-align:center;border-radius:10px;background:var(--yue);color:var(--deep);border:1px solid var(--qing)}
+.ending{text-align:center;padding:16px 0}
+.ending-title{font-size:26px;font-weight:500;letter-spacing:6px;margin-bottom:8px}
+.ending-vessel{width:200px;margin:6px auto 4px}
+.ending-vessel svg{width:100%;display:block;filter:drop-shadow(0 8px 14px rgba(0,0,0,.25))}
+/* ★ 终幕 3D 瓶容器：内层是 frag.js spin3d 生成的 .shard-ll（200×200 横构图），
+   这里只撑一个等比舞台；canvas 自身 .shard-ll 已定宽高并居中。 */
+.ending-vessel-3d{width:200px;margin:6px auto 4px}
+.ending-vessel-3d .shard-ll{margin:0 auto}
+.memory-line{font-size:14px;line-height:1.9;margin:10px 2px}
+.ending-scene{background:radial-gradient(circle at 50% 40%,#5E7F7C 0%,#3E5B5E 48%,#22383C 100%)}
+.ending-scene .ending-title{color:var(--yue)}
+.ending-scene .memory-line{color:rgba(239,245,243,.85)}
+.ending-scene .memo-sub{color:rgba(239,245,243,.62)}
+.ending-scene .ending-vessel{position:relative;z-index:0}
+.ending-scene .ending-vessel svg{filter:drop-shadow(0 10px 22px rgba(0,0,0,.45))}
+.ending-scene .ending-vessel::before{content:"";position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:300px;height:300px;border-radius:50%;background:radial-gradient(circle,rgba(239,245,243,.16),rgba(239,245,243,0) 68%);z-index:-1}
+.iv{position:relative;height:100%;display:flex;flex-direction:column}
+/* 小游戏（tang / proof / touhu）是 300×210 的横构图。
+   舞台原本 flex:1 撑满竖屏，横图会被缩成一条、上下留大片空白；
+   rich 模式下舞台按画幅比收住，整块交互在剩余高度里垂直居中。 */
+.iv.rich{justify-content:center}
+/* ★max-width：aspect-ratio 在 max-height 生效时会"保高放宽容"，横屏下舞台框比画幅宽出一大截
+   （1024 宽时框 990、画幅只有 633），两侧留着两块空皮。按 58vh×300/210 把宽也收住，框=画幅。
+   不能写 min()——本工程要兼容老 WebView，calc 足矣。 */
+/* ★2026-11-02 修（真机进不去动手小节）：这里原来写 aspect-ratio:300/210。
+   aspect-ratio 是 Chrome 88+ 才有的属性，宿主 WebView 基线（Chrome 61）不认；
+   而本规则同时是 flex:0 0 auto + 子元素全绝对定位 ⇒ 高度算成 0，实测只剩 2px：
+   画布看不见，Canvas.map() 的缩放比 sc 变成 0.0095，点哪儿都映射到画幅外，
+   表现就是「进得去、点不动」。改为「70vw 起、58vh 封顶」的纯老属性写法给兜底，
+   精确尺寸由 js/frag.js 的 fitStage() 按画幅比写入 px（老 WebView 同样生效）。 */
+.iv.rich .iv-stage{flex:0 0 auto;width:100%;height:70vw;max-height:58vh;
+  max-width:calc(58vh * 300 / 210);min-height:0;margin:0 auto}
+/* 步骤点/读数/提示跟着舞台一起收窄：否则横屏下三个点在整屏宽度上摊开，与画面脱节 */
+.iv.rich .iv-steps,
+.iv.rich .iv-val,
+.iv.rich .iv-hint{width:100%;max-width:calc(58vh * 300 / 210);margin-left:auto;margin-right:auto}
+.iv-stage{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,#F5F9F7 0%,#DDE9E5 60%,#BFD2CD 100%);border:1px solid var(--qing);border-radius:12px;overflow:hidden}
+.iv-stage.dark{background:radial-gradient(circle at 50% 36%,#3E5B5E 0%,#22383C 80%)}
+.iv-stage .zone-tag{position:absolute;top:8px;left:8px;font-size:10px;letter-spacing:1px;background:rgba(31,59,58,.62);color:var(--yue);border-radius:9px;padding:2px 9px;z-index:4}
+.iv-stage .step-tag{position:absolute;top:8px;right:8px;font-size:10px;font-weight:600;letter-spacing:1px;background:var(--gold);color:#4A3712;border-radius:9px;padding:2px 10px;z-index:4}
+.iv-stage .cshadow{position:absolute;left:50%;bottom:10%;width:44%;height:13px;margin-left:-22%;border-radius:50%;background:rgba(31,59,58,.20);z-index:0}
+.iv-stage .prop{position:relative;z-index:1}
+.iv-stage .gest{position:absolute;z-index:3;pointer-events:none}
+.iv-stage .target{position:absolute;border:1.5px dashed var(--gold);border-radius:12px;background:rgba(217,179,108,.14);z-index:2;display:flex;align-items:center;justify-content:center;font-size:10px;color:#7A5B1E;letter-spacing:1px}
+.iv-stage .hot{position:absolute;width:13px;height:13px;border-radius:50%;background:var(--yue);border:2px solid var(--gold);z-index:4}
+.iv-foot{margin-top:9px}
+.iv-hint{font-size:11px;color:var(--muted);text-align:center;margin-top:5px;line-height:1.6}
+.iv-hint b{color:var(--deep)}
+.iv-ctrl{display:flex;align-items:center;margin-top:7px}
+.iv-ctrl .sp{flex:1}
+.iv-mini{min-height:32px;font-size:11px;padding:5px 12px;border-radius:13px;border:1px solid var(--deep);background:var(--yue);color:var(--deep);margin-right:7px;font-family:inherit}
+.iv-mini.g{border-color:var(--gold);color:#7A5B1E;background:#F7EEDC}
+.iv-steps{display:flex;margin:9px 0 3px}
+.iv-steps .st{flex:1;text-align:center;font-size:10px;color:var(--muted);position:relative;padding-top:15px;line-height:1.5}
+.iv-steps .st i{position:absolute;top:0;left:50%;margin-left:-5.5px;width:11px;height:11px;border-radius:50%;background:var(--yue);border:2px solid var(--deep)}
+.iv-steps .st.done i{background:var(--deep)}
+.iv-steps .st.cur i{background:var(--gold);border-color:var(--gold)}
+.iv-steps .st.cur{color:var(--ink);font-weight:600}
+.iv-bar{position:relative;height:11px;border-radius:6px;background:var(--yue);border:1px solid var(--qing);margin-top:8px}
+.iv-bar .fill{position:absolute;top:0;bottom:0;left:0;border-radius:6px 0 0 6px;background:var(--deep)}
+.iv-bar .fill.g{background:var(--gold)}
+.iv-bar .zone{position:absolute;top:-1px;bottom:-1px;background:rgba(217,179,108,.38);border-left:1px solid var(--gold);border-right:1px solid var(--gold)}
+.iv-val{font-size:10px;color:var(--muted);text-align:center;margin-top:2px}
+.iv-row{display:flex;align-items:center;margin-top:8px}
+.iv-row .lb{width:36px;font-size:10px;color:var(--muted);flex-shrink:0}
+.iv-row .bar{flex:1;margin-top:0}
+.iv-tray{display:flex;margin-top:9px}
+.iv-tray .cell{flex:1;border:1px solid var(--qing);border-radius:9px;background:var(--fen);margin:0 3px;padding:5px 2px;display:flex;flex-direction:column;align-items:center;justify-content:center;font-size:9px;color:var(--muted);text-align:center;line-height:1.4}
+.iv-tray .cell.got{background:var(--deep);color:var(--yue);border-color:var(--deep)}
+.iv-tray .cell.sel{border:1.5px solid var(--gold);background:#F7EEDC;color:#7A5B1E;font-weight:600}
+.iv-tray .cell svg{width:15px;height:15px}
+.iv-panel{position:absolute;top:0;right:0;bottom:0;width:62%;background:rgba(239,245,243,.95);border-left:1px solid var(--qing);padding:10px 12px;z-index:5;box-shadow:-6px 0 14px rgba(31,59,58,.14)}
+.iv-panel .ph{font-size:12px;font-weight:600;color:var(--deep)}
+.iv-panel .pv{height:92px;border:1px dashed var(--deep);border-radius:10px;background:var(--fen);margin:7px 0;display:flex;align-items:center;justify-content:center;color:var(--muted);font-size:10px;text-align:center;line-height:1.5}
+.iv-panel .pq{font-size:11px;line-height:1.7}
+.iv-panel .ps{font-size:10px;color:var(--muted);margin-top:5px}
+.iv-panel .px{margin-top:8px;font-size:10.5px;padding:4px 12px;border-radius:12px;background:var(--deep);color:var(--yue);display:inline-block}
+.th-zone{position:relative;flex:1;min-height:0}
+.th-pot{position:absolute;left:50%;bottom:26%;margin-left:-42px;z-index:2}
+.th-ring{position:absolute;left:50%;bottom:24%;margin-left:-52px;width:104px;height:16px;border-radius:50%;border:1.5px dashed var(--gold);background:rgba(217,179,108,.14);z-index:1}
+.th-traj{position:absolute;left:8%;right:8%;bottom:30%;z-index:1}
+.th-dash{position:absolute;z-index:1}
+.th-thrower{position:absolute;left:50%;bottom:5%;margin-left:-44px;z-index:3;text-align:center}
+.th-thrower .cap{font-size:9px;color:var(--muted);margin-top:2px;line-height:1.5}
+.th-dial{display:flex;align-items:center;margin-top:7px}
+.th-dial .lb{width:36px;font-size:10px;color:var(--muted);flex-shrink:0}
+.th-dial .bar{flex:1;margin-top:0}
+.th-dial .rd{width:56px;font-size:10px;color:var(--deep);text-align:right;font-weight:600;flex-shrink:0}
+.topbar .cs-btn{font-family:inherit;font-size:13px;color:#4A3712;background:var(--gold);border:none;border-radius:14px;padding:4px 12px;display:flex;align-items:center;flex-shrink:0}
+.topbar .cs-btn .cs-dot{display:inline-block;margin-left:6px;font-size:10px;font-weight:600;background:#FFF;color:#7A5B1E;border-radius:9px;padding:1px 7px}
+.tb-btns{display:flex;align-items:center;flex-shrink:0}
+.tb-btns .memo-btn{margin-left:8px}
+.cs-ov{position:absolute;left:0;right:0;top:0;bottom:0;background:rgba(34,56,60,.48);z-index:20;display:flex;align-items:center;justify-content:center;
+  padding:calc(14px + var(--tq-top-inset)) calc(14px + var(--tq-right-inset)) calc(14px + var(--tq-bottom-inset)) calc(14px + var(--tq-left-inset))}
+.cs-sheet{position:relative;width:94%;max-width:318px;max-height:100%;overflow-y:auto;background:linear-gradient(180deg,#F3EBD9,#E9DEC3);border:1px solid #C7B693;border-radius:3px;box-shadow:0 14px 40px rgba(0,0,0,.35);padding:16px 16px 12px}
+.cs-sheet:before{content:"";position:absolute;left:12px;right:12px;top:8px;bottom:8px;background:repeating-linear-gradient(to right,rgba(94,140,138,.10) 0 1px,transparent 1px 26px);pointer-events:none}
+.cs-qian{text-align:center;font-size:10px;letter-spacing:3px;color:var(--muted)}
+.cs-title{font-family:"KaiTi","STKaiti","SimSun",serif;font-size:30px;letter-spacing:10px;text-align:center;margin:10px 2px 2px 12px;color:var(--ink)}
+.cs-sub{text-align:center;font-size:10px;color:var(--muted);letter-spacing:1px}
+.cs-gold{width:44px;height:1.6px;background:var(--gold);margin:12px auto}
+.cs-row{display:flex;align-items:center;padding:9px 2px;border-bottom:1px solid rgba(138,107,69,.18);position:relative;z-index:1}
+.cs-num{flex-shrink:0;width:22px;height:22px;border-radius:50%;background:var(--zhi);color:var(--yue);font-size:12px;display:flex;align-items:center;justify-content:center;font-family:"KaiTi","STKaiti","SimSun",serif}
+.cs-vt{display:flex;flex-direction:column;align-items:center;font-family:"KaiTi","STKaiti","SimSun",serif;font-size:17px;line-height:1.22;margin:0 12px;color:var(--ink)}
+.cs-meta{flex:1;min-width:0}
+.cs-meta b{display:block;font-size:12px;font-weight:600;color:var(--deep)}
+.cs-meta span{display:block;font-size:10px;color:var(--muted);margin-top:2px;line-height:1.5}
+.cs-st{flex-shrink:0;font-size:10px;padding:2px 8px;border-radius:9px;margin-left:8px;white-space:nowrap}
+.cs-st.done{background:var(--zhi);color:var(--yue)}
+.cs-st.cur{background:var(--gold);color:#4A3712;font-weight:600}
+.cs-st.todo{border:1px solid var(--muted);color:var(--muted)}
+.cs-cur{margin-top:8px;background:rgba(255,255,255,.5);border:1px dashed var(--gold);border-radius:8px;padding:8px 10px;font-size:10.5px;color:#6B5A2E;line-height:1.7;position:relative;z-index:1}
+.cs-tail{display:flex;align-items:center;justify-content:flex-end;margin-top:12px;font-size:10px;color:var(--muted);position:relative;z-index:1}
+.cs-tail .who{margin-left:10px}
+.cs-seal{margin-left:10px;width:24px;height:24px;background:var(--zhi);border-radius:2px;color:var(--yue);font-size:9px;line-height:1.05;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:"KaiTi","STKaiti","SimSun",serif;transform:rotate(-2deg);flex-shrink:0}
+.cs-fold{display:block;width:150px;margin:12px auto 0;padding:8px 0;font-size:12px;border-radius:15px;background:var(--deep);color:var(--yue);border:none;font-family:inherit;position:relative;z-index:1}
+.cs-fine{text-align:center;font-size:9px;color:var(--muted);margin-top:6px;letter-spacing:1px}
+.vn-main{flex:1;overflow:hidden;padding:0;position:relative;z-index:1}
+.sp-zone{position:absolute;left:0;right:0;top:5%;display:flex;flex-direction:column;align-items:center}
+.sp-zone .slot{width:154px;height:206px;background:rgba(239,245,243,.72)}
+.sp-zone .pname{margin-top:8px;font-size:12px;font-weight:600;color:var(--deep);background:rgba(221,233,229,.82);padding:2px 12px;border-radius:10px}
+.dlg-dock{position:absolute;left:0;right:0;bottom:0;padding:14px 14px calc(12px + var(--tq-bottom-inset))}
+.dlg-box{position:relative;background:rgba(243,238,227,.92);border:1.5px solid var(--deep);border-radius:12px;padding:16px 16px 12px;box-shadow:0 8px 22px rgba(31,59,58,.22)}
+.dlg-box .narr{font-weight:500}
+.dlg-box .name-tab{position:absolute;top:-13px;left:14px;font-size:12px;font-weight:600;color:var(--yue);background:var(--deep);border-radius:9px;padding:2px 12px;letter-spacing:1px}
+.dlg-box .dtext{font-size:16px;line-height:1.75;min-height:58px}
+.dlg-box .cont-ind{position:absolute;right:12px;bottom:8px;color:var(--deep);font-size:13px}
+.log-strip{display:flex;margin-top:8px}
+.log-key{font-size:10px;color:var(--deep);background:rgba(243,238,227,.85);border:1px solid var(--qing);border-radius:11px;padding:3px 11px;margin-right:8px}
+@media (min-width:700px) and (max-aspect-ratio:119/100){
+  body{background:#D9E3DF}
+  .app{max-width:780px;margin:0 auto;min-height:100%;box-shadow:0 0 48px rgba(31,59,58,.16)}
+  .main{padding:24px 32px}
+  .main>*{width:100%;max-width:620px;margin-left:auto;margin-right:auto}
+  .title-main{font-size:42px;letter-spacing:8px}
+  .title-sub{font-size:15px}
+  .title-note{font-size:13px}
+  .topbar{padding:14px 32px 10px}
+  .topbar .act-name{font-size:17px}
+  .timebar{max-width:620px;margin-left:auto;margin-right:auto}
+  .memo-grid{max-width:480px;margin-left:auto;margin-right:auto}
+  .memo-cell{height:60px;font-size:13px}
+  .beat-label{font-size:24px}
+  .narr{font-size:15px;line-height:2}
+  .card .text{font-size:15px}
+  .load .lt .m{font-size:46px}
+  .load .vessel-wm{height:426px}
+  .yupi span{font-size:35.5px}
+  .yline{width:72px;margin-top:71px}
+  .load .seal{width:52px;margin-top:15px}
+  .load .snote{font-size:14px}
+  .ending-vessel{width:220px}
+  .ending-scene .ending-vessel::before{width:340px;height:340px}
+  .cs-sheet{max-width:360px}
+  .cs-title{font-size:34px}
+  .cs-vt{font-size:19px}
+  .cs-meta b{font-size:13px}
+  .sp-zone .slot{width:182px;height:242px}
+  .sp-zone .pname{font-size:13px}
+  .dlg-box .dtext{font-size:17px}
+  .credits-btn:hover{filter:brightness(1.05);color:var(--deep)}
+  .load .credits-btn:hover{color:var(--yue);background:rgba(239,245,243,.14);border-color:rgba(239,245,243,.66)}
+  .cr-panel{padding:28px 26px}
+  .cr-title{font-size:20px}
+  .cr-statement{font-size:13.5px}
+  .cr-name{font-size:13.5px}
+  .cr-src{font-size:12px}
+}
+@media (min-aspect-ratio:6/5) and (min-width:900px){
+  .load{background:linear-gradient(100deg,#22383C 0%,#3E5B5E 30%,#5E7F7C 58%,#7FA29D 78%,#9DB6B0 100%)}
+  .load .vessel-wm{display:none}
+  .app.load .yupi .col{display:inline;margin:0}
+  .load .yupi .col + .col{margin-left:0}
+  .load .yupi span{display:inline;font-size:30px;letter-spacing:3px}
+  .load .yupi .comma{display:inline;margin:0 12px;align-self:center;font-family:"KaiTi","STKaiti","SimSun",serif;font-size:30px;color:var(--yue);opacity:.92}
+  .load .yline{margin-top:22px}
+  .load .seal{width:50px;margin-top:18px}
+  .load .snote{margin-top:12px;font-size:14px}
+  .load .lt{margin-top:26px}
+  .load .lt .m{font-size:52px;letter-spacing:12px}
+  .load .lt .s{font-size:16px;margin-top:14px}
+  .load .btn{width:240px;margin:24px auto 0;border-radius:24px}
+  .credits-btn:hover{filter:brightness(1.05);color:var(--deep)}
+  .load .credits-btn:hover{color:var(--yue);background:rgba(239,245,243,.14);border-color:rgba(239,245,243,.66)}
+  .cr-panel{padding:28px 26px}
+  .cr-title{font-size:20px}
+  .cr-statement{font-size:13.5px}
+  .cr-name{font-size:13.5px}
+  .cr-src{font-size:12px}
+  .topbar{padding:12px 28px}
+  .topbar .act-name{font-size:17px}
+  .timebar{display:none}
+  .topbar .timebar-inline{display:flex;flex:1;justify-content:center;margin:0 18px;max-width:560px}
+  .timebar-inline span{font-size:11px;color:rgba(239,245,243,.75);padding:0 10px;border-left:1px solid rgba(239,245,243,.3);white-space:nowrap}
+  .timebar-inline span:first-child{border-left:none}
+  .timebar-inline span.cur{color:var(--gold);font-weight:600}
+  .act-body{flex:1;display:flex;flex-direction:row;min-height:0}
+  .portrait-zone{width:38%;max-width:460px;min-width:300px;position:relative;border-right:1px solid rgba(94,140,138,.35);display:flex;flex-direction:column;justify-content:flex-end;padding:20px 18px}
+  .portrait-zone .bg-art{position:absolute;left:0;right:0;top:0;bottom:0;opacity:.42;pointer-events:none}
+  .portrait-zone .bg-art svg{width:100%;height:100%}
+  .portrait-zone .slot{width:100%;max-width:300px;height:52%;min-height:220px;margin:0 auto;background:rgba(239,245,243,.72)}
+  .portrait-zone .pname{align-self:center;margin-top:12px;font-size:13px;font-weight:600;color:var(--deep);background:var(--deep);color:var(--yue);border-radius:12px;padding:3px 14px}
+  .dlg-col{flex:1;position:relative;padding:20px 26px 18px;display:flex;flex-direction:column;min-width:0}
+  .dlg-flow{flex:1;overflow:hidden}
+  .card.dock{position:relative;width:82%;margin:14px 0 0 auto;box-shadow:0 6px 18px rgba(31,59,58,.18);border-width:1.5px}
+  .card.dock .continue{margin-top:12px;text-align:right}
+  .card.dock .btn{display:inline-block;width:auto;padding:9px 26px;margin:0}
+  .title-wrap{position:absolute;top:50%;left:0;right:0;transform:translateY(-50%);flex-direction:row;display:flex;align-items:center;text-align:left;max-width:1100px;margin:0 auto;padding:0 40px}
+  .title-wrap .tl{flex:1;padding-right:40px}
+  .title-wrap .tr{width:340px;flex-shrink:0}
+  .title-wrap .title-main{text-align:left}
+  .title-wrap .title-sub{text-align:left}
+  .title-wrap .title-note{text-align:left}
+  .role-2col{flex-direction:row;display:flex}
+  .role-2col .role-item{width:47%;margin:0 1.5%}
+  .memo-2col{flex-direction:row;display:flex;align-items:flex-start}
+  .memo-2col .mg{width:360px;flex-shrink:0}
+  .memo-2col .memo-cell{width:21%;margin:2%;height:64px}
+  .memo-2col .md{flex:1;margin-left:26px;min-width:0}
+  .beat-wide .rhythm-body{flex-direction:row;display:flex;align-items:stretch}
+  .beat-wide .deco-slot{width:38%;max-width:340px;min-width:260px;flex-shrink:0;margin-right:24px}
+  .beat-wide .deco-slot .slot{height:100%;min-height:300px}
+  .beat-wide .rhythm-main{flex:1;min-width:0}
+  .beat-wide .beat-label{font-size:26px;letter-spacing:8px}
+  .beat-wide .meter{height:44px}
+  .beat-wide .hit-tip{font-size:14px}
+  .touhu-wide .th-body{flex-direction:row;display:flex;align-items:stretch}
+  .touhu-wide .th-left{width:30%;max-width:300px;min-width:230px;flex-shrink:0;margin-right:22px;display:flex;flex-direction:column}
+  .touhu-wide .th-left .slot{flex:1;min-height:200px}
+  .touhu-wide .arrows{display:flex;flex-direction:row;margin-top:12px}
+  .touhu-wide .arrows .slot{flex:1;height:56px;margin:0 4px;min-height:0}
+  .touhu-wide .th-mid{flex:1;min-width:0}
+  .touhu-wide .th-mid .beat-label{font-size:26px}
+  .touhu-wide .th-mid .meter{height:44px}
+  .touhu-wide .th-right{width:24%;max-width:260px;min-width:200px;flex-shrink:0;margin-left:22px}
+  .touhu-wide .th-right .slot{height:100%;min-height:300px}
+  .ending-wrap{position:relative;width:100%;max-width:760px;box-sizing:border-box;margin:0 auto;padding:20px 18px}
+  @media (min-width:520px){.ending-wrap{padding:20px 56px}}
+  .ending-wrap:before,.ending-wrap:after{content:"";position:absolute;top:0;bottom:0;width:44px;pointer-events:none}
+  .ending-wrap:before{left:0;background:linear-gradient(90deg,rgba(217,179,108,.30),rgba(217,179,108,0))}
+  .ending-wrap:after{right:0;background:linear-gradient(270deg,rgba(217,179,108,.30),rgba(217,179,108,0))}
+  .ending-vessel{width:220px}
+  .ending-scene .ending-vessel::before{width:360px;height:360px}
+  .ending-title{font-size:32px}
+  .ending .memory-line{font-size:15px;max-width:560px;margin-left:auto;margin-right:auto;overflow-wrap:break-word;word-break:break-word}
+  .iv-wide .iv-body{flex:1;display:flex;flex-direction:row;min-height:0}
+  .iv-wide .iv-left{width:42%;max-width:400px;min-width:280px;flex-shrink:0;margin-right:24px}
+  .iv-wide .iv-left .iv-stage{height:100%}
+  .iv-wide .iv-right{flex:1;min-width:0}
+  .iv-wide .iv-hint{font-size:12px}
+  .iv-wide .iv-steps .st{font-size:11px}
+  .iv-wide .iv-mini{font-size:12px;padding:7px 16px}
+  .iv-wide .iv-val{font-size:11px}
+  .cs-ov{align-items:flex-start;padding-top:calc(22px + var(--tq-top-inset))}
+  .cs-sheet{width:80%;max-width:520px;padding:22px 26px 16px}
+  .cs-title{font-size:34px;margin:12px 2px 2px 12px}
+  .cs-qian{font-size:11px}
+  .cs-row{padding:12px 6px}
+  .cs-num{width:26px;height:26px;font-size:14px}
+  .cs-vt{font-size:20px;margin:0 16px}
+  .cs-meta b{font-size:14px}
+  .cs-meta span{font-size:11px}
+  .cs-st{font-size:11px;padding:3px 10px}
+  .cs-cur{font-size:12px}
+  .cs-tail{font-size:11px}
+  .cs-seal{width:28px;height:28px;font-size:10px}
+  .cs-fold{width:170px;font-size:13px;padding:9px 0}
+  .act-vn .vn-main{flex:1;display:flex;flex-direction:row;min-height:0}
+  .act-vn .sp-zone{position:relative;top:auto;left:auto;right:auto;width:38%;max-width:460px;min-width:300px;flex-shrink:0;border-right:1px solid rgba(94,140,138,.35);justify-content:flex-end;padding:20px 18px}
+  .act-vn .sp-zone .slot{width:100%;max-width:300px;height:58%;min-height:240px;background:rgba(239,245,243,.72)}
+  .act-vn .sp-zone .pname{font-size:13px;background:var(--deep);color:var(--yue)}
+  .act-vn .dlg-dock{position:relative;left:auto;right:auto;bottom:auto;flex:1;min-width:0;margin:-18px -26px 0;padding:18px 26px calc(14px + var(--tq-dock-lift,45px));display:flex;flex-direction:column}
+  .act-vn .dlg-box{margin-top:auto;width:86%}
+  .act-vn .dlg-box .dtext{font-size:17px}
+  .act-vn .vn-doc{flex:1;min-width:0;max-height:none;display:flex;flex-direction:column;padding:18px 26px 14px}
+  .act-vn.act-op .vn-doc{flex:1}
+  .act-vn .log-strip{margin-top:10px}
+  .act-vn .log-key{font-size:11px;padding:4px 13px}
+}
+/* ==================== 实仓增量（2026-10-21 合入：短屏可见性三层 + 网格补缝） ==================== */
+.footbar{ flex-shrink:0; padding:10px 16px calc(12px + var(--tq-bottom-inset));
+  background:var(--yue); border-top:1px solid var(--qing) }
+.footbar .btn{ margin:0 0 8px } .footbar .btn:last-child{ margin-bottom:0 }
+.title-meta{display:flex;justify-content:flex-start;align-items:center;flex-shrink:0;
+  padding:8px calc(14px + var(--tq-right-inset)) 0 calc(14px + var(--tq-left-inset))}
+/* 元信息行内的出处键：文档流静态排版（不浮动⇒不会漂、不会压标题），贴时间条（顶栏）下沿左侧 */
+.title-meta .credits-btn{position:static;left:auto;top:auto;bottom:auto;min-height:0;
+  padding:4px 11px;font-size:11.5px;letter-spacing:1px;
+  background:transparent;border-color:rgba(94,140,138,.45);color:var(--muted);opacity:1}
+.title-meta .credits-btn:hover{color:var(--deep);border-color:var(--deep)}
+.cs-fold{min-height:32px}
+.credits-btn{min-height:32px}
+@media (min-aspect-ratio:6/5) and (max-width:899px){
+  body{background:#D9E3DF}
+  .app{max-width:620px;margin:0 auto;min-height:100%;box-shadow:0 0 40px rgba(31,59,58,.14)}
+}
+@media (min-aspect-ratio:6/5) and (min-width:900px){
+  .footbar{ position:absolute; right:calc(36px + var(--tq-right-inset)); bottom:calc(32px + var(--tq-bottom-inset)); width:300px; z-index:5;
+    background:transparent; border-top:none; padding:0 }
+  .fb-ending{ right:auto; left:50%; transform:translateX(-50%); width:320px }
+  .memo-2col .md{ padding-bottom:150px }
+  .title-wrap .tr{ display:flex; flex-direction:column; justify-content:center; align-items:flex-start }
+  .title-wrap .tr .btn{ width:240px }
+  .fb-title{ display:none }
+}
+@media (min-aspect-ratio:6/5) and (min-width:900px) and (max-height:640px){
+  .topbar{padding:8px 24px}
+  .dlg-col{padding:14px 22px 12px}
+  .portrait-zone{padding:14px}
+  .portrait-zone .slot{min-height:180px}
+  .card.dock{width:88%}
+}
+@media (max-height:740px){
+  .topbar{padding:8px 14px 6px} .topbar .act-name{font-size:14px} .topbar .memo-btn{padding:3px 10px;font-size:12px}
+  .timebar{padding:8px 6px 4px;margin:0 14px 6px}
+  .tb-line{height:22px} .tb-line .base,.tb-line .prog{top:10px}
+  .tb-t{font-size:12px} .tb-n{font-size:9px}
+  .main{padding:12px 14px} .card{padding:12px 14px;margin:10px 0} .narr{font-size:13.5px;line-height:1.75;margin:8px 2px}
+  .shiliao{padding:12px 14px;margin:10px 0}
+  .memo-cell{height:46px;font-size:11.5px}
+  .title-wrap{padding:16px 8px} .title-main{font-size:30px;letter-spacing:5px} .title-note{margin-top:16px;font-size:11.5px}
+  .footbar{padding:8px 14px calc(10px + var(--tq-bottom-inset))}
+  .btn{padding:11px 14px;min-height:44px;font-size:14px}
+  .ending-vessel{width:180px} .ending-title{font-size:23px} .ending{padding:10px 0}
+  .load .vessel-wm{height:340px} .yupi span{font-size:30px} .yline{margin-top:52px;width:60px}
+  .load .seal{width:44px;margin-top:14px} .load .snote{margin-top:12px;font-size:12px}
+  .load .lt{margin-top:28px} .load .lt .m{font-size:32px;letter-spacing:6px} .load .lt .s{font-size:13px;margin-top:8px}
+  .load .lt .btn{margin-top:22px;width:180px}
+  .dlg-dock{padding:13px 12px 10px;max-height:36%} .dlg-box{padding:12px 14px 10px}
+  .dlg-box .dtext{font-size:15px;line-height:1.7;min-height:52px}
+  .sp-zone .slot{width:132px;height:176px} .sp-zone .pname{font-size:11px}
+  .iv-steps .st{font-size:9.5px} .iv-hint{font-size:10.5px} .iv-mini{padding:5px 10px}
+}
+@media (max-height:668px){
+  .topbar{padding:7px 12px 5px} .topbar .act-name{font-size:13.5px}
+  .timebar{padding:6px 6px 3px;margin:0 12px 6px}
+  .tb-line{height:18px} .tb-line .base,.tb-line .prog{top:8px}
+  .tb-t{font-size:11px} .tb-n{font-size:8.5px} .tb-dot{width:10px;height:10px} .tb-node.cur .tb-dot{width:15px;height:15px}
+  .main{padding:10px 12px} .memo-cell{height:42px;font-size:11px}
+  .title-main{font-size:27px;letter-spacing:4px}
+  .footbar{padding:7px 12px calc(8px + var(--tq-bottom-inset))}
+  .btn{padding:10px 12px;min-height:44px;font-size:13.5px}
+  .ending-vessel{width:150px} .ending{padding:8px 0}
+  .load .vessel-wm{height:296px} .yupi span{font-size:28px;line-height:1.16} .yupi .col + .col,.yupi .comma + .col{margin-left:30px}
+  .yline{margin-top:40px;width:56px} .load .seal{width:42px;margin-top:12px} .load .snote{margin-top:8px;font-size:11.5px}
+  .load .lt{margin-top:18px} .load .lt .m{font-size:29px;letter-spacing:5px} .load .lt .s{font-size:12.5px;margin-top:7px}
+  .load .lt .btn{margin-top:18px;width:170px}
+  .dlg-box .dtext{font-size:14.5px;line-height:1.65;min-height:48px} .sp-zone .slot{width:118px;height:158px}
+  .dlg-dock{max-height:38%}
+}
+.memory-panel{background:#1E3138;border-color:#2E444C}
+.memory-panel .memo-head{color:#AFC7C1}
+.memory-panel .memo-sub{color:#7E948F}
+.memory-panel .memory-line{color:#DCE8E2}
+.timebar-inline{display:none}
+
+/* ===== VN 结构接线（竖版：立绘区 top:5% + dock 贴底 · 纸卡对话框=基规则 .sp-zone/.dlg-dock/.dlg-box（验稿页 act_vn 原样） · act-op 操作态全宽） ===== */
+.main.act-vn{display:flex;flex-direction:column;padding:0;overflow:hidden}
+/* 操作态（iv/rhythm/touhu/shard）：隐立绘、文档流全宽——act-op 类由 runSteps 经 main.parentNode 落在 .vn-main 上 */
+/* ★立绘排布 v2 的 `.main.act-vn .sp-zone{display:block}`（0,3,0）写在后面，把 `display:none`
+   压掉了 ⇒ 动手小节里立绘从卡片四周透出来（2026-11-01 真实剧情流实测：一件尚宫宫装从卡片上下
+   探出来）。act-op 挂在 .vn-main 上（结构：.main.act-vn > .vn-main.act-op > .sp-zone），
+   所以选择器要按这条链写满，才压得过那 3 个类。 */
+.main.act-vn .vn-main.act-op .sp-zone,
+.main.act-vn .act-op .sp-zone,
+.main.act-vn.act-op .sp-zone,
+.vn-main.act-op .sp-zone{display:none}
+.vn-main.act-op .vn-doc{flex:1;min-height:0;max-height:none}
+@media not all and (min-aspect-ratio:6/5) and (min-width:900px){
+  .act-vn .vn-main{flex:1;display:flex;flex-direction:column;min-height:0}
+  .act-vn .vn-doc{margin-top:auto;flex-shrink:0;max-height:46%;min-height:120px;overflow-y:auto;padding:0 16px}
+  .vn-main.act-op .vn-doc{padding:0 16px 12px}
+  /* 对话/叙事框与四键整体上移 45px（用户 10-28 要求；下方留白，避免贴屏幕底边） */
+  .act-vn .dlg-dock{position:relative;left:auto;right:auto;bottom:auto;
+    margin:0 -16px var(--tq-dock-lift,45px);padding:14px 14px 12px}
+  .act-vn .dlg-dock .step-tail{display:block;width:150px;margin:10px auto 0;padding:8px 0;font-size:12px;border-radius:15px;background:rgba(243,238,227,.9);color:#2B3A3A;border:none;font-family:inherit}
+}
+
+/* ==================== VN 四键与浮层（2026-10-23 实装：自动/跳过/回看/手札 + 占台退场） ==================== */
+.log-key{cursor:pointer;user-select:none}
+.log-key:active{transform:translateY(1px)}
+.log-key.on{background:var(--deep);color:var(--yue);border-color:var(--deep)}
+.log-key.dis{opacity:.35;pointer-events:none}
+/* 装饰件入手：顶部瞬态 toast（不进文档流——修「汤饼碗框常驻压键条」） */
+.tq-toast{position:absolute;left:50%;top:calc(var(--tq-top-inset,0px) + 58px);z-index:35;
+  margin:0;min-width:190px;text-align:center;pointer-events:none;
+  transform:translateX(-50%);box-shadow:0 6px 18px rgba(31,59,58,.3);
+  animation:tqtoast 1.9s ease forwards}
+.tq-toast .name{font-size:15px}
+@keyframes tqtoast{0%{opacity:0;transform:translate(-50%,-8px)}12%,78%{opacity:1;transform:translate(-50%,0)}100%{opacity:0;transform:translate(-50%,-6px)}}
+/* 回看/手札：底部卷层（选择态下回看/自动/跳过由 .dis 置灰） */
+.log-ov{position:absolute;left:0;right:0;top:0;bottom:0;z-index:30;background:rgba(34,56,60,.55);display:flex;align-items:flex-end;
+  padding-top:var(--tq-top-inset);padding-bottom:var(--tq-bottom-inset);
+  padding-left:var(--tq-left-inset);padding-right:var(--tq-right-inset)}
+.log-panel{background:var(--paper);width:100%;max-height:76%;border-radius:16px 16px 0 0;padding:14px 16px calc(12px + var(--tq-bottom-inset));display:flex;flex-direction:column;box-shadow:0 -10px 32px rgba(31,59,58,.3)}
+.log-ph{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;flex-shrink:0}
+.log-pt{font-size:14px;font-weight:600;color:var(--tu);letter-spacing:2px}
+.log-pc{font-size:12px;color:var(--deep);border:1px solid var(--qing);border-radius:12px;padding:3px 12px;background:transparent;font-family:inherit}
+.log-list{overflow-y:auto;flex:1;min-height:0;-webkit-overflow-scrolling:touch}
+.log-item{border-left:3px solid var(--qing);background:var(--yue);border-radius:0 8px 8px 0;padding:9px 12px;margin:7px 0;font-size:13.5px;line-height:1.75}
+.log-item b{display:block;font-size:12px;color:var(--deep);margin-bottom:2px}
+.log-item.last{border-left-color:var(--gold)}
+.memo-ov .memo-grid{margin-bottom:4px}
+.memo-ov .shard-detail{margin-top:10px}
+/* 占台小节容器（史料卡/回忆等独占舞台） */
+.shard-occ .shard-toast{margin-top:0}
+.mem-occ .panel{margin-top:0}
+@media (min-aspect-ratio:6/5) and (min-width:900px){
+  .log-panel{max-width:560px;margin:0 auto 18px;border-radius:16px}
+  .log-item{font-size:14px}
+}
+/* ---------- 轨③素材接线（10-24 回退机制实装）：碎片转台 canvas + 预设图样角标 + 手札设置行 ---------- */
+.shard-stage{display:flex;justify-content:center;margin:4px 0 0}
+.shard-sprite{width:168px;height:168px}
+.shard-vec{position:relative;width:168px;height:150px;display:flex;align-items:center;justify-content:center}
+.shard-vec svg{width:104px;height:96px}
+.prop-badge{position:absolute;right:0;bottom:2px;font-size:9px;color:var(--muted);background:rgba(243,238,227,.88);border:1px solid var(--qing);border-radius:8px;padding:1px 7px;letter-spacing:1px}
+.prop-sprite{width:70%;max-width:200px}
+.memo-set{display:flex;align-items:center;flex-wrap:wrap;margin-top:10px;border-top:1px dashed rgba(94,140,138,.4);padding-top:10px}
+.memo-set-h{font-size:11px;color:var(--muted);letter-spacing:1px;margin-right:8px}
+.memo-set-chip{font-family:inherit;font-size:11.5px;color:var(--deep);background:var(--fen);border:1px solid var(--qing);border-radius:13px;padding:4px 12px;margin-right:8px}
+.memo-set-chip.on{background:var(--deep);color:var(--yue)}
+/* 游戏系统状态位（只读）：虚线边、不可点感 —— 表示「保留未启用 / 单轨」 */
+.memo-set-chip.kept{cursor:default;border-style:dashed}
+.memo-set-tip{font-size:10px;color:var(--muted)}
+.memo-cell canvas{width:36px;height:36px}
+@media (max-height:740px){
+  .shard-sprite{width:144px;height:144px}
+  .shard-vec{width:144px;height:128px}
+}
+@media (max-height:668px){
+  .shard-sprite{width:120px;height:120px}
+  .shard-vec{width:120px;height:106px}
+  .memo-cell canvas{width:30px;height:30px}
+}
+
+/* ===== S8 手札长卷版（s8_scroll 就位后激活；默认回退现行网格版，零变化） ===== */
+.memo-s8{position:relative;display:flex;flex-direction:column}
+.memo-s8 .s8-scroll{position:relative;flex:1;min-height:220px;margin:6px 0;background:linear-gradient(#F7F3E6,#F2EDDC);border:1px solid var(--qing);border-radius:8px;overflow:hidden}
+/* ★2026-11-02：`inset:0` 是 Chrome 87+ 语法，宿主 WebView（Chrome 61）不认 ⇒ 绝对定位元素
+ * 四边全 auto、宽高塌成 0，整幅近看图不显示。改为老写法 left/right/top/bottom。 */
+.memo-s8 .s8-bg{position:absolute;left:0;right:0;top:0;bottom:0;background-size:contain;background-repeat:no-repeat;background-position:center;opacity:.92}
+.memo-s8 .s8-rod{position:absolute;left:6px;right:6px;height:12px;background:linear-gradient(#3E4E4B,#232D2B);border-radius:6px;z-index:3;pointer-events:none}
+.memo-s8 .s8-rod-top{top:5px}.memo-s8 .s8-rod-bot{bottom:5px}
+.memo-s8 .s8-jian{position:absolute;top:8px;right:8px;width:22px;height:84px;background:var(--paper);border:1px solid var(--qing);font-family:"KaiTi","STKaiti",serif;font-size:13px;letter-spacing:4px;color:var(--deep);display:flex;align-items:center;justify-content:center;z-index:4;pointer-events:none;writing-mode:vertical-rl}
+.memo-s8 .s8-jian::before{content:"";position:absolute;top:0;left:0;right:0;height:6px;background:#9A3B2E}
+.memo-s8 .s8-body{position:absolute;top:22px;bottom:22px;left:8px;right:8px}
+.memo-s8 .s8-slot{position:absolute;width:28px;height:28px;border:1.5px dashed #C4BCA4;border-radius:7px;display:flex;align-items:center;justify-content:center;font-size:9px;color:#B0A88C;z-index:2;pointer-events:none}
+.memo-s8 .s8-slot.got{border-style:solid;border-color:#B08D46;color:#B08D46;font-weight:bold}
+.memo-s8 .s8-slot.tl{left:6px;top:6px}.memo-s8 .s8-slot.tr{right:6px;top:6px}.memo-s8 .s8-slot.bl{left:6px;bottom:6px}.memo-s8 .s8-slot.br{right:6px;bottom:6px}
+.memo-s8 .s8-stage{position:absolute;left:0;right:0;top:0;bottom:0}
+.memo-s8 .s8-title{position:absolute;left:0;right:0;top:4px;text-align:center;font-family:"KaiTi","STKaiti",serif;font-size:16px;letter-spacing:6px;color:var(--deep);z-index:5;pointer-events:none}
+.memo-s8 .s8-count{position:absolute;left:0;right:0;bottom:4px;text-align:center;font-size:12px;color:#7A756A;z-index:5;pointer-events:none}
+.memo-s8 .s8-node{position:absolute;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:12px;color:#B8B09A;cursor:default;z-index:6}
+.memo-s8 .s8-node.ungot{border:1.5px dashed #B8B09A;background:rgba(251,249,242,.6)}
+.memo-s8 .s8-node.got{border:2px solid var(--deep);background:var(--paper);overflow:hidden;box-shadow:0 2px 6px rgba(46,59,56,.25);cursor:pointer}
+.memo-s8 .s8-node.got canvas{width:100%;height:100%;display:block}
+.memo-s8 .s8-node .s8-dot{position:absolute;top:-5px;right:-5px;width:13px;height:13px;border-radius:50%;background:#8FB5B0;color:#fff;font-size:8.5px;line-height:13px;text-align:center;pointer-events:none}
+/* 近看浮层：瓷片放大居中 + 拖动旋转观赏 */
+.memo-s8 .s8-viewer{position:absolute;left:0;right:0;top:0;bottom:0;background:rgba(46,59,56,.55);z-index:30;display:none;align-items:flex-end;
+  padding:var(--tq-top-inset) var(--tq-right-inset) var(--tq-bottom-inset) var(--tq-left-inset)}
+.memo-s8 .s8-viewer[data-on]{display:flex}
+.memo-s8 .s8-viewer-sheet{background:var(--paper);width:100%;border-radius:14px 14px 0 0;padding:14px 16px 18px;position:relative}
+.memo-s8 .s8-viewer-close{position:absolute;top:8px;right:10px;width:26px;height:26px;border:none;background:#E4DECC;border-radius:50%;font-size:13px;color:var(--ink)}
+.memo-s8 .s8-viewer-stage{height:260px;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 42%,#FDFCF6,#F1ECDC 78%);border:1px solid var(--qing);border-radius:10px;overflow:hidden;margin-bottom:10px;position:relative}
+.memo-s8 .s8-viewer-stage .shard-sprite{width:200px;height:200px;border-radius:50%;box-shadow:0 6px 18px rgba(46,59,56,.28)}
+.memo-s8 .s8-viewer-name{font-size:15px;color:var(--deep);margin-bottom:3px}
+.memo-s8 .s8-viewer-tag{display:inline-block;font-size:10px;background:#E3EDE9;color:var(--deep);border-radius:4px;padding:1px 7px}
+.memo-s8 .s8-viewer-quote{font-size:12.5px;margin-top:6px}
+.memo-s8 .s8-viewer-source{font-size:10.5px;color:#8B8574;margin-top:4px}
+.memo-s8 .s8-viewer-chip{position:absolute;top:8px;right:44px;font-size:10.5px;background:#E3EDE9;color:var(--deep);border:1px solid var(--qing);border-radius:10px;padding:2px 10px}
+/* lat-long 全方位旋转画布（近看单枚瓷片 / 纸槌瓶） */
+.shard-ll{width:200px;height:200px;display:block;cursor:grab;outline:none;margin:8px auto 2px}
+.shard-ll:active{cursor:grabbing}
+.memo-s8 .s8-viewer-stage .shard-ll{width:200px;height:200px;margin:0}
+.shard-detail-rot{width:200px;margin:6px auto 2px;text-align:center;position:relative}
+/* 内壁静态帧角标 + 「内壁细看」按钮（2026-10-28 交互补强） */
+.shard-detail-rot .prop-badge.inner-badge{right:0;bottom:0}
+.shard-inner-btn{display:block;margin:4px auto 8px;font-size:11px;line-height:1.6;padding:3px 12px;
+  border-radius:12px;border:1px solid #5E8C8A;background:#E3EDE9;color:#1F3B3A;cursor:pointer;
+  font-family:inherit;width:auto}
+.shard-inner-btn:active{background:#D2E3DE}
+.shard-detail-rot .shard-ll{width:200px;height:200px}
+.shard-detail-rot .shard-sprite{width:200px;height:200px;display:block;margin:0 auto}
+.shard-detail-rot-tag{text-align:center;font-size:10px;color:#8B8574;margin:2px 0 6px}
+.vessel-vec{width:150px;height:235px;display:flex;align-items:center;justify-content:center;margin:6px auto}
+.vessel-vec svg{width:100%;height:100%}
+@media (max-width:430px){.shard-ll{width:168px;height:168px}.shard-detail-rot{width:168px}.shard-detail-rot .shard-ll,.shard-detail-rot .shard-sprite{width:168px;height:168px}.vessel-vec{width:130px;height:204px}}
+@media (max-width:360px){.shard-ll{width:132px;height:132px}.shard-detail-rot{width:132px}.shard-detail-rot .shard-ll,.shard-detail-rot .shard-sprite{width:132px;height:132px}.vessel-vec{width:104px;height:166px}}
+.ending-main{justify-content:center}
+.footbar .follow-btn{width:232px;margin:0 auto 8px}
+
+/* ==================== 瓷心回忆 · 独立沉浸舞台（2026-10-28）
+ * 与主线 VN dock 分家：暗场 + 题签 + 立绘槽 + 单句对话 + 进度；「一页文字」只留手札。 */
+.mem-stage{position:absolute;left:0;right:0;top:0;bottom:0;z-index:36;display:flex;flex-direction:column;
+  background:radial-gradient(circle at 50% 38%,#33505A 0%,#1E3138 55%,#131F24 100%);
+  padding:calc(14px + var(--tq-top-inset,0px)) calc(18px + var(--tq-right-inset)) calc(16px + var(--tq-bottom-inset)) calc(18px + var(--tq-left-inset));
+  cursor:pointer;overflow:hidden}
+.mem-stage-h{flex-shrink:0;text-align:center}
+.mem-stage-t{font-size:15px;font-weight:600;letter-spacing:2px;color:#BFD6CF}
+.mem-stage-e{font-size:11px;color:rgba(191,214,207,.6);margin-top:4px;letter-spacing:1px}
+.mem-stage-prog{font-size:10px;color:rgba(191,214,207,.45);margin-top:6px;letter-spacing:2px}
+/* ★与幕内对话画面对齐（2026-10-29）：普通画面 .dlg-box 底距屏底 88px
+ * （dock-lift 45 + dock 内边距 12 + 四键条 31）。回忆舞台按同一基准上移，
+ * 文字块底也落在 88px ⇒ 两个画面切换时视线不跳。 */
+.mem-stage-body{flex:1;min-height:0;display:flex;flex-direction:column;align-items:center;
+  justify-content:flex-end;padding-bottom:var(--mem-lift,56px)}
+/* ★立绘尺寸（2026-11-01 放大）：原 132×176 在 390 屏上只占 1/3 宽，
+ * 回忆是「看人」的段落，脸看不清楚就白费了 AI 立绘。
+ * 现按「人物高 ≈ 舞台可用高的 4 成」定档，宽度按全身像 2:3 走，其余交给 object-fit:contain。
+ * 三个断点各自 ×1.7，比例关系保持不变。 */
+/* 回忆立绘舞台：两槽常驻（2026-11-02 双人演出改版）。
+ * 单人 = 居中（与旧版同尺寸）；双人 = 左右各 44%，右位镜像（主线同款惯例）。
+ * 说话方全彩，在听方/旁白压暗（Ren'Py auto-highlight 惯例）；入场/换位有平滑过渡。 */
+.mem-figs{flex:1;min-height:0;position:relative;width:100%;margin-bottom:var(--mem-gap,24px)}
+/* 尺寸（2026-11-02 v2）：回忆立绘放大到与正文同高。
+ * 原先写死 height:298px + width:44%，2:3 的图在窄盒里是「宽定高」⇒ 人物只有 234px 高、
+ * 头宽 34px，比正文（人物 487px、头宽 77px）小一半，看着像远景小人。
+ * 现在盒高交给容器（height:100%），缩放系数由 JS 按「目标人物高度 = 正文同款 487px」算
+ * （TP.frameScale(key, slot, 对面站着?, 盒宽, 盒高)），所以盒宽怎么变，人物都一样高。 */
+.mem-fig{position:absolute;bottom:0;height:100%;width:50%;display:flex;align-items:flex-end;justify-content:center;opacity:.95;
+  /* 宽度不做过渡：盒宽直接由 data-n 决定，size 由 k 补偿；给宽度加补间会让「量到的盒宽」
+   * 与「补间后的盒宽」不一致，人物高度就会抖（实测差 6%）。 */
+  transition:left .38s ease,right .38s ease,filter .32s ease}
+.mem-figs[data-n="1"] .mem-fig{left:0;right:0;margin:0 auto;width:50%}
+.mem-figs[data-n="2"] .mem-fig{width:50%}
+.mem-figs[data-n="2"] .mem-fig[data-side="l"]{left:0}
+.mem-figs[data-n="2"] .mem-fig[data-side="r"]{right:0}
+.mem-fig[data-st="on"]{filter:none;z-index:2}
+.mem-fig[data-st="off"]{filter:brightness(.66) saturate(.85);z-index:1}
+/* 立绘尺寸与镜像（2026-11-02 v3）
+ * ★尺寸改用**像素高度**而不是 scale：`--mem-h` 由 JS 按「与正文同高」算出（见 TP.frameScale），
+ *   图按 height 定尺寸、width:auto 保持原比例 ⇒ 盒宽怎么变都不影响人物高度
+ *   （旧版用 transform:scale(k)，k 要除以「盒宽推出的 baseH」，盒宽一变就跟着抖）。
+ * 镜像仍走 scaleX（只翻不缩放），与尺寸互不干扰。 */
+.mem-fig svg,.mem-fig img{
+  width:auto;max-width:none;height:var(--mem-h,298px);
+  object-fit:contain;object-position:bottom;
+  transform-origin:bottom center;
+  transform:scaleX(var(--mem-sx,1));
+}
+/* 横屏：竖屏的 44% 双槽会把两人推到屏幕两端（1280 下槽宽 547px）⇒ 收拢到中部，
+ * 尺寸略放大补横屏的纵向余量（Chrome 61：只用 max-width，不用 clamp/min）。 */
+@media (min-aspect-ratio:6/5){
+  /* 横屏：竖向余量少、横向余量多 ⇒ 盒宽收窄、两人往中间靠，盒高仍交给容器，
+   * 人物高度由 JS 按「正文同款」算，不随这个宽度变。 */
+  .mem-figs[data-n="1"] .mem-fig{width:38%}
+  .mem-figs[data-n="2"] .mem-fig{width:38%}
+  .mem-figs[data-n="2"] .mem-fig[data-side="l"]{left:8%}
+  .mem-figs[data-n="2"] .mem-fig[data-side="r"]{right:8%}
+}
+.mem-plate{align-self:center;font-size:12px;letter-spacing:2px;color:#0F1B1E;background:#AFC7C1;border-radius:9px;padding:2px 14px;margin-bottom:10px}
+.mem-line{max-width:560px;width:100%;text-align:center;font-size:16px;line-height:1.95;color:#E4EFE9;padding:0 6px}
+.mem-line.mem-in{animation:memIn .28s ease}
+@keyframes memIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+.mem-stage-hint{flex-shrink:0;text-align:center;font-size:11px;letter-spacing:2px;color:rgba(191,214,207,.55)}
+@media (min-width:700px) and (max-aspect-ratio:119/100){
+  /* 高度不再写死：盒高交给容器，人物高度由 JS 算（height:100% 已在基规则里） */
+  .mem-figs[data-n="1"] .mem-fig{width:42%}
+  .mem-line{font-size:18px}
+}
+@media (max-height:668px){
+  .mem-figs[data-n="1"] .mem-fig{width:44%}
+  .mem-figs{margin-bottom:16px}
+  .mem-line{font-size:14.5px;line-height:1.8}
+  .mem-stage-body{padding-bottom:56px}
+}
+
+/* 手札 · 回忆剧情卡（一页文字；暂无回放入口） */
+.mem-card{margin-top:14px;background:#F3EFE2;border:1px solid #B08A5C;border-radius:12px;padding:14px 14px 12px}
+.mem-card-h{font-size:14px;font-weight:600;color:#8A6A32;letter-spacing:1px}
+.mem-card-era{font-size:11px;color:var(--muted);margin-top:3px}
+.mem-card-line{font-size:13.5px;line-height:1.85;margin-top:8px;color:var(--ink)}
+.mem-card-foot{font-size:11px;color:var(--muted);margin-top:10px;padding-top:8px;border-top:1px dashed rgba(176,138,92,.4)}
+.mem-teaser{margin-top:12px;font-size:12px;color:var(--muted);border:1px dashed var(--qing);border-radius:10px;padding:9px 12px;text-align:center}
+@media (max-height:740px){.mem-card-line{font-size:13px}}
+
+/* ==================== 平台安全区避让（2026-10-28 · §3.11 getWindowInfo）
+ * 顶栏右侧单独避让：各断点只改基准值 --tq-tb-pad-r，避让量由 JS 写入 --tq-topbar-right。
+ * 放在文件末尾：同特异性下覆盖上面各媒体查询里的 .topbar padding 简写。 */
+:root{--tq-tb-pad-r:16px}
+.topbar{padding-right:calc(var(--tq-tb-pad-r) + var(--tq-topbar-right))}
+@media (min-width:700px) and (max-aspect-ratio:119/100){:root{--tq-tb-pad-r:32px}}
+@media (min-aspect-ratio:6/5) and (min-width:900px){:root{--tq-tb-pad-r:28px}}
+@media (max-height:740px){:root{--tq-tb-pad-r:14px}}
+@media (max-height:668px){:root{--tq-tb-pad-r:12px}}
+
+/* ==================== VN 立绘摆放（2026-10-31 v2 · 单人 / 双人同框）
+ * 结构：.sp-zone = 整块舞台（绝对定位、裁边、不吃鼠标，层级压在对话框之下）；
+ *       .slot.sp-fig = 独立定位盒，各自锚地、各自做 FIT 归一化——不再依赖父容器的 flex 排布。
+ *       这样双人时「互不重叠」是**结构性保证**：fitFor 把人物本体（bw）夹在各自半幅内，
+ *       不是靠调数值凑出来的。
+ * 单人：宽 88%（≤420）居中；半身浮在对话框上沿，全身踩舞台底（脚被框压住）。
+ * 双人：左右两槽各占 50%，贴左/贴右；同框时每人头部约为单人的 3/4（同类作品惯例），
+ *       在听的一方只压暗降饱和（**不缩放**——缩放会让头顶下沉、被读成两人不一样大）。
+ * 语义：data-side = main / l / r（off = 空槽不出场）；data-st = on（说话）/ off（在听）。
+ * Chrome 61：禁 min()/max()/clamp()，宽度一律百分比 + max-width。
+ */
+:root{
+  --fig-dock-gap:24px;   /* 立绘底 ↔ 对话框顶 的呼吸间距 */
+  --fig-duo-dim:.66;     /* 在听者亮度：Ren'Py auto-highlight 惯例约 0.43~0.6；古画再暗就脏，取 0.66 */
+}
+.main.act-vn .sp-zone{
+  position:absolute; left:0; right:0; top:0; bottom:0;
+  display:block; padding:0; pointer-events:none; z-index:1; overflow:hidden;
+}
+.main.act-vn .sp-zone .slot.sp-fig{
+  position:absolute; bottom:0; height:90%;
+  border:0; border-radius:0; background:none; padding:0; overflow:hidden;
+  transform-origin:bottom center;
+  transition:transform .22s ease, opacity .22s ease, filter .22s ease;
+}
+.main.act-vn .sp-fig.has-real{ border:0; }
+.main.act-vn .sp-fig .fig-meta{ display:none; }   /* 名字只在对话框名牌出现一次，立绘上不叠字牌 */
+/* 素材缺失角标（只在 TQA.resolve 真的 fail 时挂上；点开素材自检页） */
+.main.act-vn .sp-fig .fig-miss{
+  position:absolute; left:8px; top:8px; z-index:5;
+  font-size:11px; letter-spacing:1px; line-height:1.4; text-decoration:none;
+  color:#F6E7D5; background:rgba(139,64,36,.86); border:1px solid rgba(246,231,213,.5);
+  border-radius:10px; padding:3px 9px;
+}
+
+/* —— 单人：居中、88%、上限 420（中屏另加档） —— */
+.main.act-vn .sp-fig[data-side="main"]{ left:0; right:0; margin:0 auto; width:88%; max-width:420px; }
+
+/* —— 双人：贴左 / 贴右，各占一半 —— */
+.main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-side="l"]{ left:0; width:50%; }
+.main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-side="r"]{ right:0; width:50%; }
+/* 在听者：只压暗、略降饱和（2026-11-02 裁定：**不再缩放**——底对齐的立绘一缩，
+ * 头顶就下沉 20~40px，实机被读成「范质比郭荣高一截」；VN 惯例也只用 tint 不用 resize） */
+.main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-st="off"]{
+  filter:brightness(var(--fig-duo-dim)) saturate(.85);
+  z-index:1;
+}
+/* 说话方：全彩置顶；**接管说话那一刻**轻微「挺身」一次（关键帧结束回到 scale(1)，
+ * 不驻留任何缩放 ⇒ 两人头顶静止时永远齐平）。属性 off→on 变化时动画自动触发一次。 */
+.main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-st="on"]{ z-index:2; animation:tqFigPop .36s ease; }
+@keyframes tqFigPop{ 0%{transform:scale(1)} 45%{transform:scale(1.018)} 100%{transform:scale(1)} }
+
+/* —— 锚地：全身踩舞台底（脚被对话框压住）/ 半身浮在对话框上沿并留 --fig-dock-gap ——
+ * 选择器必须带满 .sp-zone .slot 一级：否则被上面 5 个类的定位规则压住（2026-10-31 实测踩到，
+ * 症状是半身像不浮起、直接落到舞台底）。 */
+.main.act-vn .sp-zone .slot.sp-fig[data-anchor="stage-bottom"]{ bottom:0; height:90%; }
+.main.act-vn .sp-zone .slot.sp-fig[data-anchor="dock-top"]{
+  bottom:calc(var(--fig-dock-lift,0px) + var(--fig-dock-gap));
+  height:calc(100% - var(--fig-dock-lift,0px) - var(--fig-dock-gap));
+}
+
+/* 图片：一律 contain（cover 会把窄头角色的头顶裁掉），底对齐；缩放原点 bottom center */
+.main.act-vn .sp-fig .fig-real{
+  position:absolute; left:0; top:0; width:100%; height:100%;
+  object-fit:contain; object-position:bottom center;
+  animation:tqFigIn .26s ease both;
+}
+.main.act-vn .sp-zone .slot.sp-fig[data-fit="contain"] .fig-real{ object-fit:contain; object-position:bottom center; }
+.main.act-vn .sp-zone .slot.sp-fig[data-fit="contain"] .fig-real{ transform-origin:bottom center; }
+.main.act-vn .sp-fig .fig-art{ animation:tqFigIn .26s ease both; }
+/* 景别杠杆：--fig-shift-x（头肩重心横向补偿）/ --fig-scale（归一化缩放，数学上不溢出人物）
+ * --fig-sx = 水平缩放分量：正常等于 --fig-scale；双人档按 FACE 朝向表翻转的一方为负值 ⇒ 水平镜像（两人脸朝向彼此）。
+ * 用 scale(sx, sy) 两参数形式而不是再叠一个 scaleX(-1)，是为了保持
+ * 「原点 bottom center + 同一变换链」，位姿计算才能和 fitFor 的 cx 反转对得上。 */
+.main.act-vn .sp-fig .fig-real,
+.main.act-vn .sp-fig .fig-art{
+  transform:translate(var(--fig-shift-x,0px), var(--fig-shift-y,0px)) scale(var(--fig-sx,var(--fig-scale,1)), var(--fig-scale,1));
+  transform-origin:bottom center;
+}
+/* 关键帧里带 scale：animation 的 fill-mode 会盖掉基础 transform，缩放必须写进关键帧才生效 */
+@keyframes tqFigIn{
+  from{opacity:0; transform:translate(var(--fig-shift-x,0px), var(--fig-shift-y,0px)) translateY(8px) scale(var(--fig-sx,var(--fig-scale,1)), var(--fig-scale,1))}
+  to{opacity:1; transform:translate(var(--fig-shift-x,0px), var(--fig-shift-y,0px)) translateY(0) scale(var(--fig-sx,var(--fig-scale,1)), var(--fig-scale,1))} }
+/* 层级：对话框/文本列压在立绘之上——保证文字永不被遮挡（回复/选项亦然） */
+.main.act-vn .vn-doc{ position:relative; z-index:2; }
+.main.act-vn .dlg-dock{ z-index:2; }
+
+/* —— 中屏（竖版 UI，文本列 620）：单人给到 460，避免在 620 宽舞台上显得又瘦又小 —— */
+@media (min-width:700px) and (max-aspect-ratio:119/100){
+  .main.act-vn .sp-fig[data-side="main"]{ max-width:460px; }
+}
+
+/* —— 宽屏（左立绘 / 右文本双栏）：立绘列自带高度，脚贴列底 —— */
+@media (min-aspect-ratio:6/5) and (min-width:900px){
+  .main.act-vn .sp-zone{
+    position:relative; left:auto; right:auto; top:auto; bottom:auto;
+    width:42%; max-width:520px; min-width:320px; flex-shrink:0;
+    /* ★flex-direction 必须显式写 row（2026-11-01 实机定位）：
+     *   基规则 .sp-zone 是 flex-direction:column，媒体查询只改 align/justify 不改主轴，
+     *   于是 `justify-content:center` 落在**垂直**轴上 = 立绘悬在列中间、上下各留一大块，
+     *   而 `align-items:flex-end` 落在水平轴上 = 立绘被推到列右缘。
+     *   横版要的是「水平居中 + 底对齐」，正是 row 下的这两条。 */
+    display:flex; flex-direction:row; align-items:flex-end; justify-content:center;
+    padding:16px 14px 0;
+  }
+  .main.act-vn .sp-zone .slot.sp-fig{
+    position:relative; left:auto; right:auto; bottom:auto; margin:0;
+    width:100%; max-width:none; height:86%;
+  }
+  /* ★双栏里「对话框在右边，不在下面」——dock-top 那套「浮到对话框上沿、留 dock-gap」
+   *   的前提不成立：基规则的 bottom:calc(lift+gap) 在 position:relative 下会变成
+   *   相对上移（实测 lift 617px ⇒ 半身像整块飞出画面），height 也被 lift 吃掉。
+   *   两条锚地规则在这里一律归位为「贴列底、占满可用高」。
+   *   选择器 (0,6,0) 与基规则同特异性，靠后声明生效。 */
+  .main.act-vn .sp-zone .slot.sp-fig[data-anchor]{ bottom:0; height:100%; }
+  /* ★双人同框（2026-11-01 调研定案）：全身像 × 2 需要更多横向空间，
+   *   42% 的立绘列会让两人挤成一条。扩到 50%（上限 640），
+   *   两槽各 47%（中间留 6% 的天然中缝 ≈ 37px），各自贴列边。
+   *   中缝是「结构性」的：两槽宽度之和 94% < 100%，不靠 fitFor 夹紧去凑。 */
+  .main.act-vn .sp-zone[data-duo="1"]{ width:50%; max-width:640px; justify-content:space-between; }
+  .main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-side="l"]{ left:0; width:47%; height:100%; }
+  .main.act-vn .sp-zone[data-duo="1"] .sp-fig[data-side="r"]{ right:0; width:47%; height:100%; }
+}
+
+/* ===== 手札 · 瓷片全屏查看器（2026-11-01） =====
+ * 覆盖式弹层：进入/退出整体进出，手札列表滚动位置不受影响。
+ * Chrome 61 基线：不用 flex gap / :has() / clamp() / aspect-ratio。 */
+.shv{position:fixed;left:0;right:0;top:0;bottom:0;z-index:80;display:flex;overflow:hidden;
+  align-items:flex-end;justify-content:center}
+.shv-mask{position:absolute;left:0;right:0;top:0;bottom:0;background:rgba(18,26,26,.62);
+  animation:shvFade .18s ease-out both}
+.shv-sheet{position:relative;width:100%;max-width:100%;min-width:0;height:92%;max-height:92%;
+  background:var(--paper);color:var(--ink);overflow-x:hidden;
+  border-radius:16px 16px 0 0;padding:12px 14px calc(14px + env(safe-area-inset-bottom,0px));
+  display:flex;flex-direction:column;overflow-y:hidden;
+  animation:shvRise .22s cubic-bezier(.22,.61,.36,1) both;
+  box-shadow:0 -8px 30px rgba(0,0,0,.28)}
+@keyframes shvFade{from{opacity:0}to{opacity:1}}
+/* 入场只做位移、不做透明度：弹层任何一帧都不透明，避免动画期「透出手札」的闪底 */
+@keyframes shvRise{from{transform:translateY(26px)}to{transform:translateY(0)}}
+
+.shv-head{position:relative;display:flex;align-items:center;flex-shrink:0;
+  padding:0 40px 8px 0;border-bottom:1px solid rgba(94,140,138,.28)}
+.shv-name{font-size:15px;font-weight:600;color:var(--deep)}
+.shv-prov{margin-left:8px;font-size:11px;font-weight:400;color:var(--muted)}
+.shv-x{position:absolute;right:0;top:-4px;flex-shrink:0;width:34px;height:34px;line-height:32px;
+  text-align:center;border-radius:50%;border:1px solid rgba(94,140,138,.45);
+  background:transparent;color:var(--deep);font-size:15px}
+.shv-x:active{background:rgba(94,140,138,.15)}
+
+/* 舞台吃掉剩余高度；canvas 用 contain 在框内等比居中 */
+.shv-stage{position:relative;flex:1 1 auto;min-height:220px;min-width:0;width:100%;
+  margin:10px 0 6px;border-radius:12px;overflow:hidden;
+  display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 50% 42%,#F7F4E9 0%,#E8E4D6 62%,#DCD7C7 100%)}
+.shv-stage svg,.shv-stage canvas{display:block;width:100%;height:100%;object-fit:contain}
+/* 旋转档源帧仅 160px：约束在 250px 内（放大 1.5× 以内），糊感明显降低 */
+.shv-stage[data-mode="rot"] canvas{width:auto;height:auto;max-width:280px;max-height:280px}
+.shv-stage .shard-vec,.shv-stage .vessel-vec{display:flex;align-items:center;justify-content:center;height:100%}
+
+.shv-hud{display:flex;flex-wrap:wrap;align-items:center;justify-content:center;flex-shrink:0;margin:2px 0 8px}
+.shv-hud-i{font-size:11.5px;color:var(--muted);letter-spacing:.4px;
+  padding:2px 9px;margin:0 3px;border-radius:10px;background:rgba(143,181,176,.16)}
+
+.shv-bar{display:flex;flex-wrap:wrap;justify-content:center;flex-shrink:0;max-width:100%;overflow:hidden}
+.shv-b{font-size:12px;color:var(--deep);background:transparent;border:1px solid rgba(94,140,138,.42);
+  border-radius:13px;padding:5px 7px;margin:3px 2px;min-width:42px}
+.shv-b:active{background:rgba(94,140,138,.16);transform:scale(.96)}
+.shv-b[data-on="1"]{background:var(--qing);color:#fff;border-color:var(--qing)}
+.shv-b[data-off="1"]{opacity:.42}
+.shv-b-wide{min-width:64px}
+/* 静态内壁档：俯视/平视/仰视/自动旋转 与旋转无关，隐藏避免点到无效按钮 */
+.shv-bar[data-inner="1"] .shv-b-rot{display:none}
+
+.shv-tip{font-size:11px;color:var(--muted);text-align:center;margin:6px 0 0;line-height:1.6;padding:0 6px}
+.shv-quote{margin-top:10px;font-size:13px;line-height:1.9;color:var(--ink);max-height:24vh;overflow-y:auto;
+  padding:9px 11px;background:rgba(143,181,176,.10);border-left:2px solid var(--qing);border-radius:0 6px 6px 0}
+.shv-src{margin-top:4px;font-size:11px;color:var(--muted);text-align:right}
+
+body.shv-open .main{overflow:hidden}
+
+/* 手札格子按下反馈：给出「可点」的即时回应 */
+.memo-cell[role="button"]{cursor:pointer;transition:transform .12s ease,box-shadow .12s ease}
+.memo-cell[role="button"]:active{transform:scale(.94);box-shadow:inset 0 0 0 2px var(--deep)}
+.memo-cell[role="button"]:focus{outline:2px solid var(--deep);outline-offset:2px}
+
+@media (min-width:700px){
+  .shv{align-items:center}
+  .shv-sheet{max-width:560px;border-radius:16px;height:88%;max-height:88%}
+}
+
+/* ===== 小游戏过渡对话框（tang / folk … 所有动手小节收尾共用）=====
+   钉在舞台下沿：成品留在上方看得见，不压交互画面。
+   高度只由字号+内边距决定、宽度 100%，竖屏/中屏/横屏一套写法都成立。
+   ★这段曾被并发写入冲掉一次（2026-11-01 23:37），改 app.css 前先 grep mg-sheet。 */
+.mg-sheet{position:absolute;left:0;right:0;bottom:0;z-index:5;display:flex;align-items:center;
+  padding:7px 12px 8px;background:#FBF6EA;border-top:1px solid #D8CFBA;
+  border-radius:0 0 12px 12px;cursor:pointer;animation:mgSheetIn 180ms ease-out both}
+.mg-sheet-tx{flex:1;min-width:0;padding-right:8px}
+.mg-sheet-t1{font-size:12px;line-height:1.35;color:#3A3A34}
+.mg-sheet-t2{font-size:11px;line-height:1.4;color:#6A6254;margin-top:1px;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.mg-sheet-go{flex:0 0 auto;font-family:inherit;font-size:12px;color:#FBF7EE;background:#3F6B58;
+  border:0;border-radius:14px;padding:6px 14px;cursor:pointer}
+@keyframes mgSheetIn{from{transform:translateY(8px);opacity:0}to{transform:translateY(0);opacity:1}}
+@media (max-width:400px){
+  .mg-sheet{padding:6px 10px 7px}
+  .mg-sheet-t1{font-size:11.5px}
+  .mg-sheet-t2{font-size:10.5px}
+  .mg-sheet-go{padding:5px 12px;font-size:11.5px}
+}
+
+
+/* ==================== 章节结算纸卡（2026-11-01 · 竖版排版修复）====================
+ * 定位：绝对铺满舞台（.main.act-vn），与对话布局彻底解耦——
+ *   竖版不再把文字送到人物胸口，横版也不会漂到舞台左上。
+ * 层级：暗场(6) > 立绘(1)/对话(2)，文字永远在最上层，不可能被人物压住。
+ * 排版：kicker(眉题) → title(幕名) → 细线 → body(正文) → next(下一时辰)，四级层次。
+ * Chrome 61 兼容：不使用 min()/max()/clamp()/flex gap，宽度用 % + max-width。 */
+.act-settle{
+  position:absolute; left:0; right:0; top:0; bottom:0; z-index:6;
+  display:flex; align-items:center; justify-content:center;
+  padding:calc(16px + var(--tq-top-inset,0px)) calc(16px + var(--tq-right-inset,0px))
+          calc(16px + var(--tq-bottom-inset,0px)) calc(16px + var(--tq-left-inset,0px));
+  /* 压暗：让立绘退成剪影而非「半个身子露在卡片外」——卡片是主角，人物只留气氛。
+   * backdrop-filter 在 Chrome 61（小红书小工具 WebView）不支持，被忽略后靠这层不透明度兜底。 */
+  background:radial-gradient(circle at 50% 42%, rgba(22,36,40,.80) 0%, rgba(10,17,19,.94) 76%);
+  -webkit-backdrop-filter:blur(3px); backdrop-filter:blur(3px);
+  box-sizing:border-box;
+  animation:asFade .32s ease both;
+}
+@keyframes asFade{ from{opacity:0} to{opacity:1} }
+
+.as-card{
+  width:100%; max-width:400px; max-height:100%;
+  overflow-y:auto; -webkit-overflow-scrolling:touch;
+  box-sizing:border-box; text-align:center;
+  background:var(--paper); border:1px solid #C9B79A; border-radius:16px;
+  padding:26px 22px 22px;
+  box-shadow:0 12px 34px rgba(8,18,20,.42);
+  animation:asRise .34s cubic-bezier(.2,.8,.3,1) both;
+}
+@keyframes asRise{ from{opacity:0; transform:translateY(10px)} to{opacity:1; transform:none} }
+
+/* 眉题：小字 + 宽字距，承担「仪式感」，不与幕名抢注意力 */
+.as-kicker{font-size:11.5px; line-height:1.7; letter-spacing:4px; text-indent:4px; color:#8A6A32}
+/* 结算标题：幕名。长幕名（如「终幕 · 广德殿与合瓮」）自动换行，不截断 */
+.as-title{margin-top:8px; font-size:22px; line-height:1.45; font-weight:600; letter-spacing:1px;
+  color:var(--ink); overflow-wrap:break-word; word-break:break-word; hyphens:auto}
+.as-rule{width:44px; height:2px; margin:14px auto; border-radius:1px; background:#B08A5C; opacity:.55}
+/* 正文：默认居中（单句最稳）；超过 3 行由 JS 加 .is-long 转左对齐 */
+.as-body{font-size:14px; line-height:1.95; color:#3E4E4C; text-align:center;
+  overflow-wrap:break-word; word-break:break-word; hyphens:auto}
+.as-body.is-long{text-align:left; line-height:1.85}
+.as-next{margin-top:18px; padding-top:14px; border-top:1px dashed rgba(176,138,92,.45);
+  font-size:12px; line-height:1.7; letter-spacing:1px; color:var(--muted);
+  overflow-wrap:break-word; word-break:break-word}
+
+/* —— 矮屏：整体压一档，避免卡片顶到屏幕两端 —— */
+@media (max-height:740px){
+  .as-card{padding:22px 20px 18px}
+  .as-title{font-size:20px; margin-top:6px}
+  .as-rule{margin:12px auto}
+  .as-body{font-size:13.5px; line-height:1.85}
+  .as-next{margin-top:15px; padding-top:12px}
+}
+@media (max-height:668px){
+  .as-card{padding:18px 18px 16px; border-radius:14px}
+  .as-kicker{font-size:11px; letter-spacing:3px; text-indent:3px}
+  .as-title{font-size:18px; line-height:1.4; margin-top:5px}
+  .as-rule{margin:10px auto}
+  .as-body{font-size:13px; line-height:1.75}
+  .as-next{margin-top:12px; padding-top:10px; font-size:11.5px}
+}
+/* —— 宽屏：卡片放宽、字号提一档；位置仍居中，不参与左右分栏 —— */
+@media (min-aspect-ratio:6/5) and (min-width:900px){
+  .as-card{max-width:520px; padding:32px 34px 28px}
+  .as-title{font-size:24px}
+  .as-body{font-size:15px; line-height:2}
+}
+
+/* 拾得页 · 细看/收下 并排（2026-11-02） */
+.shard-acts{display:flex;align-items:center;justify-content:center;flex-wrap:wrap}
+.shard-acts .btn{margin:4px 5px}
+.shard-stage{cursor:zoom-in}
+
+/* ===== 校字 · 原文对照（2026-11-02 · grep: iv-src） =====
+   ★不是"底部抽屉"而是**整幅换页**：早先做成 bottom sheet，实测在 390×844 的舞台上
+   高约 120px = 画面 40%，正好盖住残页的第二行 —— 玩家每次比对都得"开着看不见字、
+   关了看不见对照"。改成整幅覆盖：开＝只看正字，收＝只看残页，交替着记。
+   这也不是妥协：对照与残页同屏就等于替玩家把逐字比对做完了（§26.1 的口径）。
+   收起时 opacity:0 + pointer-events:none，不占位、不吃手势。 */
+.iv-src{position:absolute;inset:0;z-index:6;background:#F7F5EE;border-radius:11px;
+  padding:14px 16px;display:flex;flex-direction:column;justify-content:flex-start;
+  opacity:0;pointer-events:none;transition:opacity .16s ease;overflow:auto}
+.iv-src.on{opacity:1;pointer-events:auto}
+.iv-src-h{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.iv-src-h b{font-size:12.5px;font-weight:600;color:#3F4A45;letter-spacing:.02em}
+.iv-src-h em{font-style:normal;font-size:9.5px;color:#8A7B5E;flex:1 1 auto;min-width:0;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.iv-src-x{flex:0 0 auto;font-family:inherit;font-size:10px;line-height:1;color:#527E79;
+  background:#FFFDF6;border:1px solid #E6DFCE;border-radius:9px;padding:4px 9px}
+.iv-src-sub{font-size:9.5px;color:#8A8378;margin:6px 0 8px;letter-spacing:.01em;flex:0 0 auto}
+.iv-src-tbl{margin:auto 0;flex:0 0 auto}
+.iv-src-row{display:flex;align-items:stretch}
+.iv-src-row + .iv-src-row{margin-top:7px}
+.iv-src-row span{flex:1 1 0;text-align:center;font-size:15px;line-height:1.55;
+  font-family:"Songti SC","STSong","SimSun",serif;color:#527E79;
+  border-bottom:1px solid rgba(82,126,121,.28)}
+.iv-src-f{font-size:8.5px;color:#9A968C;margin-top:8px;flex:0 0 auto;line-height:1.5}
+.iv-src-btn{position:absolute;right:8px;bottom:8px;z-index:6;font-family:inherit;
+  font-size:10px;line-height:1;padding:5px 9px;border-radius:11px;
+  background:rgba(255,253,246,.94);border:1px solid #E6DFCE;color:#6B6560;
+  letter-spacing:.02em}
+.iv-src-btn:active{background:#FFFDF6}
+
+/* ==================== 横屏（≥900px）内容宽度收束（2026-11-02 · 任务7） ====================
+ * 桌面/横屏全宽下，占台浮层（瓷片卡、选项、差事帖、回看）与对话框会通栏拉满：
+ * 按钮被拉成长条、文本一行四十字，观感变形。这里统一收束到可读栏宽并居中。
+ * VN 的「左立绘列 + 右对话栏」分栏（.main.act-vn）有自己的设计，不在收束之列。 */
+@media (min-width:900px){
+  .shard-occ, .shard-occ .shard-toast, .choice-box{ max-width:640px; margin-left:auto; margin-right:auto; width:100%; box-sizing:border-box; }
+  .choice-box .opt{ max-width:640px; }
+  .dlg-box{ max-width:640px; }
+  .log-strip{ max-width:640px; margin-left:auto; margin-right:auto; }
+  .cs-ov .cs-sheet, .cr-overlay .cr-panel{ max-width:620px; }
+  .log-panel{ max-width:560px; margin-left:auto; margin-right:auto; }
+  /* 瓷片卡里的整宽按钮恢复「内容宽 + 居中」，不再通栏 */
+  .shard-occ .btn{ width:auto; min-width:220px; display:block; margin-left:auto; margin-right:auto; }
+}
+
+/* ==================== 横屏（≥900px）半身立绘限高（2026-11-02 · 任务6） ====================
+ * 半身像（640² 胸像：尚食令/郭宗训/王溥等）contain 进「高 86%」的立绘列时，
+ * 1:1 的图会撑到与列同宽再被高度截着看，横屏下显得比全身像还大。
+ * 横屏给半身像单独压一档：槽高降到 64%，胸像自然缩小到与全身像协调。 */
+@media (min-width:900px){
+  .main.act-vn .sp-zone .slot.sp-fig[data-body="bust"]{ height:64% !important; max-height:64% !important; }
+  .main.act-vn .sp-zone[data-anchor="dock-top"] .slot.sp-fig[data-body="bust"],
+  .main.act-vn .sp-zone[data-anchor="dock-left"] .slot.sp-fig[data-body="bust"],
+  .main.act-vn .sp-zone[data-anchor="dock-right"] .slot.sp-fig[data-body="bust"]{ height:64% !important; max-height:64% !important; }
+}
+
+/* 回忆舞台的瓷心背景层（S7 三层视差）：压在渐变之上、正文之下 */
+.mem-stage .mem-bg{position:absolute;left:0;right:0;top:0;bottom:0;z-index:0;overflow:hidden;
+  opacity:.85;pointer-events:none}
+.mem-stage > *:not(.mem-bg){position:relative;z-index:1}
