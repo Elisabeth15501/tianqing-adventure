@@ -613,17 +613,21 @@
    *     且是「可见部分」不交叠，不是靠调数值碰运气。 */
   var DUO_GAP = 14;      /* 人物本体与半幅边缘的最小像素间隙 */
   var DUO_BLEED = 0.12;  /* 半身像允许向「画面外侧」多占的屏宽比例 */
-  var DUO_BODY_BLEED = 0.05; /* 全身像双人档外溢额度（11-02 试验）：治「举臂姿势 bwv 宽 → kSide 被压 → 同框头小一圈」。
-   * ★只在横版宽屏媒体查询下生效（与 css/app.css 的 .main 断点同条件）——390 竖版 / 768 中屏
-   *   的双人中缝基线（30px / 82px）已锁定，额度会把两人往两边推（实测 30→77 / 82→142），不能带过去。 */
+  var DUO_BODY_BLEED = 0.05; /* 全身像双人档外溢额度。
+   * ★11-02 下午起**全断点生效**（原只给横版宽屏）：因为口径改成"统一尺寸"后，
+   *   举觞/佩刀一类宽姿势会把整对拖小（张永德 0.568 把两人压到 408px，比基准小 16%）。
+   *   中缝不会因此变窄 —— 外溢额度一半用来放宽 kSide、一半用来把人物往外推（tc），
+   *   两者相抵后**内缘位置不动**（数学上：宽度 +bleed、中心外移 +bleed/2）。
+   *   多出来的是外侧的袖子/衣摆，落在屏幕边被裁，观感是"贴边"而不是"交叠"。 */
   var WIDE_MQ = (typeof matchMedia === 'function') ? matchMedia('(min-aspect-ratio:6/5) and (min-width:900px)') : null;
 
-  /* ★身高标准表（2026-11-02 用户逐条裁定；郭荣 = 1.00 为基准）
-   * 量纲是「人物渲染高度 ÷ 郭荣的渲染高度」，**不是缩放比**：各张图在画布里本来就大小不一
-   * （王朴 e2 头顶在 10.9%、范质 a1 在 2.1%，同一 k 出来能差一成），所以落地一律换算成
-   * k = C × S ÷ (1−y0)，C 为两人共用的基准（见 duoPlan）。
-   * 分档刻意留出可读台阶：相若 1.00 / 稍高 1.04 / 稍矮 0.95~0.96 / 矮 0.91~0.92 / 明显矮 0.86。
-   * 4% 在 390 档约 17px 头顶差，一眼读得出「谁略高」；再小就与渲染误差混在一起了。 */
+  /* ★身高标准表（2026-11-02 上午用户逐条裁定 · 同日下午**停用**）
+   * 停工原因：用户看过实机后改口径 —— 同框人物要**大小一致**，以「郭荣 × 范质」那一场
+   * 的观感为基准；逐人 0.86~1.04 的差异反而读成"一大一小"。
+   * 代码保留（USE_STATURE 开关），要切回「论身份高矮」只改这一个布尔。
+   * 量纲是「人物渲染高度 ÷ 郭荣的渲染高度」，不是缩放比：各张图在画布里本来就大小不一
+   * （王朴 e2 头顶在 10.9%、范质 a1 在 2.1%，同一 k 出来能差一成）。 */
+  var USE_STATURE = false;
   var STATURE = {
     guorong: 1.00,                                              /* 基准 · 官家 */
     ligu: 1.00, guowei: 1.00,                                   /* 与郭荣身高相若 */
@@ -640,6 +644,20 @@
     var s = STATURE[key];
     return (typeof s === 'number' && s > 0) ? s : STATURE_DEF;
   }
+
+  /* ★统一尺寸（2026-11-02 下午口径，现行）
+   * 基准 = 「郭荣 × 范质」同框时两人的大小：该对 cap 取小者 1.814，取整 1.81。
+   * 落地不按 k 相等、按**渲染高度相等**：各图头顶在画布里的位置不同（y0 0.021~0.13），
+   * 同一个 k 出来范质会比郭荣高 6%，所以用 k = C × REF_HF ÷ hf 把高度拉齐。
+   * 一对里谁空间更紧就按谁让（C 取两者 cap 折算后的较小值）⇒ 两人始终一样高、也不会裁切。 */
+  var DUO_K_REF = 1.81;
+  /* 跪姿/坐姿系数（2026-11-02 用户要求「按跪姿实际体量」）：
+   * 跪坐的人头顶约在站立者的 0.75 处；素材是「跪着但把画布撑满」，只能整体缩放表达，
+   * 代价是头也跟着小 25%（读起来像"坐得稍靠后"，可接受）。只在**同框里有站立者**时生效，
+   * 两边都跪或单人时不动 —— 那时没有参照物，缩了反而莫名其妙。 */
+  var KNEE_K = 0.75;
+  /* 参照身长：郭荣 a1 的「头顶→图底」占比（0.921）。全库以它为 1 个"标准身高"。 */
+  var REF_HF = 1 - ((FIT.guorong_a1 && FIT.guorong_a1.y0) || 0.079);
 
   function duoGeom(slot, key, useSlot, stageW) {
     var f = fitRow(key, useSlot);
@@ -659,7 +677,7 @@
      *   一类姿势会把 bwv 撑宽（张永德 0.612），kSide 被压到 1.40，同框头宽比郭荣
      *   小 27%。给 5% 额度让 kSide 松一档：外侧多出画的是后背/衣摆，可接受。 */
     var bleed = (f.ratio >= 0.9) ? Math.round((stageW || W * 2) * DUO_BLEED)
-              : (DUO_BODY_BLEED && WIDE_MQ && WIDE_MQ.matches) ? Math.round((stageW || W * 2) * DUO_BODY_BLEED) : 0;
+              : Math.round((stageW || W * 2) * DUO_BODY_BLEED);
     var kTop = H / Math.max(1, baseH * (1 - y0));
     var kSide = (W + bleed - DUO_GAP * 2) / Math.max(1, bwVis * baseW);
     /* ★头宽归一化（10-31 加 · 11-02 撤出双人档）
@@ -689,21 +707,33 @@
     Object.keys(map).forEach(function (k) {
       if (map[k] !== slot && map[k] && map[k]._tqKey) { other = map[k]; }
     });
-    /* ★一人一个 k（2026-11-02）：两侧共用同一个「基准身高」C，各自 k = C × S ÷ hf。
-     *   渲染高度 = baseH × k × hf = baseH × C × S ⇒ 两人的高度比**恰好**等于 S 之比，
-     *   与各自画布留白、y0 无关；而 C 取两人几何上限的较小者，所以谁也裁不出槽。 */
-    var sMe = stature(slot._tqKey);
-    var C = me.cap * me.hf / sMe;
-    if (other) {
-      var ot = duoGeom(other, other._tqKey, other._tqSlot, stageW);
-      /* 混景别（胸像 × 全身）：k 不可通约，互不牵制 —— 否则同场里换一个人说话，
-       *   另一个人的尺寸会跟着跳（5-1 夜宴 官家 会忽大忽小），那是硬伤。
-       *   同景别则取「谁更吃空间就按谁让」：C 由最紧的那一方决定。 */
-      if (ot && Math.abs(ot.ratio - me.ratio) < 0.05) {
-        C = Math.min(C, ot.cap * ot.hf / stature(other._tqKey));
-      }
+    /* ★统一尺寸（现行）：两人落到同一「渲染高度」，并让最紧的一方定基准 C。
+     *   高度 = baseH × k × hf，要让它 = baseH × C × REF_HF ⇒ k = C × REF_HF ÷ hf。
+     *   C 的上限 = 各方 cap 折算到 REF_HF 口径后的较小值 ⇒ 谁都不会被裁出槽。
+     * ★跪姿折扣要先折进上限（÷cut）：王朴跪坐档 cap 只有 1.73，若不折算，他会把
+     *   站着的郭荣一起拖小（C 被压到 1.63）—— 明明他自己要乘 0.75，本来就占不满。 */
+    var ot = other ? duoGeom(other, other._tqKey, other._tqSlot, stageW) : null;
+    var sameCam = !!(ot && Math.abs(ot.ratio - me.ratio) < 0.05);
+    var cutMe = (me.kneel && ot && !ot.kneel) ? KNEE_K : 1;
+    var cutOt = (ot && ot.kneel && !me.kneel) ? KNEE_K : 1;
+    var C;
+    if (USE_STATURE) {
+      /* 旧口径（停用，保留可切回）：每人各自的身高系数 S，C 取双方 cap×hf÷S 的较小值 */
+      var sMe0 = stature(slot._tqKey);
+      C = me.cap * me.hf / sMe0;
+      if (sameCam) { C = Math.min(C, ot.cap * ot.hf / stature(other._tqKey)); }
+      var k = C * sMe0 / me.hf * cutMe;
+      if (!isFinite(k) || k <= 0) { k = 1; }
+      if (k < 0.55) { k = 0.55; }
+      var tcS = 0.5, Ws = slot.clientWidth || 1;
+      if (me.bleed > 0) { tcS = (slot.getAttribute('data-side') === 'l') ? 0.5 - me.bleed / (2 * Ws) : 0.5 + me.bleed / (2 * Ws); }
+      return { k: k, bw: me.bw, bleed: me.bleed, tc: tcS, C: C, S: cutMe, cap: me.cap };
     }
-    var k = C * sMe / me.hf;
+    C = Math.min(DUO_K_REF, me.cap * me.hf / (REF_HF * cutMe));
+    /* 混景别（胸像 × 全身）：k 不可通约，互不牵制 —— 否则同场里换一个人说话，
+     *   另一个人的尺寸会跟着跳（5-1 夜宴 官家 会忽大忽小），那是硬伤。 */
+    if (sameCam) { C = Math.min(C, ot.cap * ot.hf / (REF_HF * cutOt)); }
+    var k = C * REF_HF / me.hf * cutMe;
     if (!isFinite(k) || k <= 0) { k = 1; }
     if (k < 0.55) { k = 0.55; }   /* 兜底：再小就没有可读性了 */
     /* 有外溢额度时把人物往画面外侧推：溢出的落在屏幕边（被裁），中缝交叠减半 */
@@ -711,7 +741,7 @@
     var W = slot.clientWidth || 1;
     var tc = 0.5;
     if (me.bleed > 0) { tc = (side === 'l') ? 0.5 - me.bleed / (2 * W) : 0.5 + me.bleed / (2 * W); }
-    return { k: k, bw: me.bw, bleed: me.bleed, tc: tc, C: C, S: sMe, cap: me.cap };
+    return { k: k, bw: me.bw, bleed: me.bleed, tc: tc, C: C, S: cutMe, cap: me.cap };
   }
 
   function fitFor(key, slotW, slotH, fit, useSlot, opt) {
@@ -764,22 +794,35 @@
   function shiftFor(key, slotW, slotH, fit) { return fitFor(key, slotW, slotH, fit).x; }
   TP_SHIFT = shiftFor;
 
-  /* ---- 原生朝向表（2026-11-02 逐张判读 AI 立绘头部特写；小图判读不可靠，
-   *   已用 _qa/sheet_faces_big/xl.png 大图终审复核一遍）----
+  /* ---- 原生朝向表（2026-11-02 **第三版**：程序化量测 + 大图人工复核）----
    * 'l' = 原图脸朝左；'r' = 朝右；'' = 端正正面。
-   * ★两处关键纠错：zhangyongde（a1/e1 举杯侧）与 lichongjin 原生**朝右**，
-   *   其余多数朝左或近正面微偏；全组只有 3 个朝右（+guowei）。
-   * 双人档的镜像规则因此**不能**是「右位一律镜像」——那样原生朝左的角色
-   * 在右位（说话方）会被翻成朝外看，两人变成「背对背」。正解（VN 惯例）：
-   *   左槽应朝右（朝向对方）⇒ 原生朝左的镜像；
-   *   右槽应朝左（朝向对方）⇒ 原生朝右的镜像；正面不管站哪边都不翻。 */
+   *
+   * ★★ 前两版为什么是反的：判读用错了线索 —— 「看得见哪只耳朵」被读成了「朝哪边」。
+   *     正确关系恰好相反：**看得见左耳 ⇒ 头转向观者右**（露出的是枕侧之外的那半张脸）。
+   *     两版把这条读反，于是 12 个「朝右」被记成「朝左」，双人档按表去镜像，
+   *     结果**郭荣在每一场都面朝画外**（用户反馈「人物均为背向屏幕」）。
+   *
+   * 现口径（可复算，不靠眼睛）：`_qa/facing_probe.py` 取头顶往下 20% 头身带，
+   *   以幞头（暗部 max(RGB)<96）重心为颅轴，看皮肤（暖亮部）重心偏向哪侧 ——
+   *   3/4 侧脸时脸整体朝鼻尖一侧偏移。偏移量按幞头宽度归一，|dx|<0.02 记「正面」。
+   *   33 张全量跑过一遍，并与 760px 超特写人工核对 **10/10 一致**（郭荣 a1 / 范质 /
+   *   王朴 a1+e2 / 张永德 / 赵匡胤 / 郭荣 a2+a3 / 王溥 / 符后 / 李重进）。
+   *
+   * 结论：本批素材**几乎全部原生朝右**，例外只有王溥(0.32 版)与郭荣的跪坐档 a2/a3。
+   * 双人档镜像规则不变（左槽朝右、右槽朝左）：左槽「朝左才翻」，右槽「朝右才翻」。 */
   var FACE = {
-    guorong: 'l', fuhou: 'l', guowei: 'r', fengdao: 'l',
-    fanzhi: 'l', ligu: 'l', wangpu: 'l', wangpu2: 'l',
-    zhangyongde: 'r', zhaokuangyin: 'l', yinchongyi: 'l', lichongjin: 'r',
-    nvguan: 'l', shiguan: 'l', shaonian: 'l', zongxun: 'l',
-    qijulang: 'l', shanggong: 'l', sizheng: 'l', shangshiling: ''
+    guorong: 'r', fuhou: 'r', guowei: 'r', fengdao: 'r',
+    fanzhi: 'r', ligu: 'r', wangpu: 'r', wangpu2: 'l',
+    zhangyongde: 'r', zhaokuangyin: 'r', yinchongyi: 'r', lichongjin: 'r',
+    nvguan: 'r', shiguan: 'r', shaonian: 'r', zongxun: 'r',
+    qijulang: 'l', shanggong: 'r', sizheng: 'r', shangshiling: 'r'
   };
+  /* 同名不同档会有不同朝向（郭荣跪坐档 a2/a3 是朝左画的）—— 按「角色_槽」覆盖。 */
+  var FACE_SLOT = { guorong_a2: 'l', guorong_a3: 'l' };
+  function faceOfKey(key, slot) {
+    if (slot) { var o = FACE_SLOT[key + '_' + slot]; if (o) { return o; } }
+    return FACE[key] || '';
+  }
 
   /* 把 fit 模式与横向补偿写到槽上：
    * - 全身像（ratio<0.9）→ cover：铺满舞台，人物本就不宽，左右裁到的是空白；
@@ -806,7 +849,7 @@
     var mir = false;
     if (slot.getAttribute('data-duo') === '1') {
       var dSide = slot.getAttribute('data-side');
-      var nf = FACE[key] || '';
+      var nf = faceOfKey(key, useSlot);
       if (dSide === 'l') { mir = (nf === 'l'); }
       else if (dSide === 'r') { mir = (nf === 'r'); }
     }
@@ -881,9 +924,17 @@
     },
     meta: function (key) { return FIG[key] || FIG.DEFAULT; },
     /* 原生朝向：'l' 脸朝左 / 'r' 朝右 / '' 正面（回忆舞台镜像也用它，与双人档同一事实源） */
-    faceOf: function (key) { return FACE[key] || ''; },
+    faceOf: function (key, slot) { return faceOfKey(key, slot); },
     /* 身高系数（郭荣=1.00）：双人档与回忆舞台共用同一张表 */
     statureOf: function (key) { return stature(key); },
+    /* 回忆舞台的尺寸系数（与主线同口径）：统一 1.0；只有「跪姿 + 同框里有人站着」才打折 */
+    frameScale: function (key, slot, partnerStanding) {
+      var f = fitRow(key, slot);
+      var kn = !!(f && f.kneel);
+      var s = USE_STATURE ? stature(key) : 1;
+      if (kn && partnerStanding) { s *= KNEE_K; }
+      return s;
+    },
     /* QA 口：把某槽的双人档内部量（cap / hf / C / k）吐出来，验收脚本按它核对身高比 */
     duoDebug: function (slot) { return duoPlan(slot); },
     /* 名牌文本：speaker 原样优先，缺省用角色称谓 */

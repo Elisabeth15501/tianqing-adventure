@@ -1365,21 +1365,35 @@
         if (global.TP.realInto) { global.TP.realInto(s, key, slotArt); }
         setCast(side, { key: key, slot: slotArt });
       }
-      /* 面向彼此（2026-11-02）：不再「右位一律镜像」——按原生朝向判定，
-       * 与主线双人档同一规则：左位要朝右（原生朝左的翻），右位要朝左（原生朝右的翻）。
-       * 郭威↔郭荣：郭荣(朝左)在左位翻→朝右，郭威(朝右)在右位翻→朝左，两人对视。 */
+      /* 面向彼此（2026-11-02 三版）：按原生朝向判定 —— 左位要朝右（原生朝左的翻），
+       * 右位要朝左（原生朝右的翻）。★朝向必须**带槽**查：郭荣跪坐档 a2/a3 与站姿档
+       * 是反着画的，只按角色查表会把它们翻到画外。 */
       if (global.TP.faceOf) {
-        var nf = global.TP.faceOf(key);
+        var nf = global.TP.faceOf(key, slotArt);
         var mir = (side === 'L') ? (nf === 'l') : (nf === 'r');
         s.setAttribute('data-mir', mir ? '1' : '0');
-        /* 身高标准（2026-11-02）：回忆舞台与主线双人档共用同一张 STATURE 表。
-         * 这里只做「等比缩小 + 底对齐」，缩的是 .mem-fig 内的 img/svg（transform-origin: bottom）
-         * ⇒ 脚不动、只有头顶下沉，读起来才是「这个人矮」，而不是「这张图变小了」。 */
-        var sv = (global.TP.statureOf ? global.TP.statureOf(key) : 1) || 1;
-        s.style.setProperty('--mem-s', sv);
+        s.setAttribute('data-st', s.getAttribute('data-st') || 'off');
         s.style.setProperty('--mem-sx', mir ? -1 : 1);
       }
       s.style.display = '';
+    }
+    /* 回忆舞台的尺寸（2026-11-02 下午口径）：统一 1.0（以郭荣为准），
+     * 只有「跪姿 + 同框里有人站着」时按跪姿体量打折（见 TP.frameScale）。
+     * 必须等两人都在台上再算 —— 单侧 paintSide 时还不知道对面跪不跪。 */
+    function applyMemScale() {
+      var list = [[slotL, castL], [slotR, castR]];
+      var anyStanding = false;
+      list.forEach(function (t) {
+        var e = t[1];
+        var f = e && global.TP.fitOf ? global.TP.fitOf(e.key, e.slot) : null;
+        if (e && !(f && f.kneel)) { anyStanding = true; }
+      });
+      list.forEach(function (t) {
+        var n = t[0], e = t[1];
+        if (!e) { return; }
+        var sv = (global.TP.frameScale ? global.TP.frameScale(e.key, e.slot, anyStanding) : 1) || 1;
+        n.style.setProperty('--mem-s', sv);
+      });
     }
     function paint() {
       var st = steps[k];
@@ -1415,6 +1429,7 @@
       void line.offsetWidth; /* 强制重排：重放淡入 */
       line.classList.add('mem-in');
       hint.textContent = (k === steps.length - 1) ? '轻点 · 回神' : '轻点继续';
+      applyMemScale();   /* 台上名册定了才算尺寸（要知道对面跪不跪） */
     }
     function advance() {
       if (k < steps.length - 1) { k += 1; paint(); return; }
