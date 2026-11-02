@@ -938,13 +938,27 @@
     faceOf: function (key, slot) { return faceOfKey(key, slot); },
     /* 身高系数（郭荣=1.00）：双人档与回忆舞台共用同一张表 */
     statureOf: function (key) { return stature(key); },
-    /* 回忆舞台的尺寸系数（与主线同口径）：统一 1.0；只有「跪姿 + 同框里有人站着」才打折 */
-    frameScale: function (key, slot, partnerStanding) {
+    /* 回忆舞台的缩放系数：目标是「人物渲染高度 = 正文双人档同款」（390 档 487px）。
+     * 传入盒子尺寸后按像素目标反解 k —— 所以盒宽怎么变，人物都一样高（旧版写死 298px 盒高，
+     * 2:3 的图在窄盒里由宽度决定高度，人物只有 234px，比正文小一半）。
+     * 跪姿折扣与 STATURE 与正文同一套。 */
+    frameScale: function (key, slot, partnerStanding, W, H) {
       var f = fitRow(key, slot);
-      var kn = !!(f && f.kneel);
-      var s = USE_STATURE ? stature(key) : 1;
-      if (kn && partnerStanding) { s *= KNEE_K; }
-      return s;
+      if (!f) { return 1; }
+      var kn = !!f.kneel;
+      var cut = (kn && partnerStanding) ? KNEE_K : 1;
+      var s = (USE_STATURE ? stature(key) : 1) * cut;
+      if (!W || !H) { return s; }                  /* 没给盒子尺寸时退回纯系数（兼容旧调用） */
+      var baseW = Math.min(W, H * f.ratio);
+      var baseH = baseW / f.ratio;
+      var hf = Math.max(0.5, 1 - ((typeof f.y0 === 'number') ? f.y0 : 0.08));
+      var vw = (global.innerWidth || 390);
+      /* 正文同款目标高度：292 × DUO_K_REF × REF_HF ≈ 487（390 档），随屏宽小幅缩放 */
+      var target = 292 * DUO_K_REF * REF_HF * Math.max(0.86, Math.min(1.35, vw / 390));
+      var k = target * s / Math.max(1, baseH * hf);
+      var kTop = H / Math.max(1, baseH * hf);
+      if (k > kTop * 0.98) { k = kTop * 0.98; }
+      return k;
     },
     /* QA 口：把某槽的双人档内部量（cap / hf / C / k）吐出来，验收脚本按它核对身高比 */
     duoDebug: function (slot) { return duoPlan(slot); },

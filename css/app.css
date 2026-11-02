@@ -680,31 +680,41 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
  * 单人 = 居中（与旧版同尺寸）；双人 = 左右各 44%，右位镜像（主线同款惯例）。
  * 说话方全彩，在听方/旁白压暗（Ren'Py auto-highlight 惯例）；入场/换位有平滑过渡。 */
 .mem-figs{flex:1;min-height:0;position:relative;width:100%;margin-bottom:var(--mem-gap,24px)}
-.mem-fig{position:absolute;bottom:0;height:298px;display:flex;align-items:flex-end;justify-content:center;opacity:.95;
-  transition:left .38s ease,right .38s ease,width .38s ease,filter .32s ease}
-.mem-figs[data-n="1"] .mem-fig{left:0;right:0;margin:0 auto;width:224px}
-.mem-figs[data-n="2"] .mem-fig{width:44%}
-.mem-figs[data-n="2"] .mem-fig[data-side="l"]{left:2%}
-.mem-figs[data-n="2"] .mem-fig[data-side="r"]{right:2%}
+/* 尺寸（2026-11-02 v2）：回忆立绘放大到与正文同高。
+ * 原先写死 height:298px + width:44%，2:3 的图在窄盒里是「宽定高」⇒ 人物只有 234px 高、
+ * 头宽 34px，比正文（人物 487px、头宽 77px）小一半，看着像远景小人。
+ * 现在盒高交给容器（height:100%），缩放系数由 JS 按「目标人物高度 = 正文同款 487px」算
+ * （TP.frameScale(key, slot, 对面站着?, 盒宽, 盒高)），所以盒宽怎么变，人物都一样高。 */
+.mem-fig{position:absolute;bottom:0;height:100%;width:50%;display:flex;align-items:flex-end;justify-content:center;opacity:.95;
+  /* 宽度不做过渡：盒宽直接由 data-n 决定，size 由 k 补偿；给宽度加补间会让「量到的盒宽」
+   * 与「补间后的盒宽」不一致，人物高度就会抖（实测差 6%）。 */
+  transition:left .38s ease,right .38s ease,filter .32s ease}
+.mem-figs[data-n="1"] .mem-fig{left:0;right:0;margin:0 auto;width:50%}
+.mem-figs[data-n="2"] .mem-fig{width:50%}
+.mem-figs[data-n="2"] .mem-fig[data-side="l"]{left:0}
+.mem-figs[data-n="2"] .mem-fig[data-side="r"]{right:0}
 .mem-fig[data-st="on"]{filter:none;z-index:2}
 .mem-fig[data-st="off"]{filter:brightness(.66) saturate(.85);z-index:1}
-/* 镜像按原生朝向（data-mir，JS 依 FACE 表写入）：目标是同框两人脸朝向彼此。
- * 旧规则「右位一律镜像」会让原生朝左的角色在右位变成朝外看，两人背对背。
- * ★2026-11-02：镜像与身高合并成一条 transform —— --mem-sx（±1）与 --mem-s（身高系数，
- *   与主线双人档同一张 STATURE 表）。分两条规则会互相覆盖（后写的赢），
- *   所以统一在这里拼成 scale(sx, s)，原点 bottom center ⇒ 脚不动、只压头顶。 */
+/* 立绘尺寸与镜像（2026-11-02 v3）
+ * ★尺寸改用**像素高度**而不是 scale：`--mem-h` 由 JS 按「与正文同高」算出（见 TP.frameScale），
+ *   图按 height 定尺寸、width:auto 保持原比例 ⇒ 盒宽怎么变都不影响人物高度
+ *   （旧版用 transform:scale(k)，k 要除以「盒宽推出的 baseH」，盒宽一变就跟着抖）。
+ * 镜像仍走 scaleX（只翻不缩放），与尺寸互不干扰。 */
 .mem-fig svg,.mem-fig img{
-  width:100%;height:100%;object-fit:contain;object-position:bottom;
+  width:auto;max-width:none;height:var(--mem-h,298px);
+  object-fit:contain;object-position:bottom;
   transform-origin:bottom center;
-  transform:scale(var(--mem-sx,1), var(--mem-s,1));
+  transform:scaleX(var(--mem-sx,1));
 }
 /* 横屏：竖屏的 44% 双槽会把两人推到屏幕两端（1280 下槽宽 547px）⇒ 收拢到中部，
  * 尺寸略放大补横屏的纵向余量（Chrome 61：只用 max-width，不用 clamp/min）。 */
 @media (min-aspect-ratio:6/5){
-  .mem-figs[data-n="1"] .mem-fig{width:264px;height:348px}
-  .mem-figs[data-n="2"] .mem-fig{width:250px;height:340px}
-  .mem-figs[data-n="2"] .mem-fig[data-side="l"]{left:18%}
-  .mem-figs[data-n="2"] .mem-fig[data-side="r"]{right:18%}
+  /* 横屏：竖向余量少、横向余量多 ⇒ 盒宽收窄、两人往中间靠，盒高仍交给容器，
+   * 人物高度由 JS 按「正文同款」算，不随这个宽度变。 */
+  .mem-figs[data-n="1"] .mem-fig{width:38%}
+  .mem-figs[data-n="2"] .mem-fig{width:38%}
+  .mem-figs[data-n="2"] .mem-fig[data-side="l"]{left:8%}
+  .mem-figs[data-n="2"] .mem-fig[data-side="r"]{right:8%}
 }
 .mem-plate{align-self:center;font-size:12px;letter-spacing:2px;color:#0F1B1E;background:#AFC7C1;border-radius:9px;padding:2px 14px;margin-bottom:10px}
 .mem-line{max-width:560px;width:100%;text-align:center;font-size:16px;line-height:1.95;color:#E4EFE9;padding:0 6px}
@@ -712,13 +722,12 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 @keyframes memIn{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
 .mem-stage-hint{flex-shrink:0;text-align:center;font-size:11px;letter-spacing:2px;color:rgba(191,214,207,.55)}
 @media (min-width:700px) and (max-aspect-ratio:119/100){
-  .mem-fig{height:372px}
-  .mem-figs[data-n="1"] .mem-fig{width:280px}
+  /* 高度不再写死：盒高交给容器，人物高度由 JS 算（height:100% 已在基规则里） */
+  .mem-figs[data-n="1"] .mem-fig{width:42%}
   .mem-line{font-size:18px}
 }
 @media (max-height:668px){
-  .mem-fig{height:212px}
-  .mem-figs[data-n="1"] .mem-fig{width:160px}
+  .mem-figs[data-n="1"] .mem-fig{width:44%}
   .mem-figs{margin-bottom:16px}
   .mem-line{font-size:14.5px;line-height:1.8}
   .mem-stage-body{padding-bottom:56px}

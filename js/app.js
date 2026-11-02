@@ -1419,6 +1419,7 @@
      * 两个槽常驻，角色首次开口入场并留在台上，说话方全彩、在听方压暗（主线同款语义）。
      * 郭威↔郭荣、冯道↔郭荣、符后↔郭荣三段回忆由此获得标准 VN 对话演出。 */
     var figs = el('div', 'mem-figs');
+    var figsEl = figs;
     var slotL = el('div', 'mem-fig');
     var slotR = el('div', 'mem-fig');
     slotL.setAttribute('data-side', 'l');
@@ -1478,11 +1479,34 @@
         var f = e && global.TP.fitOf ? global.TP.fitOf(e.key, e.slot) : null;
         if (e && !(f && f.kneel)) { anyStanding = true; }
       });
+      /* 尺寸：直接给**像素高度**（--mem-h），目标 = 正文双人档同款（390 档 487px）。
+       * 独立于盒宽 ⇒ 不受「文字撑出滚动条」的瞬时宽度影响（旧版按盒宽反解 k，实测抖 6%）。
+       * ★一人放宽：张臂类宽姿势（郭威 e3 的 bwv 0.635）在半个屏宽里放不下 487 高，
+       *   若硬顶会被屏幕边切掉肩膀。故按「人物本体最多占盒宽 115%」反推上限，
+       *   两人取同一个基准（保身高比不变），宁可整对略小也不切人。 */
+      var vw = global.innerWidth || 390;
+      var base = 292 * 1.81 * 0.921 * Math.max(0.86, Math.min(1.35, vw / 390));
+      var info = [];
       list.forEach(function (t) {
         var n = t[0], e = t[1];
-        if (!e) { return; }
-        var sv = (global.TP.frameScale ? global.TP.frameScale(e.key, e.slot, anyStanding) : 1) || 1;
-        n.style.setProperty('--mem-s', sv);
+        if (!e || !n) { return; }
+        var f = global.TP.fitOf ? global.TP.fitOf(e.key, e.slot) : null;
+        if (!f) { return; }
+        var hf = Math.max(0.5, 1 - ((typeof f.y0 === 'number') ? f.y0 : 0.08));
+        var s = (global.TP.frameScale ? global.TP.frameScale(e.key, e.slot, anyStanding) : 1) || 1;
+        var bwFull = Math.max(0.10, Math.min(1, f.bw || 0.6));
+        var bwUse = (f.ratio < 0.9 && f.bwv) ? Math.min(bwFull, f.bwv) : bwFull;
+        var W = n.clientWidth || 0;
+        info.push({ n: n, hf: hf, s: s, bw: bwUse, W: W, boxH: n.clientHeight || 0 });
+        if (W) {
+          var maxH = (W * 1.15) / (Math.max(0.1, f.ratio) * bwUse);   /* 该人的图高上限 */
+          base = Math.min(base, maxH * hf / s);
+        }
+      });
+      info.forEach(function (it) {
+        var hPx = base * it.s / it.hf;
+        if (it.boxH && hPx > it.boxH * 0.99) { hPx = it.boxH * 0.99; }
+        it.n.style.setProperty('--mem-h', Math.round(hPx) + 'px');
       });
     }
     function paint() {
@@ -1511,7 +1535,10 @@
         slotR.setAttribute('data-st', on === 'R' ? 'on' : 'off');
       } else {
         /* 旁白：台上的人留在原地一起压暗（VN 惯例：旁白不属于任何人），
-         * 不再清空立绘——正是「切换生硬」的来源。在途真图继续放行（cast 未变）。 */
+         * 不再清空立绘——正是「切换生硬」的来源。在途真图继续放行（cast 未变）。
+         * ★data-n 每步都要写：回忆首句常是旁白，不写就会停在 null，
+         *   `.mem-figs[data-n="2"] .mem-fig` 的宽度规则整个失效（实测盒宽塌成 0）。 */
+        figs.setAttribute('data-n', (castL && castR) ? '2' : '1');
         slotL.setAttribute('data-st', 'off');
         slotR.setAttribute('data-st', 'off');
       }
@@ -1545,6 +1572,9 @@
     document.addEventListener('keydown', keyH);
     paint();
     app.appendChild(ov);
+    /* ★入树之后再算一次尺寸：paint() 里第一次算时 .mem-figs 还没进 DOM，clientWidth=0，
+     * 拿不到真盒宽（那条路径只能退回纯系数）。入树后补一次，量到的才是最终盒宽。 */
+    applyMemScale();
   }
 
   /* ---------- 手札 · 瓷片关联回忆剧情卡（一页文字只在此处；暂不设回放入口） ----------
