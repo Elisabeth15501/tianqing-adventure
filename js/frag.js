@@ -221,6 +221,34 @@
     ctx.drawImage(img, fx, fy, ent.fw, ent.fh, 0, 0, w, hgt);
   }
 
+  /* ★2026-11-02 真机「瓷片不显示 / 只剩一条边」的第二层原因：
+   *   12 帧转台里必然有几帧是**侧看成一条线**的（瓷片是薄片，转到 90° 就是这个样子）。
+   *   从第 0 帧开始播，如果第 0 帧恰好是侧视，玩家第一眼看到的就是一条细边，
+   *   判定成「图没加载出来 / 素材缺失」——#14 就是这种（实测起始帧不透明面积仅 4%）。
+   *   这里在开播前扫一遍图集，把「不透明面积最大」的那一帧作为起始帧：
+   *   每帧缩到 24×24 数 alpha，12~36 帧合计几万次像素读，一次性、可忽略。
+   *   找不到就退回 0，绝不因为这件事报错。 */
+  function bestFrameOf(ent, img) {
+    try {
+      var N = (typeof ent.frames === 'number') ? ent.frames
+        : (ent.frames && ent.frames.length) || (ent.cols * ent.rows) || 12;
+      var S = 24;
+      var c = document.createElement('canvas');
+      c.width = S; c.height = S;
+      var g = c.getContext('2d');
+      var best = -1, bi = 0;
+      for (var i = 0; i < N; i += 1) {
+        var fx = (i % ent.cols) * ent.fw, fy = Math.floor(i / ent.cols) * ent.fh;
+        g.clearRect(0, 0, S, S);
+        g.drawImage(img, fx, fy, ent.fw, ent.fh, 0, 0, S, S);
+        var d = g.getImageData(0, 0, S, S).data, on = 0;
+        for (var k = 3; k < d.length; k += 4) { if (d[k] > 40) { on += 1; } }
+        if (on > best) { best = on; bi = i; }
+      }
+      return bi;
+    } catch (e) { return 0; }
+  }
+
   /* 设备像素比：canvas 的 backing store 必须按 DPR 放大，否则 160px 图集
    * 被 CSS 拉到 200px 再乘 3 倍屏 ⇒ 实测约 4.7× 插值，内壁暗纹糊成一片。
    * 上限 3 是性能与内存的折中（3 倍屏已到收益拐点）。 */
@@ -276,9 +304,11 @@
       cv.style.touchAction = 'none';
       cv.setAttribute('role', 'img');
       cv.setAttribute('aria-label', '瓷片内壁（静态·可缩放）');
-      var badge = h('div', 'prop-badge inner-badge',
-        '内壁 ' + Math.round((ent.innerRatio || 0) * 100) + '%');
-      mount.appendChild(badge);
+      /* ★2026-11-02（玩家反馈）：这里原来挂了一个「内壁 86%」的角标。
+       *   那个百分比是**制作侧的验收指标**（可见内壁面积 / 内壁总面积），
+       *   对玩家没有任何意义，反而像"这块瓷片有问题"的提示。
+       *   「内壁待重绘」的提示已在上游删除，这个角标一并撤掉——
+       *   拾得界面里不再出现任何关于素材完成度的文字。 */
       var ctx = cv.getContext('2d');
       if ('imageSmoothingQuality' in ctx) { ctx.imageSmoothingQuality = 'high'; }
       var zoom = 1, panX = 0, panY = 0;
@@ -340,36 +370,92 @@
     });
   };
 
-  TQ.shardStage = function (mount, id) {
-    var key = 'shard-' + id;
-    var tqa = global.TQA;
-    if (!tqa || tqa.kindOut('shard')) { TQ.shardInner(mount, id); return; }
-    tqa.resolve(key, function (stt) {
-      if (!mount.isConnected) { return; }
-      if (stt !== 'ok') { TQ.shardInner(mount, id); return; }
-      var ent = tqa.reg[key], img = tqa.image(key);
-      if (!img) { TQ.shardInner(mount, id); return; }
-      mount.innerHTML = '';
-      var cv = h('canvas', 'shard-sprite');
-      fitCanvas(cv, ent);
-      cv.setAttribute('role', 'img');
-      cv.setAttribute('aria-label', '瓷片转台');
-      mount.appendChild(cv);
-      var ctx = cv.getContext('2d');
-      var f = 0, last = 0, prev = 0, n = 0, sum = 0;
-      function loop(now) {
-        if (!cv.isConnected) { return; } /* 离场即停 */
-        if (prev) {
-          sum += (now - prev); n += 1;
-          if (n === 30) { tqa.watchFeed('shard', sum / n); }
-        }
-        prev = now;
-        if (!last || now - last >= 166) { f = (f + 1) % ent.frames; last = now; drawAtlasFrame(ctx, ent, img, f, cv.width, cv.height); }
-        requestAnimationFrame(loop);
+  /* ---------- 预设转台（预渲染帧序列，拾得占台与手札近看共用） ----------
+   * 为什么用「预设」而不是实时 3D：
+   *   ① 帧是离线渲好的，运行期只做一次 drawImage，低端机也不掉帧；
+   *   ② 状态只有「第几列」，没有可累积的位移/缩放 ⇒ 结构上不可能跑出画布；
+   *   ③ 帧序固定，每次打开看到的都是同一套（不是随机起点）。
+   *
+   * ★两种图集，选法固定：
+   *   shard-LL-<id>（12 yaw × 3 pitch，1920×480）—— 优先，横向 12 帧更顺；
+   *   shard-<id>   （ 4 yaw × 3 pitch， 640×480）—— LL 缺失时退到它。
+   * ★纵向必须**锁一行**：3 行分别是「俯视 +45° / 平视 0° / 仰视 −45°」，
+   *   对薄片来说平视那行几乎是侧看 ⇒ 整行都是一条线（#14 实测覆盖 5~8%，
+   *   而它的俯视/仰视行是 15~22%）。旧代码 f=(f+1)%frames 是**纵向串行**，
+   *   转一圈必然经过这一行 ⇒ 每两秒碎成一条边，玩家看到的就是
+   *   「瓷片一会儿有一会儿没了 / 图没加载出来」。现在锁行 + 行内循环，
+   *   并把起始列取成覆盖最大那一列（bestFrameOf）⇒ 第一眼就是完整的瓷片。 */
+  function atlasFrames(ent) {
+    return (typeof ent.frames === 'number') ? ent.frames
+      : (ent.frames && ent.frames.length) || (ent.cols * (ent.rows || 1));
+  }
+  function playAtlas(mount, ent, img, opt) {
+    if (mount.__tqStop) { try { mount.__tqStop(); } catch (e) {} mount.__tqStop = null; }
+    mount.innerHTML = '';
+    var cv = h('canvas', 'shard-sprite');
+    fitCanvas(cv, ent);
+    cv.style.touchAction = 'none';
+    cv.setAttribute('role', 'img');
+    cv.setAttribute('aria-label', (opt && opt.label) || '瓷片转台');
+    mount.appendChild(cv);
+    var ctx = cv.getContext('2d');
+    var cols = Math.max(1, ent.cols || 1);
+    var start = bestFrameOf(ent, img);
+    var base = Math.floor(start / cols) * cols;   /* 锁行：整轮只在 base..base+cols-1 里循环 */
+    var i = start - base;
+    function draw() { drawAtlasFrame(ctx, ent, img, base + i, cv.width, cv.height); }
+    var auto = true, drag = false, lx = 0, last = 0, prev = 0, n = 0, sum = 0, dead = false;
+    function loop(now) {
+      if (dead || !cv.isConnected) { return; }    /* 离场即停 */
+      if (prev) {
+        sum += (now - prev); n += 1;
+        if (n === 30) { if (global.TQA && global.TQA.watchFeed) { global.TQA.watchFeed('shard', sum / n); } }
       }
-      drawAtlasFrame(ctx, ent, img, f, cv.width, cv.height);
+      prev = now;
+      if (auto && (!last || now - last >= 166)) { i = (i + 1) % cols; last = now; draw(); }
       requestAnimationFrame(loop);
-    });
+    }
+    function down(e) { drag = true; auto = false; lx = e.clientX; e.preventDefault(); }
+    function up() { drag = false; }
+    function move(e) {
+      if (!drag) { return; }
+      var df = Math.round((e.clientX - lx) / 20);   /* 20px ≈ 半列，12 列约 240px 走半圈 */
+      if (df !== 0) { i = ((i + df) % cols + cols) % cols; lx = e.clientX; draw(); }
+    }
+    cv.addEventListener('pointerdown', down);
+    window.addEventListener('pointerup', up);
+    cv.addEventListener('pointermove', move);
+    mount.__tqStop = function () {
+      dead = true;
+      cv.removeEventListener('pointerdown', down);
+      window.removeEventListener('pointerup', up);
+      cv.removeEventListener('pointermove', move);
+    };
+    draw();
+    requestAnimationFrame(loop);
+  }
+  /* 取「优先 LL、退 4×3 图集、再退内壁帧」那一条链，成功就交给 playAtlas。 */
+  function mountAtlas(mount, id, cb) {
+    var tqa = global.TQA;
+    if (!tqa || tqa.kindOut('shard')) { cb(false); return; }
+    var keys = ['shard-LL-' + id, 'shard-' + id];
+    function tryAt(k) {
+      if (k >= keys.length) { cb(false); return; }
+      var key = keys[k];
+      if (!tqa.reg[key]) { tryAt(k + 1); return; }
+      tqa.resolve(key, function (stt) {
+        if (!mount.isConnected) { return; }
+        if (stt !== 'ok') { tryAt(k + 1); return; }
+        var img = tqa.image(key);
+        if (!img) { tryAt(k + 1); return; }
+        playAtlas(mount, tqa.reg[key], img, { label: '瓷片预设转台' });
+        cb(true);
+      }, { hot: true });
+    }
+    tryAt(0);
+  }
+  TQ.shardStage = function (mount, id) {
+    mountAtlas(mount, id, function (ok) { if (!ok) { TQ.shardInner(mount, id); } });
   };
   TQ.shardStill = function (mount, id) {
     var key = 'shard-' + id;
@@ -383,46 +469,13 @@
       var cv = h('canvas', 'shard-still');
       fitCanvas(cv, ent);
       mount.appendChild(cv);
-      drawAtlasFrame(cv.getContext('2d'), ent, img, 0, cv.width, cv.height);
+      drawAtlasFrame(cv.getContext('2d'), ent, img, bestFrameOf(ent, img), cv.width, cv.height);
     });
   };
-  /* 近看模式（S8 手札）：瓷片放大居中 + 拖动旋转观赏（atlas 12 帧转台擦洗）。
-   * 默认 6fps 自转；拖动即暂停、松手停留当前帧；重新调用本函数即恢复自转。
-   * chrome 红线：切帧一律 canvas drawImage（禁 background-position 动画）；pointer 系手势 + touch-action:none 防滚动。 */
+  /* 近看 / 拾得占台的「转动看看」：同一条预设转台。
+   * 与旧版的差别：不再纵向串行扫 36 格，也不再有任何可累积的缩放/平移状态。 */
   TQ.shardViewer = function (mount, id) {
-    var key = 'shard-' + id;
-    var tqa = global.TQA;
-    if (!tqa || tqa.kindOut('shard')) { TQ.shardInner(mount, id); return; }
-    tqa.resolve(key, function (stt) {
-      if (!mount.isConnected) { return; }
-      if (stt !== 'ok') { TQ.shardInner(mount, id); return; }
-      var ent = tqa.reg[key], img = tqa.image(key);
-      if (!img) { TQ.shardInner(mount, id); return; }
-      mount.innerHTML = '';
-      var cv = h('canvas', 'shard-sprite');
-      fitCanvas(cv, ent);
-      cv.style.touchAction = 'none';
-      mount.appendChild(cv);
-      var ctx = cv.getContext('2d');
-      var f = 0, last = 0, prev = 0, n = 0, sum = 0, auto = true, drag = false, lx = 0;
-      function draw() { drawAtlasFrame(ctx, ent, img, f, cv.width, cv.height); }
-      function loop(now) {
-        if (!cv.isConnected) { return; }
-        if (prev) { sum += (now - prev); n += 1; if (n === 30) { tqa.watchFeed('shard', sum / n); } }
-        prev = now;
-        if (auto && (!last || now - last >= 166)) { f = (f + 1) % ent.frames; last = now; draw(); }
-        requestAnimationFrame(loop);
-      }
-      draw(); requestAnimationFrame(loop);
-      cv.addEventListener('pointerdown', function (e) { drag = true; auto = false; lx = e.clientX; e.preventDefault(); });
-      window.addEventListener('pointerup', function () { drag = false; });
-      cv.addEventListener('pointermove', function (e) {
-        if (!drag) { return; }
-        var dx = e.clientX - lx, step = 20; /* 12 帧 / ~240px 拖动 = 半帧手感 */
-        var df = Math.round(dx / step);
-        if (df !== 0) { f = (f + df) % ent.frames; if (f < 0) { f += ent.frames; } lx = e.clientX; draw(); }
-      });
-    });
+    mountAtlas(mount, id, function (ok) { if (!ok) { TQ.shardInner(mount, id); } });
   };
 
   /* ========== S8 手札 · lat-long 全方位自由旋转（yaw×pitch 最近格 · 拖拽 + 惯性 + 独立状态） ==========

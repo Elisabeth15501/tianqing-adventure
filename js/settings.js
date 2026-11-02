@@ -229,15 +229,12 @@
       }(SECTIONS[s]));
     }
 
-    /* --- 画面 --- */
+    /* --- 画面 ---
+     * ★2026-11-02 真机反馈后下线「恒用预设图样」开关：
+     *   有了这个开关，玩家一开就整局看不到 AI 立绘/底图，还会把「图没出来」误当成品控问题；
+     *   而它本来只是弱网兜底，兜底应当自动发生（解码失败/超时 → 矢量占位），不该由玩家承担判断。
+     *   现在图样恒为真素材，占位只在失败时静默顶上（见 assets.js TA.assetsMode）。 */
     panel.appendChild(h('div', 'set-sec', '画面'));
-    var rArt = h('div', 'set-row');
-    var tArt = h('div', 'set-txt');
-    tArt.appendChild(h('div', 'set-n', '恒用预设图样'));
-    tArt.appendChild(h('div', 'set-d', '不走 AI 素材，一律用程序绘制的图样。弱网或素材缺失时更稳，笔触会简一些。'));
-    rArt.appendChild(tArt);
-    rArt.appendChild(switchBtn(assetsVector, setAssetsVector));
-    panel.appendChild(rArt);
 
     /* --- 关于 --- */
     panel.appendChild(h('div', 'set-sec', '关于'));

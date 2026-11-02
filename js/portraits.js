@@ -115,7 +115,7 @@
         s += '<circle cx="62" cy="21" r="2.2" fill="#C9A227"/>';
         s += '<path d="M36 24.6 q-5 5 -5.6 11" stroke="' + lt(hc, 0.3) + '" stroke-width="1.1" fill="none" opacity=".5"/>';
         break;
-      case 'jin': /* 巾帼软巾（尚食令 · 灶事） */
+      case 'jin': /* 巾帼软巾（尚食奉御 · 灶事） */
         s += '<path d="M31 40 q-3.2 -13.6 5.6 -21.6 q9.4 -8 26.8 0 q8.8 8 5.6 21.6 q-4.2 -9.6 -11.6 -12.6 q-7.6 4.2 -18.6 0 q-4 5 -7.8 12.6 Z" fill="' + hc + '"/>';
         s += '<path d="M31 30 q-3.4 8 -2.6 14.6 q5.4 -1 7 -6.6 Z" fill="' + dk(hc, 0.1) + '"/>';
         s += '<path d="M41 19.4 q9 -4.4 18 0" stroke="' + (c.bandColor || '#8A7A63') + '" stroke-width="3.2" fill="none"/>';
@@ -248,7 +248,7 @@
       return '<path d="M72 120 L72 78" stroke="#8A6B3E" stroke-width="3" stroke-linecap="round"/>'
         + '<circle cx="72" cy="76" r="3.4" fill="#A6834C"/>';
     }
-    if (p === 'shao') { /* 灶勺（尚食令） */
+    if (p === 'shao') { /* 灶勺（尚食奉御） */
       return '<g><path d="M70 120 L58 96" stroke="#8A6B3E" stroke-width="2.6" stroke-linecap="round"/>'
         + '<ellipse cx="56" cy="93" rx="6.4" ry="4.4" fill="#C9C2B4"/></g>';
     }
@@ -413,10 +413,10 @@
      *   ① 外廷殿中省尚食局：设「尚食奉御」二人，**正五品下**，属南衙男官系统；
      *   ② 内廷宫官六尚之尚食局：设「尚食」二人，**正五品**，女官。
      *   「尚食**令**」这个称谓属外廷令式系统（令/丞），故本作按**男官·正五品下**画，
-     *   与 memory 已载「尚食令须为男（45 岁圆胖厨师）」一致。
+     *   与 memory 已载「尚食奉御须为男（45 岁圆胖厨师）」一致。
      * 品色衣：正五品 ⇒ **绯**（四五品绯）。之前画成青绿 #5E6E62 是错的，已改。 */
     shangshiling: {
-      k: 'shangshiling', label: '尚食令 · 灶事', head: 'jin', build: 'm', beard: 'short',
+      k: 'shangshiling', label: '尚食奉御 · 灶事', head: 'jin', build: 'm', beard: 'short',
       hair: '#332C26', headColor: '#332C26', bandColor: '#8A7A63', robe: '#8E4A3C', collar: '#EFEAE0',
       belt: '#5E3128', buckle: '#B79A55', prop: 'shao',
       title: '殿中省尚食局 · 尚食奉御 · 正五品下（45 岁圆胖）'
@@ -473,7 +473,7 @@
   var MAP = {
     '王朴': 'wangpu', '王溥': 'wangpu2', '张永德': 'zhangyongde', '赵匡胤': 'zhaokuangyin',
     '范质': 'fanzhi', '李谷': 'ligu', '李重进': 'lichongjin', '殷崇义': 'yinchongyi',
-    '尚食令': 'shangshiling', '司正': 'sizheng', '黄衣小皇子': 'zongxun',
+    '尚食奉御': 'shangshiling', '司正': 'sizheng', '黄衣小皇子': 'zongxun',
     '符后': 'fuhou', '郭威': 'guowei', '冯道': 'fengdao', '郭荣': 'guorong',
     /* 2026-11-01：原此处有 '柴荣': 'shaonian' —— 已删。郭荣随养父郭威改姓郭，
      * 本作对其一律称「郭荣」；「柴荣」是宋人追称，只出现在史实出处的引文里，
@@ -494,12 +494,12 @@
   /* 当前 20 张已入仓且已过目：
    *   3 张锚点：郭荣(a1) / 女官 / 史官（双玩家 A/B 线基础形象）；
    *   12 张 10-28 审核入库（commit 478724c）：王朴/张永德/赵匡胤/殷崇义（A 级服色 v2）
-   *     ＋ 符后/郭威/冯道（回忆语境像）＋ 司正/尚宫/起居郎/尚食令/郭宗训（B 级）；
+   *     ＋ 符后/郭威/冯道（回忆语境像）＋ 司正/尚宫/起居郎/尚食奉御/郭宗训（B 级）；
    *   5 张 10-28 晚重生入库：范质（禁烛火）/李谷（双手捧觞）/王溥（单手举觞）/李重进（去甲）
    *     ＋ 少年郭荣（肩挑茶担，替换手提花篮旧版）。
-   *   尚食令 10-28 晚由全身版裁切为半身重入仓（FIT 已按裁切版重测）。
+   *   尚食奉御 10-28 晚由全身版裁切为半身重入仓（FIT 已按裁切版重测）。
    *   ★键名坑：生图侧 prompts.py 用 `shangling`，运行时图键是 `shangshiling`
-   *     （prompts 键按「尚食令」字面，运行时按 FIG 定义），入包脚本里做了映射，
+   *     （prompts 键按「尚食奉御」字面，运行时按 FIG 定义），入包脚本里做了映射，
    *     这里必须写运行时键，否则 TQA.resolve 找不到文件、静默回落矢量像。 */
   /* ============ 立绘视觉居中表（2026-10-28 实测） ============
    * cx = 「头肩重心」归一化横坐标（alpha 包围盒上半段中心 / 图宽）。
@@ -1161,6 +1161,12 @@
       function put(im) {
         var pic = document.createElement('img');
         pic.className = 'mem-fig-real';
+        /* ★2026-11-02 真机：立绘是 50~70KB 的 webp，解码在主线程同步做会掉帧，
+         *   挂上去的那一瞬最容易「卡一下」。decoding=async 让它异步解；
+         *   draggable=false + pointer-events:none（css 全局）确保它既不能被拖，
+         *   也不会成为长按的命中目标（宿主会把 <img> 认成「图片」弹保存菜单）。 */
+        pic.setAttribute('decoding', 'async');
+        pic.setAttribute('draggable', 'false');
         pic.src = im.src;
         pic.alt = (TP.meta(key).label || '') + ' 立绘';
         node.innerHTML = '';

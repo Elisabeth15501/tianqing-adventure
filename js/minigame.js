@@ -2543,7 +2543,7 @@ var DEF_VEND = [
   { fx: 0.50, name: '卖囊妇人', say: '今日卖空了三个架。买的不都是要送人——有买给自己的。',
     note: '士庶以丝结承露囊，更相遗问——唐千秋节旧俗，五代承之。' },
   { fx: 0.83, name: '南来客商', say: '库里的三百匹是贡的，我这些不是。贡的进不了这条街。',
-    note: '占城贡香三百匹尚在礼部库；桥市香摊所售非贡余，乃商舶私贩。' }
+    note: '占城贡香三百匹已入左藏库；桥市香摊所售非贡余，乃商舶私贩。' }
 ];
 var PANO_CACHE = {};
 function panoMeta(src) {
@@ -2650,9 +2650,16 @@ function playShiFolk(cv, hooks, cfg, ui) {
     var s = '<defs><clipPath id="panoClip"><rect x="0" y="40" width="' + VW + '" height="118"/></clipPath></defs>';
     s += '<g clip-path="url(#panoClip)"><g transform="translate(' + n1(-st.off) + ',0)">';
     if (pano && pano.ok) {
-      /* 正式全景：一张图铺满 [0,SW]×[40,158]；纵向取景交给 fit，避免裁掉主体 */
+      /* 正式全景：一张图铺满 [0,SW]×[40,158]；纵向取景交给 fit，避免裁掉主体
+       * ★2026-11-02 真机「长按道具弹出保存图片 / 被当成按到背景图」的**唯一根因**：
+       *   全景是 SVG 里的 `<image>`，它铺满整个可视区、且默认可命中（pointer-events 默认 visiblePainted）。
+       *   道具是代码画的 `<path>`，长按道具时只要指尖落点略偏出道具轮廓，
+       *   命中的就是下面这张 `<image>` —— WebView 认为「按到了图片」，
+       *   于是弹系统菜单，把动手小节打断（玩家描述成「卡住」）。
+       *   修法：全景一律 pointer-events="none"，让它彻底不参与命中测试；
+       *   拖拽与点击仍由 SVG 根节点接管，交互行为不变。 */
       s += '<image x="0" y="40" width="' + SW + '" height="118" href="' + pano.src +
-        '" preserveAspectRatio="' + (S4.fit || 'xMidYMid slice') + '"/>';
+        '" preserveAspectRatio="' + (S4.fit || 'xMidYMid slice') + '" pointer-events="none"/>';
       s += vendMarks();
     } else {
     s += '<rect x="0" y="40" width="' + SW + '" height="118" fill="#EAF0EC"/>';

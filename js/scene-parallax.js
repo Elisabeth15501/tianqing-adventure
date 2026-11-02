@@ -1,5 +1,5 @@
 /*
- * scene-parallax.js —— 场景三层视差引擎层（S5 滋德殿旧址首用 · 2026-11-02）
+ * scene-parallax.js —— 场景三层视差引擎层（S5 滋德殿首用 · 2026-11-02）
  *
  * 职责：把「一张场景图」变成「可被陀螺仪驱动的三层结构」，并把「到底几层真的生效了」
  *      这件事变成可以在运行时读出来的数（SP.audit / SP.selftest），而不是靠肉眼判断。
@@ -65,7 +65,7 @@
   /* ------------------------------------------------------------------ */
   function def(key, cfg) { REG[key] = cfg; return SP; }
 
-  /* S5 滋德殿旧址（750×1080 竖 / 1500×630 横，资产在 assets/scenes/s5_zide{,_h}/）
+  /* S5 滋德殿（750×1080 竖 / 1500×630 横，资产在 assets/scenes/s5_zide{,_h}/）
      v3 真·物体分层：bg=补全图（RGB），mg/fg=轮廓贴片（RGBA）⇒ additive:false */
   def('s5_zide', {
     dir: { h: 'assets/scenes/s5_zide_h', v: 'assets/scenes/s5_zide' },
@@ -74,7 +74,7 @@
     lim: 30,          // 单层最大位移 px（k=1 那层）
     bgScale: 0.012,   // bg 额外缩放：|cx| 最大时 +1.2%，补「镜头在推」的错觉
     additive: false,  // mg/fg 用 normal+alpha（物体贴片），非黑底 screen
-    title: 'S5 滋德殿旧址'
+    title: 'S5 滋德殿'
   });
 
   SP.register = def;
@@ -190,6 +190,8 @@
         box.setAttribute('data-k', String(this.cfg.ks[l]));
         img = document.createElement('img');
         img.setAttribute('data-l', l);
+        img.setAttribute('draggable', 'false');
+        img.setAttribute('decoding', 'async');
         img.alt = l.toUpperCase() + ' 层';
         box.appendChild(img);
         el.appendChild(box);

@@ -315,7 +315,7 @@
   }
   /* ---------- 时辰节点（竖版横卡 / 横版顶栏嵌入） ---------- */
   var ACT_NODES = [
-    { t: '寅', n: '万寿门' }, { t: '辰', n: '广德殿' }, { t: '午', n: '汴桥' },
+    { t: '寅', n: '万岁门' }, { t: '辰', n: '广德殿' }, { t: '午', n: '汴桥' },
     { t: '酉', n: '滋德殿' }, { t: '终', n: '合瓮' }
   ];
   var CUR_ACT = 0;
@@ -625,6 +625,26 @@
   }
 
   /* ---------- 幕流程 ---------- */
+  /* ★2026-11-02 真机「切景要等一下才出图」：
+   *   场景图是**挂载那一刻才 set src**（mountSingle / mountPano / parallax 三处都是），
+   *   所以每换一次底图都是一次从零开始的下载。scenes.js 里已经有 SC_.preload
+   *   （并发受控、失败静默、见到 _hot 主动让路），但**从来没有人调用它** —— 写好了没接线，
+   *   等于没有。这里在进幕时把「本幕会用到的全部场景 + 下一幕的场景」排进预热队列，
+   *   延迟 1.2s 起跑：先把屏上这一张让出来，再补后台。
+   *   纪律：只预热当前形态（竖屏不浪费横版素材）；失败静默，不影响任何流程。 */
+  function prewarmAct(act, idx) {
+    if (!global.TQScenes || !global.TQScenes.preload) { return; }
+    var form = sceneForm(), want = [], seen = {};
+    function add(k) { if (k && !seen[k]) { seen[k] = 1; want.push({ key: k, form: form }); } }
+    add(act && act.scene);
+    (act && act.steps || []).forEach(function (st) { if (st && st.scene) { add(st.scene); } });
+    var nx = D.acts[idx + 1];
+    if (nx) { add(nx.scene); }
+    if (!want.length) { return; }
+    setTimeout(function () {
+      try { global.TQScenes.preload(want, { conc: 1 }); } catch (e) { /* 预热失败不影响流程 */ }
+    }, 1200);
+  }
   function enterAct(idx) {
     if (ACT_KEY_HANDLER) { document.removeEventListener('keydown', ACT_KEY_HANDLER); ACT_KEY_HANDLER = null; }
     var act = D.acts[idx];
@@ -633,6 +653,7 @@
     // 断点续玩：同一幕内从存档步数继续；新开一幕从 0 起
     var from = (save.actIndex === idx && save.step > 0 && save.step < act.steps.length) ? save.step : 0;
     buildActShell(act, idx, from);
+    prewarmAct(act, idx);
   }
 
   /* ---------- 角色分叉展开：split 步骤按 save.role 解析为线性序列 ---------- */
@@ -930,7 +951,13 @@
       if (dock && !keepDock) { dock.style.display = 'none'; } /* 选择态 keepDock：dock 可见、三键置灰 */
       var vnMain = main.parentNode;
       if (vnMain && vnMain.classList) { vnMain.classList.add('act-op'); }
-      main.scrollTop = main.scrollHeight;
+      /* ★2026-11-02 真机「瓷片拾得界面里瓷片跑到屏幕外」：
+       *   这里原先写的是 `main.scrollTop = main.scrollHeight`（照抄对话流"滚到最新一条"）。
+       *   `.vn-doc` 是 overflow-y:auto 的，占台内容比可视区高时——史料卡文本越长越明显
+       *   （#11/#13/#15 的长文正是最长三张）——这一行会把**顶部的瓷片舞台**顶出可视区，
+       *   玩家只看到史料卡与按钮，以为「瓷片没显示/素材缺失」。
+       *   占台不是对话流：内容必须从顶部看起，故归零。 */
+      main.scrollTop = 0;
     }
     VNC.dockBox = dockBox;
     VNC.occupy = occupyNode;
@@ -1216,10 +1243,21 @@
      *   内壁帧是 700~1000px 的整幅画（assets/shards/shard_XX_inner.webp），
      *   清晰、必定有图、且是静态绘制——首屏稳。想看立体再按「转动看看」。
      *   默认值仍按材质能取到的档位来：内壁画缺失时自动退回转台（shardInner 内部处理）。 */
+    /* ★2026-11-02 真机（第三次）：把「转动看看」从实时 3D 图集（F.spin3d）改成
+     *   **预先渲染好的 12 帧转台**（F.shardViewer，预设动画）。
+     *   理由三条，都来自手机实测：
+     *   ① spin3d 是「按需 drawImage 切格 + 常驻 rAF」，进来就 30fps 自转；
+     *      低端机上占台期间一直在跑，是「拾得瓷片就卡」的主因之一。
+     *   ② 它的缩放/平移状态是玩家自己拖出来的，拖过之后可能停在边角，
+     *      在 200~236px 的小画布里看着就是「瓷片跑出屏幕了」。
+     *   ③ 图集每一帧只有 160px，180° 之外的角度靠最近格取整，观感并不比 12 帧稳。
+     *   预设转台是 6fps 自转 + 拖动擦洗（全部走同一份预渲染帧），内存与帧时都可控，
+     *   且**永远居中**——没有任何可累积的位移状态，结构上不可能再跑出画布。
+     *   瓶（vessel）仍保留 spin3d，它只有终点合瓮一处，且需要俯仰看肩部。 */
     var onInner = true;
     var innerBtn = null;
     function syncInnerBtn() { if (innerBtn) { innerBtn.textContent = onInner ? '转动看看' : '回到内壁'; } }
-    function renderSpin() { if (window.F) { F.spin3d(stage, id); } onInner = false; syncInnerBtn(); }
+    function renderSpin() { if (window.F) { F.shardViewer(stage, id); } onInner = false; syncInnerBtn(); }
     function renderInner() { if (window.F) { F.shardInner(stage, id); } onInner = true; syncInnerBtn(); }
     if (first) { sfx('bead'); }  /* 首次拾得：三音上行的获得音 */
     var toast = el('div', 'shard-toast');
@@ -1246,14 +1284,11 @@
      *   _qa/_seam11.png），放大后比"模糊"更碍眼。这两张默认走转台（图集干净），
      *   并在下面标一句"内壁待重绘"，把问题摆在明处而不是让玩家以为是自己屏幕坏了。
      *   重出这两张 inner 图后，把编号从这张表里删掉即可恢复默认内壁。 */
-    var BAD_INNER = { '11': 1, '14': 1 };
-    if (BAD_INNER[String(id)]) {
-      renderSpin();
-      var tip = el('div', 'inner-badge', '内壁待重绘');
-      stage.parentNode.insertBefore(tip, stage.nextSibling);
-    } else {
-      renderInner();   /* 首屏＝内壁静态帧（清晰、必定有图、不跑 60fps） */
-    }
+    /* ★2026-11-02（玩家反馈）：原先这里给 #11/#14 挂一句「内壁待重绘」的角标，
+     *   把内部制作状态暴露给了玩家——已删除，界面上不再出现任何「待重画」字样。
+     *   这两张的默认档仍走转台（图集干净），只是不再解释原因。 */
+    var SPIN_FIRST = { '11': 1, '14': 1 };
+    if (SPIN_FIRST[String(id)]) { renderSpin(); } else { renderInner(); }
     var px0 = 0, py0 = 0, pt0 = 0;
     stage.addEventListener('pointerdown', function (e) {
       px0 = e.clientX; py0 = e.clientY; pt0 = Date.now();
@@ -2247,7 +2282,7 @@
     list.appendChild(rec);
     if (window.TQA) {
       var setRow = el('div', 'memo-set');
-      setRow.appendChild(el('span', 'memo-set-h', '体法与图样'));
+      setRow.appendChild(el('span', 'memo-set-h', '音效与设定'));
       function mkChip(label, getV, setV, onLabel, offLabel) {
         var b = el('button', 'memo-set-chip' + (getV() ? ' on' : ''));
         function paint() {
@@ -2264,10 +2299,8 @@
       gsA.title = TQA.modeNote('jie');
       gsA.setAttribute('data-kept', '1');
       setRow.appendChild(gsA);
-      setRow.appendChild(mkChip('恒用预设图样',
-        function () { return TQA.assetsMode() === 'vector'; },
-        function (v) { TQA.setSetting('tq_assets_mode', v ? 'vector' : 'auto'); },
-        '开', '关'));
+      /* ★2026-11-02：「恒用预设图样」开关已下线（占位只在失败时自动顶上，不由玩家选）。
+         见 settings.js 画面节与 assets.js TA.assetsMode 的注释。 */
       setRow.appendChild(mkChip('音效',
         function () { return global.TQSET ? global.TQSET.sfxOn() : (global.TQSFX && global.TQSFX.isEnabled()); },
         function (v) { if (global.TQSET) { global.TQSET.setSfx(v); } else if (global.TQSFX) { global.TQSFX.setEnabled(v); } },
@@ -2320,7 +2353,7 @@
       body.appendChild(rec);
       if (window.TQA) {
         var setRow = el('div', 'memo-set');
-        setRow.appendChild(el('span', 'memo-set-h', '体法与图样'));
+        setRow.appendChild(el('span', 'memo-set-h', '音效与设定'));
         function mkChip(label, getV, setV, onLabel, offLabel) {
           var b = el('button', 'memo-set-chip' + (getV() ? ' on' : ''));
           function paint() { b.textContent = label + ' · ' + (getV() ? onLabel : offLabel); b.setAttribute('data-on', getV() ? '1' : '0'); }
@@ -2332,7 +2365,7 @@
         gsB.title = TQA.modeNote('jie');
         gsB.setAttribute('data-kept', '1');
         setRow.appendChild(gsB);
-        setRow.appendChild(mkChip('恒用预设图样', function () { return TQA.assetsMode() === 'vector'; }, function (v) { TQA.setSetting('tq_assets_mode', v ? 'vector' : 'auto'); }, '开', '关'));
+        /* 同上：图样开关已下线（2026-11-02）。 */
         setRow.appendChild(mkChip('音效',
           function () { return global.TQSET ? global.TQSET.sfxOn() : (global.TQSFX && global.TQSFX.isEnabled()); },
           function (v) { if (global.TQSET) { global.TQSET.setSfx(v); } else if (global.TQSFX) { global.TQSFX.setEnabled(v); } },
@@ -2455,6 +2488,12 @@
     memo: function () { showMemo(false); },
     memoOverlay: function () { showMemoOverlay(); },
     viewer: openShardViewer,
+    /* 拾得瓷片占台的验收入口（2026-11-02 新增）：真机反馈「#11/#13/#15 不显示」，
+     *   要复现必须能直接进那张占台，不能靠「玩到那一步」。
+     *   TQApp.shard('13') 的 DOM 与正常流程**完全同源**（同一个 showShard），
+     *   只是省掉了前面的剧情步进。★注意：走的是真流程，因此会把该编号记进存档
+     *   （shards[id]=true），验收前请用干净档或验收后清档。 */
+    shard: function (id) { showShard(null, String(id), function () {}); },
     /* 终幕验收钩子（只读入口，便于 headless 直达合瓮结算画面，无需玩到最后一幕）。
      * 若存档未就绪则就地构造一个最小全量档，保证 showEnding 不报错。 */
     ending: function () {

@@ -79,7 +79,12 @@
   function lsSet(k, v) {
     try { localStorage.setItem(k, v); } catch (err) { /* 隐私模式静默 */ }
   }
-  TA.assetsMode = function () { return lsGet('tq_assets_mode', 'auto'); }; /* auto | vector */
+  /* ★2026-11-02：占位回退开关「恒用预设图样」已下线。
+   *   旧版返回 localStorage 里的 tq_assets_mode（auto|vector），玩家一旦打开就整局只看矢量图；
+   *   真机反馈里「人物/背景没出来」有一半来自这里。现在恒为 'auto'：
+   *   **真素材优先，占位只在解码失败/超时/尺寸超限时自动顶上**（见下方 resolve 的三态）。
+   *   键名保留只为兼容旧存档——已经设过 vector 的机器不会再把整局锁在占位态。 */
+  TA.assetsMode = function () { return 'auto'; };
   TA.tifa = function () { return lsGet('tq_tifa', 'gongxing'); };         /* gongxing | jie · 保留备用 */
   TA.tifaJie = function () { return TA.tifa() === 'jie'; };
   TA.setSetting = function (k, v) { lsSet(k, v); };

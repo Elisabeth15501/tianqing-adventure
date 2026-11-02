@@ -14,11 +14,11 @@
 (function (global) {
   'use strict';
   global.TQ_VERSION = {
-    ver: '1.1.3',
-    build: '2026-11-02 22:20',
+    ver: '1.1.5',
+    build: '2026-11-02 23:45',
     stage: '内测',
-    note: '桌面版修复 · 按画布切景 · 瓷片不压扁 · 立绘首帧真图',
+    note: '长按图片根治 · 瓷片转台锁行 · 矮屏占台收拢 · 场景预热接线 · 落笔过渡',
     /* 对应 git 提交在发布时补记（留空则设定页只显示版本与构建时间） */
-    commit: 'afc9e95'
+    commit: ''
   };
 }(window));
