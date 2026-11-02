@@ -779,7 +779,6 @@
     tutBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
     tutBtn.addEventListener('pointerup', function (e) { e.stopPropagation(); });
     tutRow.appendChild(tutBtn);
-    wrap.appendChild(tutRow);
     tutSync();
     if (global.TQSET && global.TQSET.onChange) { global.TQSET.onChange(tutSync); }
 
@@ -799,7 +798,12 @@
        ★不删代码：TQA.GSYS.jie.on 置真即原样恢复这个入口与 onJie 回调。 */
     if (global.TQA && TQA.modeOpen && TQA.modeOpen('jie')) { ctrl.appendChild(sp); ctrl.appendChild(jie); }
     var hint = h('div', 'iv-hint', '');
-    wrap.appendChild(stepsRow); wrap.appendChild(bar); wrap.appendChild(val); wrap.appendChild(ctrl); wrap.appendChild(hint);
+    /* 说明区收进一张纸卡（2026-11-02）：场景底图铺满之后，步骤条/读数/提示直接压在
+     * 门楼与殿柱上，字是"看得见但读不清"。纸卡只管排版与对比，不改任何判定。 */
+    var board = h('div', 'iv-guide');
+    board.appendChild(stepsRow); board.appendChild(bar); board.appendChild(val);
+    board.appendChild(hint); board.appendChild(ctrl); board.appendChild(tutRow);
+    wrap.appendChild(board);
     /* 挂载与退场由调用方占台管理（VN 占台机制）；节点不再自行 append 进文档流 */
 
     var steps = cfg.steps || [];

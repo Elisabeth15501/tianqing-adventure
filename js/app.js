@@ -513,10 +513,6 @@
     cr.setAttribute('aria-label', '查看本作史实出处');
     cr.addEventListener('click', showCredits);
     meta.appendChild(cr);
-    var stb0 = el('button', 'credits-btn set-entry', '设定');
-    stb0.setAttribute('aria-label', '打开设定：音效与操作教学');
-    stb0.addEventListener('click', openSettings);
-    meta.appendChild(stb0);
     app.appendChild(meta);
     var main = el('div', 'main title-bottom');
     var wrap = el('div', 'title-wrap');
@@ -545,15 +541,15 @@
     app.appendChild(foot);
   }
 
-  /* ---------- 史实出处（鸣谢页式：瓷片/瓷心出处由数据派生，不另维护清单） ---------- */
-  /* 设定页（2026-11-02）：音效 / 各小节操作教学 / 画面 / 版本。
-   * 页面本体在 js/settings.js（TQSET），这里只做「从哪进」——顶栏、首屏元信息行、
-   * 手札页都会调它；模块缺失时静默（老包里没有 TQSET 也不会报错）。 */
+  /* ---------- 设定页入口（2026-11-02） ----------
+   * 音效 / 各小节操作教学 / 画面 / 版本。页面本体在 js/settings.js（TQSET），
+   * 这里只做「从哪进」——顶栏与手札页都调它；模块缺失时静默（旧包没有 TQSET 也不报错）。 */
   function openSettings() {
     if (global.TQSET && global.TQSET.open) { global.TQSET.open(); return; }
     console.warn('[TQ] 设定模块未加载：js/settings.js');
   }
 
+  /* ---------- 史实出处（鸣谢页式：瓷片/瓷心出处由数据派生，不另维护清单） ---------- */
   function showCredits() {
     var C = D.credits;
     if (!C) { return; }
