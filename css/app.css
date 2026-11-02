@@ -1098,3 +1098,78 @@ body.shv-open .main{overflow:hidden}
 .mem-stage .mem-bg{position:absolute;left:0;right:0;top:0;bottom:0;z-index:0;overflow:hidden;
   opacity:.85;pointer-events:none}
 .mem-stage > *:not(.mem-bg){position:relative;z-index:1}
+
+/* ===== 设定页入口（2026-11-02） =====
+ * 顶栏（首屏简版与幕内完整版）都挂一个「设定」，与「手札」同款；
+ * 首屏元信息行的「设定」复用 credits-btn 的纸签样式，只补个左边距。 */
+.topbar .set-btn{font-family:inherit;font-size:13px;color:var(--fen);background:transparent;
+  border:1px solid var(--qing);border-radius:14px;padding:4px 12px;margin-left:8px;flex-shrink:0}
+.topbar .set-btn:hover{color:var(--yue);border-color:var(--yue)}
+
+/* ===== 设定页（js/settings.js）=====
+ * z-index 44：高于史实出处浮层（40）与手札浮层，低于「收下瓷片」这类即时提示。
+ * 面板走纸色 + 赭边，与出处页同族；内容可滚，横屏时分两列不必——列表本身不长。 */
+.set-ov{position:absolute;left:0;right:0;top:0;bottom:0;z-index:44;background:rgba(31,59,58,.55);
+  overflow-y:auto;display:flex;align-items:center;justify-content:center;padding:16px}
+.set-panel{background:var(--paper);border:1px solid var(--tu);border-radius:14px;width:100%;
+  max-width:520px;max-height:100%;overflow-y:auto;box-shadow:0 10px 32px rgba(31,59,58,.28);
+  padding:16px 16px 18px;flex-shrink:0}
+.set-hd{display:flex;align-items:flex-start;justify-content:space-between;
+  border-bottom:1px solid rgba(94,140,138,.35);padding-bottom:10px}
+.set-tt1{font-size:19px;letter-spacing:4px;color:var(--ink);font-weight:500}
+.set-tt2{font-size:11px;color:var(--muted);letter-spacing:1px;margin-top:4px}
+.set-x{font-family:inherit;font-size:12px;color:var(--deep);background:var(--yue);
+  border:1px solid var(--qing);border-radius:13px;padding:5px 13px;min-height:32px;flex-shrink:0}
+.set-sec{font-size:11px;letter-spacing:2px;color:var(--deep);margin:14px 0 2px;padding-left:2px}
+.set-row{display:flex;align-items:center;padding:9px 2px;border-bottom:1px dashed rgba(94,140,138,.28)}
+.set-row:last-child{border-bottom:none}
+.set-row-all{align-items:flex-start;flex-wrap:wrap}
+.set-txt{flex:1;min-width:0;padding-right:10px}
+.set-n{font-size:13.5px;color:var(--ink);line-height:1.5}
+.set-tag{font-size:10px;color:var(--muted);border:1px solid var(--qing);border-radius:8px;
+  padding:0 5px;margin-left:6px;vertical-align:1px}
+.set-d{font-size:11px;color:var(--muted);line-height:1.65;margin-top:2px}
+.set-sw{font-family:inherit;flex-shrink:0;min-width:52px;min-height:32px;font-size:12px;
+  border-radius:15px;border:1px solid var(--qing);background:var(--yue);color:var(--muted)}
+.set-sw[data-on="1"]{background:var(--deep);border-color:var(--deep);color:var(--yue)}
+.set-minis{display:flex;flex-shrink:0}
+.set-mini{font-family:inherit;font-size:11px;color:var(--deep);background:var(--yue);
+  border:1px solid var(--qing);border-radius:12px;padding:4px 10px;margin-left:6px;min-height:28px}
+.set-kv{padding-top:4px}
+.set-kvrow{display:flex;font-size:11.5px;line-height:1.9}
+.set-k{color:var(--muted);width:46px;flex-shrink:0;letter-spacing:1px}
+.set-v{color:var(--ink);flex:1;min-width:0;word-break:break-all}
+.set-foot{font-size:10.5px;color:var(--muted);margin-top:10px;line-height:1.6}
+/* 横屏/宽屏：与出处页同一个宽度档（620），否则 520 在 1280 上显得局促 */
+@media (min-width:900px){ .set-panel{max-width:620px} }
+
+/* ===== 动手小节 · 操作教学开关（js/frag.js TQ.iv）=====
+ * 按钮单独一行、在舞台之外：RICH 分支会把 .iv-ctrl 整行藏掉，挂在里面就看不见了。
+ * 关掉（.tut-off）只藏「教怎么玩」的部分 —— 步骤条 / 提示 / 手势示意 / 落点框 /
+ * 画布内提示条 #hud / 步骤角标；器具、进度读数、成品与这个按钮本身都保留。 */
+.iv-tutrow{display:flex;justify-content:flex-end;margin-top:3px}
+.iv-tut{font-family:inherit;font-size:10.5px;letter-spacing:1px;color:var(--muted);
+  background:transparent;border:1px solid var(--qing);border-radius:10px;
+  padding:2px 9px;min-height:22px;line-height:1}
+.iv-tut[data-on="1"]{color:var(--deep);border-color:var(--deep)}
+.iv.tut-off .iv-steps,
+.iv.tut-off .iv-hint,
+.iv.tut-off .iv-stage .gest,
+.iv.tut-off .iv-stage .target,
+.iv.tut-off .iv-stage .step-tag{display:none!important}
+.iv.tut-off .iv-stage svg #hud{display:none!important}
+
+/* 动手小节的说明纸卡（2026-11-02）：步骤条 / 进度 / 读数 / 提示 / 教学开关同处一张纸。
+ * 起因：真场景底图铺满之后，这些字直接压在门楼与殿柱上，「看得见但读不清」。
+ * 只管排版与对比，不改任何判定与坐标。
+ * ★类名不能用 .iv-panel —— 那个在 240 行已经给了「原文对照」右侧抽屉（absolute）。 */
+.iv-guide{margin:6px auto 0;background:rgba(243,239,226,.94);
+  border:1px solid rgba(166,124,82,.34);border-radius:12px;padding:8px 10px 6px;max-width:100%}
+.iv.rich .iv-guide{width:100%;max-width:calc(58vh * 300 / 210)}
+.iv-guide .iv-steps{margin-top:0}
+.iv-guide .iv-val:empty{display:none}
+.iv-guide .iv-tutrow{margin-top:2px}
+.iv-guide .iv-ctrl{margin-top:6px}
+.iv-guide .iv-hint{margin-top:4px}
+/* 小屏顶栏：与「手札」同一档内边距，否则两个按钮高度差 5px，看着像没对齐 */
+@media (max-height:740px){ .topbar .set-btn{padding:3px 10px;font-size:12px} }

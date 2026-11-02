@@ -16,6 +16,10 @@
 <script src="./js/assets.js"></script>
 <script src="./js/portraits.js"></script>
 <script src="./js/sfx.js"></script>
+<!-- 版本标（唯一事实源）与设定页：设定页只读写设置，不参与游戏流程；
+     放在 app.js 之前 —— app.js 一执行就要给顶栏挂「设定」入口。 -->
+<script src="./js/version.js"></script>
+<script src="./js/settings.js"></script>
 <!-- 场景三层视差（S5 首用）：tilt.js 只做「姿态 → tx/ty」，scene-parallax.js 做「三层 + 探针」。
      两者都不自启，四幕脚本调用 SceneParallax.mount() 才生效；先加载 = 运行时可直接自检。 -->
 <script src="./js/tilt.js"></script>

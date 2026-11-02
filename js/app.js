@@ -315,9 +315,14 @@
     /* 简版：首屏/选角/手札（复刻设计稿 topbar(name)：幕名 + 手札，无时辰条/差事帖） */
     var bar = el('div', 'topbar');
     bar.appendChild(el('div', 'act-name', actName || '天清往事'));
+    var tb0 = el('div', 'tb-btns');
+    var stb = el('button', 'set-btn', '设定');
+    stb.addEventListener('click', openSettings);
+    tb0.appendChild(stb);
     var memo = el('button', 'memo-btn', '手札');
     memo.addEventListener('click', function () { showMemo(true); });
-    bar.appendChild(memo);
+    tb0.appendChild(memo);
+    bar.appendChild(tb0);
     return bar;
   }
   function topbarAct(actName) {
@@ -336,6 +341,9 @@
     cs.appendChild(el('span', 'cs-dot', doneN + '/' + totalN));
     cs.addEventListener('click', function () { openChaishi(); });
     btns.appendChild(cs);
+    var stb = el('button', 'set-btn', '设定');
+    stb.addEventListener('click', openSettings);
+    btns.appendChild(stb);
     var memo = el('button', 'memo-btn', '手札');
     memo.addEventListener('click', function () { showMemoOverlay(); });
     btns.appendChild(memo);
@@ -531,6 +539,14 @@
     addActions(tr);
     addActions(foot);
     app.appendChild(foot);
+  }
+
+  /* ---------- 设定页入口（2026-11-02） ----------
+   * 音效 / 各小节操作教学 / 画面 / 版本。页面本体在 js/settings.js（TQSET），
+   * 这里只做「从哪进」——顶栏与手札页都调它；模块缺失时静默（旧包没有 TQSET 也不报错）。 */
+  function openSettings() {
+    if (global.TQSET && global.TQSET.open) { global.TQSET.open(); return; }
+    console.warn('[TQ] 设定模块未加载：js/settings.js');
   }
 
   /* ---------- 史实出处（鸣谢页式：瓷片/瓷心出处由数据派生，不另维护清单） ---------- */
@@ -986,7 +1002,7 @@
             busy = false;
             after();
           });
-        } : null);
+        } : null, st.cfg);
         occupyNode(ivWrap);
         }
       } else if (st.type === 'shard') {
@@ -1039,7 +1055,7 @@
                 if (s2.deco && s2.decoName) { awardDeco(s2.deco, s2.decoName, main); }
                 nextSub();
               });
-            } : null);
+            } : null, s2.cfg);
             occupyNode(ivWrap2);
             }
           } else if (s2.type === 'rhythm') {
@@ -1653,7 +1669,7 @@
     var ivWrap = F.iv(main, ivc, function () {
       awardDeco('jinzhi', '金矢', main); // 胜负零惩罚，参与即纪念
       done();
-    }, null);
+    }, null, 'touhu');
     VNC.occupy(ivWrap);
   }
 
@@ -2205,9 +2221,13 @@
         function (v) { TQA.setSetting('tq_assets_mode', v ? 'vector' : 'auto'); },
         '开', '关'));
       setRow.appendChild(mkChip('音效',
-        function () { return global.TQSFX && global.TQSFX.isEnabled(); },
-        function (v) { if (global.TQSFX) { global.TQSFX.setEnabled(v); } TQA.setSetting('tq_sfx', v ? 'on' : 'off'); },
+        function () { return global.TQSET ? global.TQSET.sfxOn() : (global.TQSFX && global.TQSFX.isEnabled()); },
+        function (v) { if (global.TQSET) { global.TQSET.setSfx(v); } else if (global.TQSFX) { global.TQSFX.setEnabled(v); } },
         '开', '关'));
+      /* 手札只放常用两项；分节操作教学、画面、版本都在设定页里 */
+      var moreSet = el('button', 'memo-set-chip', '更多设定');
+      moreSet.addEventListener('click', openSettings);
+      setRow.appendChild(moreSet);
       setRow.appendChild(el('span', 'memo-set-tip', '游戏系统单轨·对新开小节生效'));
       list.appendChild(setRow);
     }
@@ -2266,9 +2286,12 @@
         setRow.appendChild(gsB);
         setRow.appendChild(mkChip('恒用预设图样', function () { return TQA.assetsMode() === 'vector'; }, function (v) { TQA.setSetting('tq_assets_mode', v ? 'vector' : 'auto'); }, '开', '关'));
         setRow.appendChild(mkChip('音效',
-          function () { return global.TQSFX && global.TQSFX.isEnabled(); },
-          function (v) { if (global.TQSFX) { global.TQSFX.setEnabled(v); } TQA.setSetting('tq_sfx', v ? 'on' : 'off'); },
+          function () { return global.TQSET ? global.TQSET.sfxOn() : (global.TQSFX && global.TQSFX.isEnabled()); },
+          function (v) { if (global.TQSET) { global.TQSET.setSfx(v); } else if (global.TQSFX) { global.TQSFX.setEnabled(v); } },
           '开', '关'));
+        var moreSet2 = el('button', 'memo-set-chip', '更多设定');
+        moreSet2.addEventListener('click', openSettings);
+        setRow.appendChild(moreSet2);
         setRow.appendChild(el('span', 'memo-set-tip', '游戏系统单轨·对新开小节生效'));
         body.appendChild(setRow);
       }

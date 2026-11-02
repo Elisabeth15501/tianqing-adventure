@@ -725,7 +725,7 @@
    * 手势与等价按钮双轨并存；进度只增不清；「应节而动」切应节轨（外部回调）。
    * ★11-01 起：应节按钮默认不挂（单轨），onJie 回调与整条应节轨保留备用。
    */
-  TQ.iv = function (main, cfg, cb, onJie) {
+  TQ.iv = function (main, cfg, cb, onJie, sect) {
     /* ★rich：这三个小游戏（tang / proof / touhu）不从这套"进度累加器"里走，
        判定依据是"形状变没变"（面坯档位／切开的片数／矢的落点），
        交给 js/minigame.js 自己画、自己判；这里只保留步骤条与文案。 */
@@ -743,6 +743,45 @@
     stage.appendChild(propBox); stage.appendChild(target); stage.appendChild(gest);
     wrap.appendChild(stage);
 
+    /* ---- 操作教学开关（2026-11-02 · 每小节独立） ----
+     * 关掉只藏「教怎么玩」的部分：步骤条 .iv-steps、提示 .iv-hint、手势示意 .gest、
+     * 落点框 .target、画布内提示条 #hud；器具本体、进度读数、成品都保留。
+     * ★开关按钮自己不能藏 —— 藏了玩家就找不回来。所以它单独占一行、放在舞台之外，
+     *   RICH 分支把 .iv-ctrl 整行 display:none 也不影响它。
+     * ★小节 id 用 data.js 的 cfg 键（tang / shi_food / …）：史官线与女官线同名小节
+     *   配置与画面都不同，必须是两份开关。 */
+    var SECT = sect || cfg.id || cfg.rich || '';
+    var tutRow = h('div', 'iv-tutrow');
+    var tutBtn = h('button', 'iv-tut', '');
+    tutBtn.type = 'button';
+    var everMounted = false;
+    function tutSync() {
+      if (wrap.parentNode) { everMounted = true; }
+      else if (everMounted) {
+        if (global.TQSET && global.TQSET.offChange) { global.TQSET.offChange(tutSync); }
+        return;                                    /* 已退场：摘订阅，别攥着 DOM */
+      }
+      var on = (!global.TQSET || !SECT) ? true : global.TQSET.tutOn(SECT);
+      if (on) { wrap.classList.remove('tut-off'); } else { wrap.classList.add('tut-off'); }
+      tutBtn.textContent = on ? '教学 · 开' : '教学 · 关';
+      tutBtn.setAttribute('data-on', on ? '1' : '0');
+      tutBtn.setAttribute('aria-pressed', on ? 'true' : 'false');
+      tutBtn.title = on ? '本小节的操作提示：开（点一下关掉）' : '本小节的操作提示：关（点一下恢复）';
+    }
+    function onTutClick(e) {
+      if (e && e.stopPropagation) { e.stopPropagation(); }
+      if (!global.TQSET || !SECT) { return; }
+      global.TQSET.setTut(SECT, !global.TQSET.tutOn(SECT));   /* 订阅回调会重画 */
+      if (global.TQSFX) { try { global.TQSFX.play('tap'); } catch (err) {} }
+    }
+    tutBtn.addEventListener('click', onTutClick);
+    /* 舞台的 pointerdown 会被小游戏当成一次操作 ⇒ 按钮上的指针事件必须挡住冒泡 */
+    tutBtn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
+    tutBtn.addEventListener('pointerup', function (e) { e.stopPropagation(); });
+    tutRow.appendChild(tutBtn);
+    tutSync();
+    if (global.TQSET && global.TQSET.onChange) { global.TQSET.onChange(tutSync); }
+
     var stepsRow = h('div', 'iv-steps');
     var bar = h('div', 'iv-bar');
     var fill = h('div', 'fill');
@@ -759,7 +798,12 @@
        ★不删代码：TQA.GSYS.jie.on 置真即原样恢复这个入口与 onJie 回调。 */
     if (global.TQA && TQA.modeOpen && TQA.modeOpen('jie')) { ctrl.appendChild(sp); ctrl.appendChild(jie); }
     var hint = h('div', 'iv-hint', '');
-    wrap.appendChild(stepsRow); wrap.appendChild(bar); wrap.appendChild(val); wrap.appendChild(ctrl); wrap.appendChild(hint);
+    /* 说明区收进一张纸卡（2026-11-02）：场景底图铺满之后，步骤条/读数/提示直接压在
+     * 门楼与殿柱上，字是"看得见但读不清"。纸卡只管排版与对比，不改任何判定。 */
+    var board = h('div', 'iv-guide');
+    board.appendChild(stepsRow); board.appendChild(bar); board.appendChild(val);
+    board.appendChild(hint); board.appendChild(ctrl); board.appendChild(tutRow);
+    wrap.appendChild(board);
     /* 挂载与退场由调用方占台管理（VN 占台机制）；节点不再自行 append 进文档流 */
 
     var steps = cfg.steps || [];
