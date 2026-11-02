@@ -130,9 +130,9 @@ window.TQ_DATA = {
 
   acts: [
     {
-      id: 'yin', name: '寅时 · 万寿门', unlocked: true, bg: 'yin', scene: 's1_wanshou',
+      id: 'yin', name: '寅时 · 万岁门', unlocked: true, bg: 'yin', scene: 's1_wanshou',
       steps: [
-        { type: 'narr', text: '天未亮，宫灯次第亮起。万寿门内，今日仪注已铺满长案。' },
+        { type: 'narr', text: '天未亮，宫灯次第亮起。万岁门内，今日仪注已铺满长案。' },
         { type: 'narr', text: '显德五年九月廿四，天清节。官家的三十八岁生日。' },
         { type: 'shard', id: '1' },
         { type: 'tasks' },
@@ -149,7 +149,7 @@ window.TQ_DATA = {
           ]
         } },
         { type: 'shard', id: '3' },
-        { type: 'narr', text: '面送到万寿门侧殿候着。你回廊下过仪注，殿檐下挂着一方旧寺额的拓样——天清寺进贡的贺仪单子就压在下面。' },
+        { type: 'narr', text: '面送到万岁门侧殿候着。你回廊下过仪注，殿檐下挂着一方旧寺额的拓样——天清寺进贡的贺仪单子就压在下面。' },
         { type: 'role', branches: {
           shi: [
             { type: 'narr', text: '你重过仪注——史官的职业病，见字必校。' },
