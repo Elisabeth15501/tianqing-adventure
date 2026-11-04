@@ -1,0 +1,768 @@
+{
+ "net": "none",
+ "view": "390x780",
+ "trace": [
+  [
+   0,
+   {
+    "roleN": 0,
+    "btn": "入宫当值",
+    "body": "雨 过 天 青 云 破 处 这 般 颜 色 做 将 来 「世传御批」· 语出明·谢肇淛《五杂"
+   }
+  ],
+  [
+   1,
+   {
+    "roleN": 0,
+    "btn": "入宫当值",
+    "body": "显德五年 · 九月廿四 · 天清节 手札 史实出处 天清往事 显德五年 · 九月廿四 · 天"
+   }
+  ],
+  [
+   2,
+   {
+    "roleN": 2,
+    "btn": null,
+    "body": "天清往事 · 应差 手札 天清节前夜，礼部来人问话：这一日，你以何职当值？ 宫中女官 掌灯烛"
+   }
+  ],
+  [
+   "点身份卡",
+   "宫中女官掌灯烛汤食，出入"
+  ]
+ ],
+ "screens": [
+  [
+   "进幕后",
+   {
+    "where": "/index.html?fresh=1",
+    "body": "寅时 · 万寿门 差事帖 0/5 手札 寅 万寿门 辰 广德殿 午 汴桥 酉 滋德殿 终 合瓮 天未亮，宫灯次第亮起。万寿门内，今日仪注已铺满长案。 自动 跳过 回看 手札",
+    "zone": {
+     "r": {
+      "x": 0,
+      "y": 153,
+      "w": 390,
+      "h": 627
+     },
+     "cs": {
+      "display": "block",
+      "flex-direction": "column",
+      "position": "absolute",
+      "overflow": "hidden"
+     }
+    },
+    "slots": [
+     {
+      "key": "",
+      "slot": "",
+      "data": {
+       "side": "off",
+       "anchor": null,
+       "fit": null,
+       "duo": null
+      },
+      "r": {
+       "x": 0,
+       "y": 0,
+       "w": 0,
+       "h": 0
+      },
+      "cs": {
+       "display": "none",
+       "position": "absolute",
+       "height": "90%",
+       "width": "154px",
+       "opacity": "1",
+       "visibility": "visible",
+       "z-index": "auto",
+       "overflow": "hidden"
+      },
+      "vars": {
+       "scale": "",
+       "sx": "",
+       "dx": "",
+       "dy": ""
+      },
+      "hasArt": false,
+      "hasReal": false,
+      "img": null
+     },
+     {
+      "key": "nvguan",
+      "slot": "a1",
+      "data": {
+       "side": "main",
+       "anchor": "stage-bottom",
+       "fit": "contain",
+       "duo": null
+      },
+      "r": {
+       "x": 23,
+       "y": 216,
+       "w": 343,
+       "h": 564
+      },
+      "cs": {
+       "display": "flex",
+       "position": "absolute",
+       "height": "564.297px",
+       "width": "343.188px",
+       "opacity": "1",
+       "visibility": "visible",
+       "z-index": "auto",
+       "overflow": "hidden"
+      },
+      "vars": {
+       "scale": "1.1206",
+       "sx": "1.1206",
+       "dx": "-24px",
+       "dy": "0px"
+      },
+      "hasArt": false,
+      "hasReal": true,
+      "img": {
+       "src": "http://127.0.0.1:8765/assets/chars/tq_chars_nvguan_a1_final.webp",
+       "inst": "1",
+       "nat": "1024x1536",
+       "complete": true,
+       "r": {
+        "x": -21,
+        "y": 148,
+        "w": 385,
+        "h": 632
+       },
+       "cs": {
+        "display": "block",
+        "position": "absolute",
+        "object-fit": "contain",
+        "object-position": "50% 100%",
+        "opacity": "1",
+        "transform": "matrix(1.1206, 0, 0, 1.1206, -24, 0)",
+        "width": "343.188px",
+        "height": "564.297px",
+        "visibility": "visible",
+        "z-index": "auto"
+       }
+      }
+     }
+    ],
+    "tqa": {
+     "regChars": 33,
+     "status": {
+      "char-shiguan": "ok",
+      "char-fanzhi": "ok",
+      "char-nvguan": "ok",
+      "char-ligu": "ok"
+     },
+     "env": {
+      "webp": true,
+      "tex2048": true
+     },
+     "mode": "auto",
+     "regSample": "char-guorong → ./assets/chars/tq_chars_guorong_a1_final.webp"
+    },
+    "errs": []
+   }
+  ],
+  [
+   "推进 1",
+   {
+    "where": "/index.html?fresh=1",
+    "body": "寅时 · 万寿门 差事帖 0/5 手札 寅 万寿门 辰 广德殿 午 汴桥 酉 滋德殿 终 合瓮 天未亮，宫灯次第亮起。万寿门内，今日仪注已铺满长案。 自动 跳过 回看 手札",
+    "zone": {
+     "r": {
+      "x": 0,
+      "y": 153,
+      "w": 390,
+      "h": 627
+     },
+     "cs": {
+      "display": "block",
+      "flex-direction": "column",
+      "position": "absolute",
+      "overflow": "hidden"
+     }
+    },
+    "slots": [
+     {
+      "key": "",
+      "slot": "",
+      "data": {
+       "side": "off",
+       "anchor": null,
+       "fit": null,
+       "duo": null
+      },
+      "r": {
+       "x": 0,
+       "y": 0,
+       "w": 0,
+       "h": 0
+      },
+      "cs": {
+       "display": "none",
+       "position": "absolute",
+       "height": "90%",
+       "width": "154px",
+       "opacity": "1",
+       "visibility": "visible",
+       "z-index": "auto",
+       "overflow": "hidden"
+      },
+      "vars": {
+       "scale": "",
+       "sx": "",
+       "dx": "",
+       "dy": ""
+      },
+      "hasArt": false,
+      "hasReal": false,
+      "img": null
+     },
+     {
+      "key": "nvguan",
+      "slot": "a1",
+      "data": {
+       "side": "main",
+       "anchor": "stage-bottom",
+       "fit": "contain",
+       "duo": null
+      },
+      "r": {
+       "x": 23,
+       "y": 216,
+       "w": 343,
+       "h": 564
+      },
+      "cs": {
+       "display": "flex",
+       "position": "absolute",
+       "height": "564.297px",
+       "width": "343.188px",
+       "opacity": "1",
+       "visibility": "visible",
+       "z-index": "auto",
+       "overflow": "hidden"
+      },
+      "vars": {
+       "scale": "1.1206",
+       "sx": "1.1206",
+       "dx": "-24px",
+       "dy": "0px"
+      },
+      "hasArt": false,
+      "hasReal": true,
+      "img": {
+       "src": "http://127.0.0.1:8765/assets/chars/tq_chars_nvguan_a1_final.webp",
+       "inst": "1",
+       "nat": "1024x1536",
+       "complete": true,
+       "r": {
+        "x": -21,
+        "y": 148,
+        "w": 385,
+        "h": 632
+       },
+       "cs": {
+        "display": "block",
+        "position": "absolute",
+        "object-fit": "contain",
+        "object-position": "50% 100%",
+        "opacity": "1",
+        "transform": "matrix(1.1206, 0, 0, 1.1206, -24, 0)",
+        "width": "343.188px",
+        "height": "564.297px",
+        "visibility": "visible",
+        "z-index": "auto"
+       }
+      }
+     }
+    ],
+    "tqa": {
+     "regChars": 33,
+     "status": {
+      "char-shiguan": "ok",
+      "char-fanzhi": "ok",
+      "char-nvguan": "ok",
+      "char-ligu": "ok"
+     },
+     "env": {
+      "webp": true,
+      "tex2048": true
+     },
+     "mode": "auto",
+     "regSample": "char-guorong → ./assets/chars/tq_chars_guorong_a1_final.webp"
+    },
+    "errs": []
+   }
+  ],
+  [
+   "推进 2",
+   {
+    "where": "/index.html?fresh=1",
+    "body": "寅时 · 万寿门 差事帖 0/5 手札 寅 万寿门 辰 广德殿 午 汴桥 酉 滋德殿 终 合瓮 天未亮，宫灯次第亮起。万寿门内，今日仪注已铺满长案。 自动 跳过 回看 手札",
+    "zone": {
+     "r": {
+      "x": 0,
+      "y": 153,
+      "w": 390,
+      "h": 627
+     },
+     "cs": {
+      "display": "block",
+      "flex-direction": "column",
+      "position": "absolute",
+      "overflow": "hidden"
+     }
+    },
+    "slots": [
+     {
+      "key": "",
+      "slot": "",
+      "data": {
+       "side": "off",
+       "anchor": null,
+       "fit": null,
+       "duo": null
+      },
+      "r": {
+       "x": 0,
+       "y": 0,
+       "w": 0,
+       "h": 0
+      },
+      "cs": {
+       "display": "none",
+       "position": "absolute",
+       "height": "90%",
+       "width": "154px",
+       "opacity": "1",
+       "visibility": "visible",
+       "z-index": "auto",
+       "overflow": "hidden"
+      },
+      "vars": {
+       "scale": "",
+       "sx": "",
+       "dx": "",
+       "dy": ""
+      },
+      "hasArt": false,
+      "hasReal": false,
+      "img": null
+     },
+     {
+      "key": "nvguan",
+      "slot": "a1",
+      "data": {
+       "side": "main",
+       "anchor": "stage-bottom",
+       "fit": "contain",
+       "duo": null
+      },
+      "r": {
+       "x": 23,
+       "y": 216,
+       "w": 343,
+       "h": 564
+      },
+      "cs": {
+       "display": "flex",
+       "position": "absolute",
+       "height": "564.297px",
+       "width": "343.188px",
+       "opacity": "1",
+       "visibility": "visible",
+       "z-index": "auto",
+       "overflow": "hidden"
+      },
+      "vars": {
+       "scale": "1.1206",
+       "sx": "1.1206",
+       "dx": "-24px",
+       "dy": "0px"
+      },
+      "hasArt": false,
+      "hasReal": true,
+      "img": {
+       "src": "http://127.0.0.1:8765/assets/chars/tq_chars_nvguan_a1_final.webp",
+       "inst": "1",
+       "nat": "1024x1536",
+       "complete": true,
+       "r": {
+        "x": -21,
+        "y": 148,
+        "w": 385,
+        "h": 632
+       },
+       "cs": {
+        "display": "block",
+        "position": "absolute",
+        "object-fit": "contain",
+        "object-position": "50% 100%",
+        "opacity": "1",
+        "transform": "matrix(1.1206, 0, 0, 1.1206, -24, 0)",
+        "width": "343.188px",
+        "height": "564.297px",
+        "visibility": "visible",
+        "z-index": "auto"
+       }
+      }
+     }
+    ],
+    "tqa": {
+     "regChars": 33,
+     "status": {
+      "char-shiguan": "ok",
+      "char-fanzhi": "ok",
+      "char-nvguan": "ok",
+      "char-ligu": "ok"
+     },
+     "env": {
+      "webp": true,
+      "tex2048": true
+     },
+     "mode": "auto",
+     "regSample": "char-guorong → ./assets/chars/tq_chars_guorong_a1_final.webp"
+    },
+    "errs": []
+   }
+  ],
+  [
+   "推进 3",
+   {
+    "where": "/index.html?fresh=1",
+    "body": "寅时 · 万寿门 差事帖 0/5 手札 寅 万寿门 辰 广德殿 午 汴桥 酉 滋德殿 终 合瓮 天未亮，宫灯次第亮起。万寿门内，今日仪注已铺满长案。 自动 跳过 回看 手札",
+    "zone": {
+     "r": {
+      "x": 0,
+      "y": 153,
+      "w": 390,
+      "h": 627
+     },
+     "cs": {
+      "display": "block",
+      "flex-direction": "column",
+      "position": "absolute",
+      "overflow": "hidden"
+     }
+    },
+    "slots": [
+     {
+      "key": "",
+      "slot": "",
+      "data": {
+       "side": "off",
+       "anchor": null,
+       "fit": null,
+       "duo": null
+      },
+      "r": {
+       "x": 0,
+       "y": 0,
+       "w": 0,
+       "h": 0
+      },
+      "cs": {
+       "display": "none",
+       "position": "absolute",
+       "height": "90%",
+       "width": "154px",
+       "opacity": "1",
+       "visibility": "visible",
+       "z-index": "auto",
+       "overflow": "hidden"
+      },
+      "vars": {
+       "scale": "",
+       "sx": "",
+       "dx": "",
+       "dy": ""
+      },
+      "hasArt": false,
+      "hasReal": false,
+      "img": null
+     },
+     {
+      "key": "nvguan",
+      "slot": "a1",
+      "data": {
+       "side": "main",
+       "anchor": "stage-bottom",
+       "fit": "contain",
+       "duo": null
+      },
+      "r": {
+       "x": 23,
+       "y": 216,
+       "w": 343,
+       "h": 564
+      },
+      "cs": {
+       "display": "flex",
+       "position": "absolute",
+       "height": "564.297px",
+       "width": "343.188px",
+       "opacity": "1",
+       "visibility": "visible",
+       "z-index": "auto",
+       "overflow": "hidden"
+      },
+      "vars": {
+       "scale": "1.1206",
+       "sx": "1.1206",
+       "dx": "-24px",
+       "dy": "0px"
+      },
+      "hasArt": false,
+      "hasReal": true,
+      "img": {
+       "src": "http://127.0.0.1:8765/assets/chars/tq_chars_nvguan_a1_final.webp",
+       "inst": "1",
+       "nat": "1024x1536",
+       "complete": true,
+       "r": {
+        "x": -21,
+        "y": 148,
+        "w": 385,
+        "h": 632
+       },
+       "cs": {
+        "display": "block",
+        "position": "absolute",
+        "object-fit": "contain",
+        "object-position": "50% 100%",
+        "opacity": "1",
+        "transform": "matrix(1.1206, 0, 0, 1.1206, -24, 0)",
+        "width": "343.188px",
+        "height": "564.297px",
+        "visibility": "visible",
+        "z-index": "auto"
+       }
+      }
+     }
+    ],
+    "tqa": {
+     "regChars": 33,
+     "status": {
+      "char-shiguan": "ok",
+      "char-fanzhi": "ok",
+      "char-nvguan": "ok",
+      "char-ligu": "ok"
+     },
+     "env": {
+      "webp": true,
+      "tex2048": true
+     },
+     "mode": "auto",
+     "regSample": "char-guorong → ./assets/chars/tq_chars_guorong_a1_final.webp"
+    },
+    "errs": []
+   }
+  ],
+  [
+   "推进 4",
+   {
+    "where": "/index.html?fresh=1",
+    "body": "寅时 · 万寿门 差事帖 0/5 手札 寅 万寿门 辰 广德殿 午 汴桥 酉 滋德殿 终 合瓮 天未亮，宫灯次第亮起。万寿门内，今日仪注已铺满长案。 自动 跳过 回看 手札",
+    "zone": {
+     "r": {
+      "x": 0,
+      "y": 153,
+      "w": 390,
+      "h": 627
+     },
+     "cs": {
+      "display": "block",
+      "flex-direction": "column",
+      "position": "absolute",
+      "overflow": "hidden"
+     }
+    },
+    "slots": [
+     {
+      "key": "",
+      "slot": "",
+      "data": {
+       "side": "off",
+       "anchor": null,
+       "fit": null,
+       "duo": null
+      },
+      "r": {
+       "x": 0,
+       "y": 0,
+       "w": 0,
+       "h": 0
+      },
+      "cs": {
+       "display": "none",
+       "position": "absolute",
+       "height": "90%",
+       "width": "154px",
+       "opacity": "1",
+       "visibility": "visible",
+       "z-index": "auto",
+       "overflow": "hidden"
+      },
+      "vars": {
+       "scale": "",
+       "sx": "",
+       "dx": "",
+       "dy": ""
+      },
+      "hasArt": false,
+      "hasReal": false,
+      "img": null
+     },
+     {
+      "key": "nvguan",
+      "slot": "a1",
+      "data": {
+       "side": "main",
+       "anchor": "stage-bottom",
+       "fit": "contain",
+       "duo": null
+      },
+      "r": {
+       "x": 23,
+       "y": 216,
+       "w": 343,
+       "h": 564
+      },
+      "cs": {
+       "display": "flex",
+       "position": "absolute",
+       "height": "564.297px",
+       "width": "343.188px",
+       "opacity": "1",
+       "visibility": "visible",
+       "z-index": "auto",
+       "overflow": "hidden"
+      },
+      "vars": {
+       "scale": "1.1206",
+       "sx": "1.1206",
+       "dx": "-24px",
+       "dy": "0px"
+      },
+      "hasArt": false,
+      "hasReal": true,
+      "img": {
+       "src": "http://127.0.0.1:8765/assets/chars/tq_chars_nvguan_a1_final.webp",
+       "inst": "1",
+       "nat": "1024x1536",
+       "complete": true,
+       "r": {
+        "x": -21,
+        "y": 148,
+        "w": 385,
+        "h": 632
+       },
+       "cs": {
+        "display": "block",
+        "position": "absolute",
+        "object-fit": "contain",
+        "object-position": "50% 100%",
+        "opacity": "1",
+        "transform": "matrix(1.1206, 0, 0, 1.1206, -24, 0)",
+        "width": "343.188px",
+        "height": "564.297px",
+        "visibility": "visible",
+        "z-index": "auto"
+       }
+      }
+     }
+    ],
+    "tqa": {
+     "regChars": 33,
+     "status": {
+      "char-shiguan": "ok",
+      "char-fanzhi": "ok",
+      "char-nvguan": "ok",
+      "char-ligu": "ok"
+     },
+     "env": {
+      "webp": true,
+      "tex2048": true
+     },
+     "mode": "auto",
+     "regSample": "char-guorong → ./assets/chars/tq_chars_guorong_a1_final.webp"
+    },
+    "errs": []
+   }
+  ]
+ ],
+ "res": [
+  {
+   "n": "tq_chars_shiguan_a1_final.webp",
+   "start": 62,
+   "dur": 7,
+   "size": 57054,
+   "enc": 56754
+  },
+  {
+   "n": "tq_chars_nvguan_a1_final.webp",
+   "start": 62,
+   "dur": 27,
+   "size": 47646,
+   "enc": 47346
+  },
+  {
+   "n": "tq_chars_fanzhi_a1_final.webp",
+   "start": 74,
+   "dur": 9,
+   "size": 68752,
+   "enc": 68452
+  },
+  {
+   "n": "tq_chars_ligu_a1_final.webp",
+   "start": 84,
+   "dur": 6,
+   "size": 66622,
+   "enc": 66322
+  }
+ ],
+ "netLog": [
+  {
+   "n": "tq_chars_shiguan_a1_final.webp",
+   "st": 200,
+   "mime": "image/webp"
+  },
+  {
+   "n": "tq_chars_nvguan_a1_final.webp",
+   "st": 200,
+   "mime": "image/webp"
+  },
+  {
+   "n": "tq_chars_fanzhi_a1_final.webp",
+   "st": 200,
+   "mime": "image/webp"
+  },
+  {
+   "n": "tq_chars_ligu_a1_final.webp",
+   "st": 200,
+   "mime": "image/webp"
+  },
+  {
+   "n": "tq_chars_shiguan_a1_final.webp",
+   "st": 200,
+   "mime": "image/webp"
+  },
+  {
+   "n": "tq_chars_nvguan_a1_final.webp",
+   "st": 200,
+   "mime": "image/webp"
+  },
+  {
+   "n": "tq_chars_fanzhi_a1_final.webp",
+   "st": 200,
+   "mime": "image/webp"
+  },
+  {
+   "n": "tq_chars_ligu_a1_final.webp",
+   "st": 200,
+   "mime": "image/webp"
+  }
+ ]
+}

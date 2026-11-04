@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="stylesheet" href="../css/app.css">
+<style>
+  body{margin:0;background:#e8e8e8}
+  .iv{display:flex;flex-direction:column;align-items:center;padding:20px}
+  #stage{position:relative;width:300px;height:210px}
+</style>
+</head>
+<body>
+<div class="iv rich" id="wrap">
+  <div class="iv-stage" id="stage"></div>
+</div>
+<script src="../js/minigame.js"></script>
+<script>
+  window.__log = [];
+  var q = location.search || '';
+  var nMin = parseInt((q.match(/ministers=(\d+)/) || [])[1] || '0', 10);
+  var ministers = [];
+  for (var i = 0; i < nMin; i++) { ministers.push({ speaker: '群臣' + (i + 1), line: '第' + (i + 1) + '位，请。' }); }
+  var stage = document.getElementById('stage');
+  var cfg = {
+    rich: 'touhu', zone: 'test', title: 'test', hint: '',
+    story: {
+      ministers: ministers, intro: '', toPlayer: '',
+      minResult: { 0: '两矢未入。', 1: '一矢入壶。', 2: '两矢皆中。' },
+      rongIntro: '', rongThrow: { hit: ['', ''], miss: ['', ''] }, ending: {}
+    },
+    steps: [ { label: '第一矢', gest: 'toss' }, { label: '第二矢', gest: 'toss' } ]
+  };
+  var hooks = { step: function () {}, tip: function () {}, done: function () { window.__log.push('done'); } };
+  window.__mg = window.TQM.play('touhu', stage, cfg, hooks);
+  window.__state = function () { return (window.TQM && window.TQM.cur && window.TQM.cur.state) ? window.TQM.cur.state() : null; };
+
+  window.__drag = function (pointerType) {
+    var svg = stage.querySelector('svg');
+    var r = svg.getBoundingClientRect();
+    var x0 = r.left + r.width * 0.40, y0 = r.top + r.height * 0.72;
+    var x1 = x0 + r.width * 0.26, y1 = y0 - r.height * 0.30;
+    function ev(type, x, y) {
+      return new PointerEvent(type, {
+        pointerType: pointerType, pointerId: 1,
+        clientX: x, clientY: y, bubbles: true, cancelable: true, isPrimary: true, buttons: 1
+      });
+    }
+    stage.dispatchEvent(ev('pointerdown', x0, y0));
+    stage.dispatchEvent(ev('pointermove', (x0 + x1) / 2, (y0 + y1) / 2));
+    stage.dispatchEvent(ev('pointermove', x1, y1));
+    stage.dispatchEvent(ev('pointerup', x1, y1));
+    return window.__state();
+  };
+</script>
+</body>
+</html>

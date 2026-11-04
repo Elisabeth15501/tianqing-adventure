@@ -1,0 +1,768 @@
+{
+ "view": "1280x720",
+ "net": "none",
+ "total": 33,
+ "bad": [],
+ "rows": [
+  {
+   "key": "guorong",
+   "slot": "a1",
+   "ak": "char-guorong",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": 7,
+    "y": 48,
+    "w": 501,
+    "h": 677
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.96,
+   "ms": 103
+  },
+  {
+   "key": "guorong",
+   "slot": "a2",
+   "ak": "char-guorong-a2",
+   "status": "ok",
+   "nat": "900x1350",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": 6,
+    "y": 54,
+    "w": 496,
+    "h": 670
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.973,
+   "ms": 109
+  },
+  {
+   "key": "guorong",
+   "slot": "a3",
+   "ak": "char-guorong-a3",
+   "status": "ok",
+   "nat": "800x1200",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": 13,
+    "y": 59,
+    "w": 493,
+    "h": 666
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.989,
+   "ms": 108
+  },
+  {
+   "key": "guorong",
+   "slot": "t",
+   "ak": "char-guorong-t",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": 6,
+    "y": 49,
+    "w": 501,
+    "h": 676
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.962,
+   "ms": 101
+  },
+  {
+   "key": "guorong",
+   "slot": "n1",
+   "ak": "char-guorong-n1",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": 13,
+    "y": 49,
+    "w": 501,
+    "h": 676
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.962,
+   "ms": 106
+  },
+  {
+   "key": "nvguan",
+   "slot": "a1",
+   "ak": "char-nvguan",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -19,
+    "y": 45,
+    "w": 502,
+    "h": 677
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.914,
+   "ms": 102
+  },
+  {
+   "key": "shiguan",
+   "slot": "a1",
+   "ak": "char-shiguan",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -16,
+    "y": 54,
+    "w": 497,
+    "h": 672
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.927,
+   "ms": 103
+  },
+  {
+   "key": "wangpu",
+   "slot": "a1",
+   "ak": "char-wangpu",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -16,
+    "y": 9,
+    "w": 531,
+    "h": 716
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.857,
+   "ms": 104
+  },
+  {
+   "key": "wangpu",
+   "slot": "e2",
+   "ak": "char-wangpu-e2",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": 38,
+    "y": 129,
+    "w": 441,
+    "h": 596
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.992,
+   "ms": 102
+  },
+  {
+   "key": "wangpu2",
+   "slot": "a1",
+   "ak": "char-wangpu2",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": 33,
+    "y": 75,
+    "w": 481,
+    "h": 649
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.975,
+   "ms": 105
+  },
+  {
+   "key": "zhangyongde",
+   "slot": "a1",
+   "ak": "char-zhangyongde",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -34,
+    "y": 51,
+    "w": 499,
+    "h": 674
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.889,
+   "ms": 104
+  },
+  {
+   "key": "zhangyongde",
+   "slot": "e1",
+   "ak": "char-zhangyongde-e1",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -8,
+    "y": 48,
+    "w": 502,
+    "h": 678
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.936,
+   "ms": 104
+  },
+  {
+   "key": "zhaokuangyin",
+   "slot": "a1",
+   "ak": "char-zhaokuangyin",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -12,
+    "y": 53,
+    "w": 497,
+    "h": 672
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.935,
+   "ms": 105
+  },
+  {
+   "key": "zhaokuangyin",
+   "slot": "e1",
+   "ak": "char-zhaokuangyin-e1",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -9,
+    "y": 54,
+    "w": 497,
+    "h": 671
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.943,
+   "ms": 107
+  },
+  {
+   "key": "zhaokuangyin",
+   "slot": "e3",
+   "ak": "char-zhaokuangyin-e3",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -9,
+    "y": 49,
+    "w": 500,
+    "h": 675
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.938,
+   "ms": 103
+  },
+  {
+   "key": "yinchongyi",
+   "slot": "a1",
+   "ak": "char-yinchongyi",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -29,
+    "y": 48,
+    "w": 502,
+    "h": 678
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.895,
+   "ms": 103
+  },
+  {
+   "key": "yinchongyi",
+   "slot": "e1",
+   "ak": "char-yinchongyi-e1",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -11,
+    "y": 48,
+    "w": 501,
+    "h": 677
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.931,
+   "ms": 102
+  },
+  {
+   "key": "yinchongyi",
+   "slot": "e2",
+   "ak": "char-yinchongyi-e2",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -11,
+    "y": 49,
+    "w": 501,
+    "h": 677
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.931,
+   "ms": 107
+  },
+  {
+   "key": "yinchongyi",
+   "slot": "e3",
+   "ak": "char-yinchongyi-e3",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": 20,
+    "y": 48,
+    "w": 501,
+    "h": 677
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.948,
+   "ms": 102
+  },
+  {
+   "key": "fuhou",
+   "slot": "a1",
+   "ak": "char-fuhou",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": 7,
+    "y": 100,
+    "w": 463,
+    "h": 626
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.975,
+   "ms": 107
+  },
+  {
+   "key": "fuhou",
+   "slot": "e2",
+   "ak": "char-fuhou-e2",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -3,
+    "y": 52,
+    "w": 498,
+    "h": 673
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.952,
+   "ms": 103
+  },
+  {
+   "key": "guowei",
+   "slot": "a1",
+   "ak": "char-guowei",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -9,
+    "y": 46,
+    "w": 503,
+    "h": 679
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.932,
+   "ms": 104
+  },
+  {
+   "key": "guowei",
+   "slot": "e3",
+   "ak": "char-guowei-e3",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -1,
+    "y": 52,
+    "w": 500,
+    "h": 675
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.952,
+   "ms": 104
+  },
+  {
+   "key": "fengdao",
+   "slot": "a1",
+   "ak": "char-fengdao",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -19,
+    "y": 35,
+    "w": 511,
+    "h": 689
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.9,
+   "ms": 106
+  },
+  {
+   "key": "shaonian",
+   "slot": "a1",
+   "ak": "char-shaonian",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -12,
+    "y": 60,
+    "w": 493,
+    "h": 666
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.939,
+   "ms": 102
+  },
+  {
+   "key": "fanzhi",
+   "slot": "a1",
+   "ak": "char-fanzhi",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": 35,
+    "y": 89,
+    "w": 471,
+    "h": 637
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.988,
+   "ms": 109
+  },
+  {
+   "key": "ligu",
+   "slot": "a1",
+   "ak": "char-ligu",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": 32,
+    "y": 87,
+    "w": 472,
+    "h": 638
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.993,
+   "ms": 103
+  },
+  {
+   "key": "lichongjin",
+   "slot": "a1",
+   "ak": "char-lichongjin",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -9,
+    "y": 89,
+    "w": 471,
+    "h": 637
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.942,
+   "ms": 103
+  },
+  {
+   "key": "shangshiling",
+   "slot": "a1",
+   "ak": "char-shangshiling",
+   "status": "ok",
+   "nat": "640x640",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -34,
+    "y": -78,
+    "w": 593,
+    "h": 801
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.685,
+   "ms": 103
+  },
+  {
+   "key": "zongxun",
+   "slot": "a1",
+   "ak": "char-zongxun",
+   "status": "ok",
+   "nat": "1024x1536",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": 25,
+    "y": 76,
+    "w": 481,
+    "h": 650
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.989,
+   "ms": 105
+  },
+  {
+   "key": "sizheng",
+   "slot": "a1",
+   "ak": "char-sizheng",
+   "status": "ok",
+   "nat": "640x640",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": 27,
+    "y": 122,
+    "w": 445,
+    "h": 601
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.994,
+   "ms": 104
+  },
+  {
+   "key": "shanggong",
+   "slot": "a1",
+   "ak": "char-shanggong",
+   "status": "ok",
+   "nat": "640x640",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": -26,
+    "y": -23,
+    "w": 553,
+    "h": 747
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.788,
+   "ms": 103
+  },
+  {
+   "key": "qijulang",
+   "slot": "a1",
+   "ak": "char-qijulang",
+   "status": "ok",
+   "nat": "640x640",
+   "hasReal": true,
+   "hasArt": false,
+   "imgRect": {
+    "x": 20,
+    "y": 61,
+    "w": 490,
+    "h": 662
+   },
+   "slotRect": {
+    "x": 14,
+    "y": 57,
+    "w": 491,
+    "h": 663
+   },
+   "vis": 0.983,
+   "ms": 105
+  }
+ ],
+ "failed": []
+}

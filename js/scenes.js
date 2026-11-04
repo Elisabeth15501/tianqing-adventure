@@ -232,9 +232,14 @@
       '.tqs-stage img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 50%;',
       '  -webkit-user-drag:none;user-select:none}',
       '.tqs-pano{position:absolute;left:0;top:0;height:100%;will-change:transform}',
-      '.tqs-pano img{width:100%;height:100%;object-fit:fill}',
+      /* ★底图一律用 CSS 背景层（2026-11-04）：<img> 会触发宿主的长按「保存图片」，
+         背景图不是图片节点，从根上避开。cover/fill 用 background-size 表达。 */
+      '.tqs-bg{position:absolute;left:0;top:0;width:100%;height:100%;',
+      '  background-size:cover;background-position:50% 50%;background-repeat:no-repeat;',
+      '  pointer-events:none;-webkit-user-drag:none;user-select:none}',
+      '.tqs-pano .tqs-bg{background-size:100% 100%;background-position:0 0}',
       /* 单层场景：主图放大兜住位移，前景层反向慢移（程序化，无资源） */
-      '.tqs-solo img{transform-origin:50% 50%;will-change:transform}',
+      '.tqs-solo .tqs-bg{transform-origin:50% 50%;will-change:transform}',
       '.tqs-solo-fg{position:absolute;left:-6%;top:-4%;width:112%;height:108%;pointer-events:none;',
       '  will-change:transform;',
       '  background:'
@@ -264,12 +269,16 @@
   function mountSingle(el, cfg) {
     injectStyle();
     el.classList.add('tqs-stage', 'tqs-solo');
-    var im = el.querySelector('img');
-    if (!im) { im = document.createElement('img'); el.appendChild(im); }
-    im.setAttribute('alt', '');
-    im.setAttribute('draggable', 'false');
-    im.setAttribute('decoding', 'async');
-    im.src = path(cfg.files.main);
+    /* ★2026-11-04 长按根治：底图不再用 <img>，改成 CSS 背景层。
+       <img> 即便 pointer-events:none，部分安卓 WebView 仍在原生层按节点类型
+       弹「保存图片／识别图片」；背景图不是图片节点，这是不依赖宿主实现的一刀。
+       src/loaded 改由一个脱离文档的 Image 追踪，对调用方接口不变。 */
+    var src0 = path(cfg.files.main);
+    var bgd = el.querySelector('.tqs-bg');
+    if (!bgd) { bgd = document.createElement('div'); bgd.className = 'tqs-bg'; el.appendChild(bgd); }
+    bgd.style.backgroundImage = 'url("' + src0 + '")';
+    var probe = new Image();
+    probe.src = src0;
 
     var fg = el.querySelector('.tqs-solo-fg');
     if (!fg) { fg = document.createElement('div'); fg.className = 'tqs-solo-fg'; el.appendChild(fg); }
@@ -282,7 +291,7 @@
       cy += (ty - cy) * 0.14;
       var moving = Math.abs(tx - cx) > 0.0015 || Math.abs(ty - cy) > 0.0015;
       if (!moving) { cx = tx; cy = ty; }
-      im.style.transform = 'translate3d(' + (cx * -1.6).toFixed(2) + '%,' + (cy * -1.1).toFixed(2) + '%,0) scale(1.06)';
+      bgd.style.transform = 'translate3d(' + (cx * -1.6).toFixed(2) + '%,' + (cy * -1.1).toFixed(2) + '%,0) scale(1.06)';
       fg.style.transform = 'translate3d(' + (cx * 2.6).toFixed(2) + '%,' + (cy * 1.8).toFixed(2) + '%,0)';
       if (moving) { schedule(); }
     }
@@ -303,8 +312,8 @@
     }
     return {
       kind: 'single', el: el,
-      src: im.src,
-      loaded: function () { return im.complete && im.naturalWidth > 0; },
+      src: src0,
+      loaded: function () { return probe.complete && probe.naturalWidth > 0; },
       inputStatus: function () {
         return { kind: el.getAttribute('data-spl-input') || 'none',
                  detail: ctrl && ctrl.status ? ctrl.status() : null };
@@ -326,12 +335,12 @@
     el.classList.add('tqs-stage');
     var box = document.createElement('div');
     box.className = 'tqs-pano';
-    var im = document.createElement('img');
-    im.setAttribute('alt', '');
-    im.setAttribute('draggable', 'false');
-    im.setAttribute('decoding', 'async');
-    im.src = path(cfg.files.main);
-    box.appendChild(im);
+    /* 长卷同样走 CSS 背景层（见 mountSingle 的说明）：`background-size:100% 100%`
+       等价于原来的 object-fit:fill，拖动只改 box 的 transform。 */
+    var bgd = document.createElement('div');
+    bgd.className = 'tqs-bg';
+    bgd.style.backgroundImage = 'url("' + path(cfg.files.main) + '")';
+    box.appendChild(bgd);
     el.appendChild(box);
 
     var inst = {

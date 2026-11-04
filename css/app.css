@@ -1114,7 +1114,10 @@ body.shv-open .main{overflow:hidden}
  * z-index 44：高于史实出处浮层（40）与手札浮层，低于「收下瓷片」这类即时提示。
  * 面板走纸色 + 赭边，与出处页同族；内容可滚，横屏时分两列不必——列表本身不长。 */
 .set-ov{position:absolute;left:0;right:0;top:0;bottom:0;z-index:44;background:rgba(31,59,58,.55);
-  overflow-y:auto;display:flex;align-items:center;justify-content:center;padding:16px}
+  /* ★2026-11-04：设定页整体让开平台安全区。容器会把右上角原生按钮（分享/我的）算进
+     --tq-top-inset（见 app.js 的 getWindowInfo 归边逻辑）；Pages 上该值为 0，视觉不变。 */
+  overflow-y:auto;display:flex;align-items:center;justify-content:center;
+  padding:calc(16px + var(--tq-top-inset)) 16px 16px}
 .set-panel{background:var(--paper);border:1px solid var(--tu);border-radius:14px;width:100%;
   max-width:520px;max-height:100%;overflow-y:auto;box-shadow:0 10px 32px rgba(31,59,58,.28);
   padding:16px 16px 18px;flex-shrink:0}
