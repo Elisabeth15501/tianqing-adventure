@@ -3384,24 +3384,81 @@ function playShiFolk(cv, hooks, cfg, ui) {
     g.beat(startBeat);
     g.start();
 
-    function onDown(e) { e.preventDefault(); var p = cv.map(e); g.down(p); try { stage.setPointerCapture(e.pointerId); } catch (err) { } }
-    function onMove(e) { var p = cv.map(e); g.move(p); }
-    function onUp(e) { var p = cv.map(e); g.up(p); }
+    /* ★输入双轨（2026-11-04）：容器可能只投递 touch 事件、或把拖动判成滚动后 pointercancel。
+       有 PointerEvent 就接所有 pointerType；同时无条件挂 touchstart/move/end（passive:false）。
+       两路互斥（ptrId / touchId 先按先得），不会双触发。 */
+    var USE_PTR = !!global.PointerEvent, ptrId = null, touchId = null;
+    function tmap(t) { return { clientX: t.clientX, clientY: t.clientY, pointerId: t.identifier }; }
+    function pickTouch(list, id) {
+      if (!list || !list.length) { return null; }
+      for (var i = 0; i < list.length; i++) { if (list[i].identifier === id) { return list[i]; } }
+      return list[0];
+    }
 
-    stage.addEventListener('pointerdown', onDown);
-    stage.addEventListener('pointermove', onMove);
-    stage.addEventListener('pointerup', onUp);
-    stage.addEventListener('pointercancel', onUp);
+    function onDown(e) {
+      if (ptrId !== null) { return; }
+      if (e.cancelable) { e.preventDefault(); }
+      ptrId = e.pointerId;
+      var p = cv.map(e); g.down(p);
+      try { stage.setPointerCapture(e.pointerId); } catch (err) { }
+    }
+    function onMove(e) {
+      if (ptrId !== null && e.pointerId !== ptrId) { return; }
+      if (e.cancelable) { e.preventDefault(); }
+      g.move(cv.map(e));
+    }
+    function onUp(e) {
+      if (ptrId !== null && e.pointerId !== ptrId) { return; }
+      ptrId = null;
+      g.up(cv.map(e));
+    }
+
+    function tDown(e) {
+      if (touchId !== null || ptrId !== null) { return; }
+      if (e.cancelable) { e.preventDefault(); }
+      var t = e.changedTouches && e.changedTouches[0]; if (!t) { return; }
+      touchId = t.identifier; g.down(cv.map(tmap(t)));
+    }
+    function tMove(e) {
+      if (touchId === null || ptrId !== null) { return; }
+      if (e.cancelable) { e.preventDefault(); }
+      var t = pickTouch(e.touches, touchId); if (!t) { return; }
+      g.move(cv.map(tmap(t)));
+    }
+    function tUp(e) {
+      if (touchId === null) { return; }
+      var t = pickTouch(e.changedTouches, touchId);
+      touchId = null;
+      g.up(t ? cv.map(tmap(t)) : { x: 0, y: 0 });
+    }
+
+    if (USE_PTR) {
+      stage.addEventListener('pointerdown', onDown);
+      stage.addEventListener('pointermove', onMove);
+      stage.addEventListener('pointerup', onUp);
+      stage.addEventListener('pointercancel', onUp);
+    }
+    /* passive:false 才能 preventDefault —— 否则手指纵向一拖就被判成滚动 */
+    stage.addEventListener('touchstart', tDown, { passive: false });
+    stage.addEventListener('touchmove', tMove, { passive: false });
+    stage.addEventListener('touchend', tUp, false);
+    stage.addEventListener('touchcancel', tUp, false);
 
     return {
       next: function (i) { g.beat(i); },
       destroy: function () {
         g.stop();
         sheet.close();
-        stage.removeEventListener('pointerdown', onDown);
-        stage.removeEventListener('pointermove', onMove);
-        stage.removeEventListener('pointerup', onUp);
-        stage.removeEventListener('pointercancel', onUp);
+        if (USE_PTR) {
+          stage.removeEventListener('pointerdown', onDown);
+          stage.removeEventListener('pointermove', onMove);
+          stage.removeEventListener('pointerup', onUp);
+          stage.removeEventListener('pointercancel', onUp);
+        }
+        stage.removeEventListener('touchstart', tDown);
+        stage.removeEventListener('touchmove', tMove);
+        stage.removeEventListener('touchend', tUp);
+        stage.removeEventListener('touchcancel', tUp);
         /* ★不删 SVG：结束时要停在这一拍的成品上（三条面 / 补好的卷 / 壶与比分）。
            删掉就是一个空舞台，玩家以为自己什么都没做。 */
         cv.svg.style.pointerEvents = 'none';
