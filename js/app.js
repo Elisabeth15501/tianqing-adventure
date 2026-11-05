@@ -19,6 +19,13 @@
       root.style.setProperty(name, Math.max(0, Math.round(px)) + 'px');
     }
     function apply(ins) {
+      /* ★2026-11-05：设定页需要「整体下移避开容器顶部原生按钮」。
+         不动全局 --tq-top-inset（那会把顶栏也推下去），只算一个设定页专用上边距：
+         容器内取 max(实测, 44) —— getWindowInfo 取不到时也有下限；Pages 上没有
+         window.xhs，值等于 16px，视觉与旧版完全一致。 */
+      var setTop = ins.top || 0;
+      if (global.xhs && global.xhs.miniTool && setTop < 44) { setTop = 44; }
+      setVar('--tq-set-top', setTop + 16);
       setVar('--tq-top-inset', ins.top || 0);
       setVar('--tq-bottom-inset', ins.bottom || 0);
       setVar('--tq-left-inset', ins.left || 0);
@@ -695,14 +702,30 @@
   /* ★三层视差是「按舞台比画的」（1500×630 / 750×1080），引擎把层图 object-fit:fill
    *   铺满宿主 ⇒ 宿主比与素材不一致时会被拉伸（1280×800 实测纵向拉 50%）。
    *   这里给宿主做 background-size:cover 式的等比放大 + 居中，画面回到正确的形变。 */
-  function fitSceneCover(host, key, form) {
+  /* ★2026-11-05：真机进幕那一瞬 app.clientWidth 常为 0。旧实现用「|| 1」兜底，
+   *   k≈0.0016，把三层宿主写成 2×1px —— 图其实下载成功，但整块看不见，
+   *   表现就是「部分场景/前景没加载」（S1 横版 / S2 / S5 / S7 全是三层）。
+   *   现在：量不到就等布局（≤24×50ms），最后才用 innerWidth/innerHeight；
+   *   视口变化（旋转/分屏/软键盘收起）后重算。绝不用 1 参与除法。 */
+  var FIT_TRIES = 24, FIT_STEP = 50;
+  function fitSceneCover(host, key, form, tries) {
     if (!host) { return; }
     var cfg = (global.TQScenes && global.TQScenes.form) ? global.TQScenes.form(key, form) : null;
     if (!cfg || cfg.kind !== 'parallax' || !cfg.size) {
       host.style.width = ''; host.style.height = ''; host.style.left = ''; host.style.top = '';
       return;
     }
-    var W = app.clientWidth || 1, H = app.clientHeight || 1;
+    tries = tries || 0;
+    var W = app.clientWidth, H = app.clientHeight;
+    if (!W || !H) {
+      if (tries < FIT_TRIES) {
+        setTimeout(function () { fitSceneCover(host, key, form, tries + 1); }, FIT_STEP);
+        return;
+      }
+      /* 仍量不到：用视口兜底（比图幅更接近真实可见区），而不是把 1 当宽度 */
+      W = global.innerWidth || 390;
+      H = global.innerHeight || 844;
+    }
     var k = Math.max(W / cfg.size[0], H / cfg.size[1]);
     var w = Math.round(cfg.size[0] * k), h = Math.round(cfg.size[1] * k);
     host.style.width = w + 'px'; host.style.height = h + 'px';
@@ -710,6 +733,18 @@
     host.style.top = Math.round((H - h) / 2) + 'px';
     if (SCENE.inst && SCENE.inst._measure) { SCENE.inst._measure(); }
   }
+
+  /* 视口变化后重算 cover 尺寸（旋转 / 分屏 / 地址栏收起都会改变可见高） */
+  (function () {
+    var t = 0;
+    function refit() {
+      if (!SCENE.el || !SCENE.key) { return; }
+      if (t) { clearTimeout(t); }
+      t = setTimeout(function () { fitSceneCover(SCENE.el, SCENE.key, SCENE.form); }, 80);
+    }
+    global.addEventListener('resize', refit);
+    global.addEventListener('orientationchange', refit);
+  }());
 
   function mountScene(key) {
     if (!key || !global.TQScenes) { return false; }
@@ -726,7 +761,11 @@
       fitSceneCover(host, key, form);
       return true;
     } catch (e) {
-      /* 素材缺失/引擎没加载：静默退回矢量底图，不打断剧情 */
+      /* 素材缺失/引擎没加载：退回矢量底图，不打断剧情。
+         ★但必须留痕：原来这里完全静默，真机「场景没了、控制台干净」，无法排查。 */
+      if (global.console && global.console.warn) {
+        global.console.warn('[TQ] 场景挂载失败，退回矢量底图:', key, e && e.message);
+      }
       if (host.parentNode) { host.parentNode.removeChild(host); }
       SCENE = { key: null, form: null, inst: null, el: null };
       return false;
@@ -2488,6 +2527,10 @@
     memo: function () { showMemo(false); },
     memoOverlay: function () { showMemoOverlay(); },
     viewer: openShardViewer,
+    /* 场景 cover 尺寸的验收入口（2026-11-05）：真机首帧 clientWidth=0 会把三层宿主
+       写成 2×1px（「场景没加载」的真因）。headless 无法自然制造这一瞬，
+       故开放只读重算入口，配合「临时把 clientWidth 打成 0」做确定性回归。 */
+    fitScene: function (host, key, form) { fitSceneCover(host, key, form); },
     /* 拾得瓷片占台的验收入口（2026-11-02 新增）：真机反馈「#11/#13/#15 不显示」，
      *   要复现必须能直接进那张占台，不能靠「玩到那一步」。
      *   TQApp.shard('13') 的 DOM 与正常流程**完全同源**（同一个 showShard），

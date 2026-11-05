@@ -8,7 +8,7 @@
  * 三种 kind：
  *   parallax  三层（bg/mg/fg）→ 交给 SceneParallax 引擎，陀螺仪/指针驱动
  *   single    整幅单层（S3/S6 与 S1 竖版）→ 直接铺满，无位移
- *   pano      横向长卷（S4，2880×720）→ 指针拖动 camera，clamp 到两端
+ *   pano      横向长卷（S4，2048×512）→ 指针拖动 camera，clamp 到两端
  *
  * 视差系数来源（不许现编）：
  *   S5 用实测定标 ks = 0.30 / 0.60 / 1.00（build_s5_v3_layers.py + 三层预览验收）
@@ -93,10 +93,10 @@
   def('s4_pano', {
     title: 'S4 汴桥桥市（午时·可拖长卷）',
     forms: {
-      h: { kind: 'pano', size: [2880, 720], world: 2880,
+      h: { kind: 'pano', size: [2048, 512], world: 2048,
            files: { main: 'assets/scenes/s4_pano/pano_l4.webp' },
            note: '单层；camera ∈ [0, world − 可见宽]，不接陀螺仪' },
-      v: { kind: 'pano', size: [2880, 720], world: 2880,
+      v: { kind: 'pano', size: [2048, 512], world: 2048,
            files: { main: 'assets/scenes/s4_pano/pano_l4.webp' },
            note: '竖屏取同图的一段（可见宽更窄），非另出一张' }
     }
@@ -237,6 +237,11 @@
       '.tqs-bg{position:absolute;left:0;top:0;width:100%;height:100%;',
       '  background-size:cover;background-position:50% 50%;background-repeat:no-repeat;',
       '  pointer-events:none;-webkit-user-drag:none;user-select:none}',
+      /* 单层场景的可选实体前景（S1 竖版待资产）。只有注册了 files.fg 才创建，
+         没有就只保留下面那层程序化檐影 —— 不拿整幅备选图冒充前景。 */
+      '.tqs-solo-fgimg{position:absolute;left:0;top:0;width:100%;height:100%;',
+      '  background-size:cover;background-position:50% 50%;background-repeat:no-repeat;',
+      '  pointer-events:none;will-change:transform}',
       '.tqs-pano .tqs-bg{background-size:100% 100%;background-position:0 0}',
       /* 单层场景：主图放大兜住位移，前景层反向慢移（程序化，无资源） */
       '.tqs-solo .tqs-bg{transform-origin:50% 50%;will-change:transform}',
@@ -266,6 +271,31 @@
    *   主图放大 1.06 倍后按倾斜做 ≤1.6% 位移（余量够，永不露边），
    *   再叠一层**程序化前景**（檐角暗影 + 低位浮尘，纯 CSS 渐变）反向位移 2 倍——
    *   一近一远就有了景深，且零新增资源、零新增请求。 */
+  /* 背景层加载：失败重试一次，第二次仍失败才告警。
+     ★2026-11-05：底图改 CSS 背景后不再有 <img> 的 onerror 可用，而旧实现是「裸设 src」，
+     失败等于静默空白 —— 真机上表现为「场景没了、控制台干净」，无法定位。
+     这里用脱离文档的 Image 追踪，成功失败都落痕迹；重试带 cache-bust 防同一张坏缓存。 */
+  function loadBg(box, src) {
+    var im = new global.Image();
+    var tried = 0;
+    function set(u) { if (box) { box.style.backgroundImage = 'url("' + u + '")'; } }
+    im.onerror = function () {
+      if (tried === 0) {
+        tried = 1;
+        var u = src + (src.indexOf('?') < 0 ? '?' : '&') + 'r=1';
+        set(u);
+        im.src = u;
+        return;
+      }
+      if (global.console && global.console.warn) {
+        global.console.warn('[TQ] 场景图加载失败:', src);
+      }
+    };
+    im.src = src;
+    set(src);
+    return im;
+  }
+
   function mountSingle(el, cfg) {
     injectStyle();
     el.classList.add('tqs-stage', 'tqs-solo');
@@ -276,12 +306,23 @@
     var src0 = path(cfg.files.main);
     var bgd = el.querySelector('.tqs-bg');
     if (!bgd) { bgd = document.createElement('div'); bgd.className = 'tqs-bg'; el.appendChild(bgd); }
-    bgd.style.backgroundImage = 'url("' + src0 + '")';
-    var probe = new Image();
-    probe.src = src0;
+    var probe = loadBg(bgd, src0);
 
     var fg = el.querySelector('.tqs-solo-fg');
     if (!fg) { fg = document.createElement('div'); fg.className = 'tqs-solo-fg'; el.appendChild(fg); }
+
+    /* 可选实体前景：只有配置里注册了 files.fg 才建。S1 竖版当前没有这张图，
+       所以保持「程序化檐影」不变；资产到位后只需在 def 里加一行 fg，无需改渲染。 */
+    var fgi = null;
+    if (cfg.files && cfg.files.fg) {
+      fgi = el.querySelector('.tqs-solo-fgimg');
+      if (!fgi) {
+        fgi = document.createElement('div');
+        fgi.className = 'tqs-solo-fgimg';
+        el.insertBefore(fgi, fg);
+      }
+      loadBg(fgi, path(cfg.files.fg));
+    }
 
     var tx = 0, ty = 0, cx = 0, cy = 0, raf = 0, dead = false, ctrl = null;
     function paint() {
@@ -293,6 +334,7 @@
       if (!moving) { cx = tx; cy = ty; }
       bgd.style.transform = 'translate3d(' + (cx * -1.6).toFixed(2) + '%,' + (cy * -1.1).toFixed(2) + '%,0) scale(1.06)';
       fg.style.transform = 'translate3d(' + (cx * 2.6).toFixed(2) + '%,' + (cy * 1.8).toFixed(2) + '%,0)';
+      if (fgi) { fgi.style.transform = 'translate3d(' + (cx * 2.0).toFixed(2) + '%,' + (cy * 1.4).toFixed(2) + '%,0)'; }
       if (moving) { schedule(); }
     }
     function schedule() {
@@ -339,7 +381,7 @@
        等价于原来的 object-fit:fill，拖动只改 box 的 transform。 */
     var bgd = document.createElement('div');
     bgd.className = 'tqs-bg';
-    bgd.style.backgroundImage = 'url("' + path(cfg.files.main) + '")';
+    loadBg(bgd, path(cfg.files.main));
     box.appendChild(bgd);
     el.appendChild(box);
 

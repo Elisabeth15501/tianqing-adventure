@@ -228,7 +228,22 @@
         }
         self.loaded[ll] = false;
         im.onload = function () { self.loaded[ll] = im.naturalWidth > 0; };
-        im.onerror = function () { self.loaded[ll] = false; };
+        /* 失败重试一次（带 cache-bust），第二次才告警：背景层没有 <img> 的可见失败态，
+           不留日志的话真机就是「场景黑了、控制台干净」。 */
+        var retried = false;
+        im.onerror = function () {
+          if (!retried) {
+            retried = true;
+            var u = src + (src.indexOf('?') < 0 ? '?' : '&') + 'r=1';
+            if (box) { box.style.backgroundImage = 'url("' + u + '")'; }
+            im.setAttribute('src', u);
+            return;
+          }
+          self.loaded[ll] = false;
+          if (global.console && global.console.warn) {
+            global.console.warn('[TQ] 场景图层加载失败:', ll, src);
+          }
+        };
         im.setAttribute('src', src);
       }(l));
       this._srcs[l] = this._src(l, this.form);
