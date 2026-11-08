@@ -76,3 +76,42 @@ redapp preview --source <来源> --file "./preview.json" --qr-out "./preview-qr.
 | CLI 登录态 | **access token 已于 2026-11-02 过期**，config 要求重新扫码 |
 
 结论：包没问题，问题在会话/任务层；且 CLI 侧确认账号需要重新授权。
+
+---
+
+## 五、2026-11-09 复现与定性（同一条报错再次出现）
+
+### 结论
+
+**不是包的问题，是账号授权过期。** 而且 `redapp whoami` 会给出假阳性——它只读本地配置，不校验服务端。
+
+### 证据链
+
+| 步骤 | 命令 | 结果 |
+|---|---|---|
+| 1 | 包结构体检 | CRC 通过；153 条目；根目录仅 `index.html`+`mini_tool.json`；无重复条目/大小写冲突/非法路径/空文件；6.17 MiB |
+| 2 | `redapp whoami --agent` | `loggedIn: true`，**但** `expireTimeMs` 换算为 **2026-11-02 13:46**（已过期 7 天） |
+| 3 | `redapp upload --confirm <hash>` | 不报错、不传文件，直接弹 `PROMPT:{"type":"auth_device_code",...}` ⇒ 服务端要求重新授权 |
+| 4 | 扫码后重试 upload | **成功**：`fileId=red_app/R_t43s0…Uf707E.zip`，`md5=fe6ee2b7…` 与本地一致 |
+| 5 | `redapp preview --source thirdAgent` | **成功**：`appId=6af0a1a8fae1a5001579005b`，产出 `previewUrl` 与二维码 |
+
+**定性**：网页端的「预览任务信息缺失，请重新上传」= 上传链路只完成了「传文件」，创建任务的那一步被鉴权拦掉，前端只能给一句笼统提示。**登录态不恢复，重传多少次都是同一个结果。**
+
+### 判定法（下次照这个走，别猜）
+
+```bash
+redapp upload --file "./xxx.zip" --type pkg --dry-run --agent    # 只看包
+redapp upload --file "./xxx.zip" --type pkg --confirm "<hash>" --agent
+# 输出里出现 auth_device_code ⇒ 授权失效，先 login；不再出现 ⇒ 包/账号都正常
+```
+
+### 两个容易误判的点
+
+1. **`whoami` 显示 `loggedIn:true` 不等于 token 有效**：要看 `expireTimeMs`，别只看布尔值。
+2. **`status/history` 对预览态 appId 会报「小工具不存在」**：这是正常的——预览只产出开发态 appId，**没有落库为正式小工具**；正式部署仍须在创作者后台完成，CLI 不代部署、不代送审。
+
+### 复现用的固定值（本次）
+
+- 包 md5：`fe6ee2b75c9c0498f68f44687af92f0e`
+- sha256：`8b8396c2e151697429ce3f4a0fc25d86731bc17a83b94ccd36ef52ef9b5e1fe5`
+- 预览 appId：`6af0a1a8fae1a5001579005b`
