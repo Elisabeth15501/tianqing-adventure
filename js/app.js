@@ -146,6 +146,30 @@
     e.preventDefault();
   }, false);
 
+  /* ★2026-11-10 iOS 长按「选中文字」（真机截图实测）：
+   * contextmenu 拦得住系统菜单，拦不住 Safari 的**文本选择**——长按 500ms 先起选择，
+   * 再弹「复制/分享/全选/搜寻」，并把这一下指针序列取消掉。需要"按住"的小节
+   * （揉面/擀面/投矢）因此永远记不上，表现成「做完第一小节就推不动」。
+   * 三层一起上，缺一层就会漏：
+   *   ① CSS 把 user-select/callout 关到 html,body 与 svg text（不再只挂 .app *）；
+   *   ② selectstart 直接 preventDefault —— 选择根本不许开始；
+   *   ③ 兜底：老 WebKit 若仍选中，清掉选区，别留高亮与菜单。 */
+  function isEditable(t) {
+    if (!t || !t.tagName) { return false; }
+    var n = t.tagName.toLowerCase();
+    return n === 'input' || n === 'textarea' || n === 'select' || t.isContentEditable;
+  }
+  document.addEventListener('selectstart', function (e) {
+    if (isEditable(e.target)) { return; }
+    e.preventDefault();
+  }, false);
+  document.addEventListener('selectionchange', function () {
+    var sel = global.getSelection && global.getSelection();
+    if (!sel || !sel.rangeCount) { return; }
+    if (isEditable(document.activeElement)) { return; }
+    sel.removeAllRanges();
+  }, false);
+
   /* 启动即应用上次的音效开关（默认开） */
   (function initSfx() {
     if (!global.TQSFX) { return; }

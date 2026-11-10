@@ -156,9 +156,21 @@
       var go = document.createElement('button'); go.className = 'mg-sheet-go'; go.type = 'button';
       go.textContent = o.go || '继续';
       box.appendChild(tx); box.appendChild(go);
-      box.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-      box.addEventListener('pointerup', function (e) { e.stopPropagation(); });
-      box.addEventListener('click', function (e) { e.stopPropagation(); fire(); });
+      /* ★2026-11-10：只挂 click 时，iOS 上首次点击可能被系统 callout 吞掉（第一下只关菜单），
+         玩家点一次没反应就以为卡死 —— 这是「完成小节后无法继续」的第二条通路。
+         现在 pointerdown 记起点、pointerup 就确认（一次性），click 作为无障碍/键盘兜底。
+         必须记「按下是否落在面板内」：切面的拖动会一路划到舞台下缘，正好压过面板。 */
+      var inBox = false, fired = false;
+      function fireOnce() { if (fired) { return; } fired = true; fire(); }
+      box.addEventListener('pointerdown', function (e) { e.stopPropagation(); inBox = true; });
+      box.addEventListener('pointerup', function (e) {
+        e.stopPropagation();
+        if (!inBox) { return; }
+        inBox = false;
+        fireOnce();
+      });
+      box.addEventListener('pointercancel', function () { inBox = false; });
+      box.addEventListener('click', function (e) { e.stopPropagation(); fireOnce(); });
       stage.appendChild(box);
       fn = cb || null;
     }

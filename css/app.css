@@ -951,7 +951,7 @@ body.shv-open .main{overflow:hidden}
    钉在舞台下沿：成品留在上方看得见，不压交互画面。
    高度只由字号+内边距决定、宽度 100%，竖屏/中屏/横屏一套写法都成立。
    ★这段曾被并发写入冲掉一次（2026-11-01 23:37），改 app.css 前先 grep mg-sheet。 */
-.mg-sheet{position:absolute;left:0;right:0;bottom:0;z-index:5;display:flex;align-items:center;
+.mg-sheet{position:absolute;left:0;right:0;bottom:0;z-index:7;touch-action:manipulation;display:flex;align-items:center;
   padding:7px 12px 8px;background:#FBF6EA;border-top:1px solid #D8CFBA;
   border-radius:0 0 12px 12px;cursor:pointer;animation:mgSheetIn 180ms ease-out both}
 .mg-sheet-tx{flex:1;min-width:0;padding-right:8px}
@@ -1187,6 +1187,14 @@ body.shv-open .main{overflow:hidden}
  * 根因：长按（500ms 左右）在 iOS/部分安卓 WebView 里会触发 callout 菜单，canvas 上尤其明显。
  * 处理：游戏区一律关掉 callout 与文本选择（本作没有需要长按复制的正文）；
  *       输入框例外。再配 app.js 的 contextmenu 拦截（安卓走这条）。 */
+/* ★2026-11-10 iOS 文本选择：选择可以从 body 起手，只挂 .app * 不够 —— 覆盖到 html,body；
+   SVG 里的 <text>（小游戏读数/提示）在 Safari 里会被单独选中，也一并关掉。 */
+html,body{-webkit-user-select:none;-moz-user-select:none;user-select:none;
+  -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+.app svg,.app svg text{-webkit-user-select:none;-moz-user-select:none;user-select:none;
+  -webkit-touch-callout:none}
+/* 小游戏的读数/标签是纯展示：不参与命中，长按就不会"按到字"上 */
+.iv-stage svg text{pointer-events:none}
 .app{-webkit-tap-highlight-color:transparent}
 .app *{-webkit-touch-callout:none;
   -webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}
