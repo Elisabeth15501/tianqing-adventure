@@ -277,8 +277,20 @@
     var key = 'shard-inner-' + id;
     var tqa = global.TQA;
     if (!tqa || !tqa.reg[key]) { vecShard(mount, false); return; }
+    /* ★2026-11-12 真机「拾得瓷片时瓷片迟迟不出现」：
+     *   面板（标题/史料卡/按钮）是**同步**建的，内壁图却要等 resolve ——
+     *   旧实现在这中间是**空舞台**，慢网/首访能空到 resolve 的 2s 上限，
+     *   玩家看到的就是「先出一张卡、瓷片半天不来」，也就是"显示不同步"。
+     *   现在：先把矢量轮廓同步画上屏（零等待），真图到了再原位替换；
+     *   超时后图片晚到，用 onLate 再补一次，占位不会永久留在屏上。 */
+    vecShard(mount, false);
     tqa.resolve(key, function (stt) {
       if (!mount.isConnected) { return; }
+      if (stt === 'timeout') {
+        /* 占位已在屏上；图晚到就重来一遍（此时 status 已是 ok，resolve 会同步回 ok） */
+        tqa.onLate(key, function (st) { if (st === 'ok') { TQ.shardInner(mount, id); } });
+        return;
+      }
       if (stt !== 'ok') { vecShard(mount, stt === 'fail'); return; }
       var ent = tqa.reg[key], img = tqa.image(key);
       if (!img) { vecShard(mount, false); return; }

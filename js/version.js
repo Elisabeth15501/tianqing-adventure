@@ -14,10 +14,10 @@
 (function (global) {
   'use strict';
   global.TQ_VERSION = {
-    ver: '1.1.11',
-    build: '2026-11-11 01:30',
+    ver: '1.1.12',
+    build: '2026-11-12 00:45',
     stage: '内测',
-    note: 'iOS 长按不选中 · 完成面板 pointerup 兜底（修「小节后推不动」）',
+    note: '瓷片先占位后升级（消除 2s 空台）· iOS 长按不选中 · 完成面板 pointerup',
     /* 对应 git 提交在发布时补记（留空则设定页只显示版本与构建时间） */
     commit: ''
   };
