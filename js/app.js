@@ -23,10 +23,16 @@
          不动全局 --tq-top-inset（那会把顶栏也推下去），只算一个设定页专用上边距：
          容器内取 max(实测, 44) —— getWindowInfo 取不到时也有下限；Pages 上没有
          window.xhs，值等于 16px，视觉与旧版完全一致。 */
+      var inContainer = !!(global.xhs && global.xhs.miniTool);
       var setTop = ins.top || 0;
-      if (global.xhs && global.xhs.miniTool && setTop < 44) { setTop = 44; }
+      if (inContainer && setTop < 44) { setTop = 44; }
       setVar('--tq-set-top', setTop + 16);
-      setVar('--tq-top-inset', ins.top || 0);
+      /* ★2026-11-17：主顶栏原来完全没吃 --tq-top-inset，容器胶囊按钮直接压在
+       * 「设定/手札」上。这里给顶栏用的上预留也做 44px 下限（Pages 仍为 0）。
+       * getWindowInfo 取到真实值时用真值，取不到也按容器最小安全条下移。 */
+      var topSafe = ins.top || 0;
+      if (inContainer && topSafe < 44) { topSafe = 44; }
+      setVar('--tq-top-inset', topSafe);
       setVar('--tq-bottom-inset', ins.bottom || 0);
       setVar('--tq-left-inset', ins.left || 0);
       setVar('--tq-right-inset', ins.right || 0);
@@ -88,16 +94,22 @@
       if (W && ins.left + ins.right > W * 0.5) { ins.left = 0; ins.right = 0; }
       return ins;
     }
+    function onInfo(info) {
+      var ins = measure(info);
+      if (ins) { apply(ins); }
+    }
     function pull() {
       var mt = global.xhs && global.xhs.miniTool;
       if (!mt || typeof mt.getWindowInfo !== 'function') { return; }
       var pr;
-      try { pr = mt.getWindowInfo(); } catch (e) { return; }
-      if (!pr || typeof pr.then !== 'function') { return; }
-      pr.then(function (info) {
-        var ins = measure(info);
-        if (ins) { apply(ins); }
-      })['catch'](function () { /* 读取失败：保持现值（默认 0），自绘 UI 仍可用 */ });
+      /* ★2026-11-17：网页后台预览里 getWindowInfo 的 Promise 形态不稳定
+       * （旧代码只认 pr.then，拿不到就整块安全区=0 ⇒ 顶栏被胶囊压住）。
+       * 按官方「回调 / Promise 二态」约定同时接两种：传回调保证老容器有结果，
+       * 若实现仍返回 Promise 则再接一次，幂等。 */
+      try {
+        pr = mt.getWindowInfo({ success: onInfo, fail: function () {} });
+      } catch (e) { return; }
+      if (pr && typeof pr.then === 'function') { pr.then(onInfo)['catch'](function () {}); }
     }
     /* 初始化顺序：查询参数 > 宿主桥 > 自动测量 */
     var q = fromQuery();

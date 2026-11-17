@@ -10,7 +10,30 @@
 (function (global) {
   'use strict';
 
-  var TA = { reg: {}, status: {}, imgs: {}, env: null, slowKinds: {}, _pending: {} };
+  var TA = { reg: {}, status: {}, imgs: {}, srcs: {}, _lru: [], env: null, slowKinds: {}, _pending: {} };
+  /* ★2026-11-17：容器内只保留最近 N 张**解码位图**。
+   * 33 张立绘全量 decode ≈ 176MiB、49 张瓷片 ≈ 131MiB（RGBA8 估算）；
+   * 桌面浏览器无感，小工具 WebView 到中后段就会因内存压力让新图 onerror ⇒ 回退角标。
+   * 路径常驻（srcs）、位图按 LRU 淘汰：需要时 resolve 会按路径静默重载。 */
+  var CACHE_LIMIT = (global.xhs && global.xhs.miniTool) ? 6 : 20;
+  function touch(key) {
+    var q = TA._lru, at = q.indexOf(key);
+    if (at >= 0) { q.splice(at, 1); }
+    q.push(key);
+    while (q.length > CACHE_LIMIT) { delete TA.imgs[q.shift()]; }
+  }
+  function remember(key, im, src) {
+    TA.srcs[key] = src;
+    TA.imgs[key] = im;
+    touch(key);
+  }
+  TA.src = function (key) { return TA.srcs[key] || (TA.imgs[key] && TA.imgs[key].src) || null; };
+  TA.release = function (key) {
+    delete TA.imgs[key];
+    var at = TA._lru.indexOf(key);
+    if (at >= 0) { TA._lru.splice(at, 1); }
+  };
+  TA.releasePortrait = TA.release;
 
   /* ---------- 内壁静态帧的姿态与保证（由 pick_inner_pose.py + pack_inner_still.py 产出） ----------
    * innerRatio = 「该姿态下可见内壁面积 / 该片内壁总面积」。
@@ -174,7 +197,19 @@
     var ent = TA.reg[key];
     if (!ent) { cb('none'); return; }
     if (TA.assetsMode() === 'vector') { TA.status[key] = 'fail'; cb('fail'); return; }
-    if (TA.status[key]) { cb(TA.status[key]); return; }
+    if (TA.status[key]) {
+      /* LRU 淘汰过位图但路径还在：按原相对路径静默重载，调用方仍只收到 ok/fail。
+       * ★必须用 TA.srcs 的相对路径，不用 im.src 的绝对 URL（容器 CSP 可能拒绝）。 */
+      if (TA.status[key] === 'ok' && !TA.imgs[key] && TA.srcs[key]) {
+        var again = new Image();
+        again.onload = function () { remember(key, again, TA.srcs[key]); cb('ok'); };
+        again.onerror = function () { TA.status[key] = 'fail'; cb('fail'); };
+        again.src = TA.srcs[key];
+        return;
+      }
+      cb(TA.status[key]);
+      return;
+    }
     if (opt && opt.hot) { TA._hot[key] = 1; }
     if (TA._pending[key]) { TA._pending[key].push(cb); return; }
     var flight = TA._inflight[key];
@@ -193,7 +228,7 @@
       done = true;
       clearTimeout(to);
       TA.status[key] = stt;
-      if (stt === 'ok') { TA.imgs[key] = im; delete TA._inflight[key]; }
+      if (stt === 'ok') { remember(key, im, ent.src); delete TA._inflight[key]; }
       drain(stt);
       if (stt === 'ok') { fireLate(key); }
       else { delete TA._inflight[key]; delete TA._late[key]; }
@@ -216,7 +251,7 @@
         if (tooBig) { return; }
         var f = TA._inflight[key];
         TA.status[key] = 'ok';
-        TA.imgs[key] = im;
+        remember(key, im, ent.src);
         delete TA._inflight[key];
         if (f) { for (var j = 0; j < f.cbs.length; j += 1) { f.cbs[j]('ok'); } }
         fireLate(key);
@@ -274,7 +309,10 @@
     pump();
   };
   TA.reset = function (key) {   /* 运维/测试：手动解除失败缓存 */
-    delete TA.status[key]; delete TA.imgs[key]; delete TA._late[key]; delete TA._inflight[key];
+    delete TA.status[key]; delete TA.imgs[key]; delete TA.srcs[key];
+    delete TA._late[key]; delete TA._inflight[key];
+    var at = TA._lru.indexOf(key);
+    if (at >= 0) { TA._lru.splice(at, 1); }
   };
 
   TA.image = function (key) { return TA.imgs[key] || null; };
@@ -292,7 +330,7 @@
       var im = TA.imgs[k];
       var row = { key: k, src: TA.reg[k].src, status: stt,
         w: im ? im.width : 0, h: im ? im.height : 0 };
-      if (stt === 'ok' && im) { okList.push(row); }
+      if (stt === 'ok' && (im || TA.srcs[k])) { okList.push(row); }
       else if (stt === 'pending') { pend.push(row); }
       else { miss.push(row); }
     });

@@ -10,14 +10,13 @@
      assets-check.html 按字母序排在前面，会被打包器当成入口并报
      「入口 html 文件必须…命名为 index.html，当前文件为 assets-check.html」。
      诊断页仍保留在仓库/Pages 供真机排障，但不进发布包。
-  3. 写 mini_tool.json（高消耗能力标记：本项目无 Worker / WebAssembly / 离屏渲染 / 游戏引擎
-     → is_high_consumption_scene: false）。
+  3. v1.10.0 规范不再要求 mini_tool.json：不写高消耗标记（本项目也无 Worker /
+     WebAssembly / 离屏渲染 / 游戏引擎），包内保持无 manifest。
 其余沿用 build_site.py 的素材清单与相对路径约定（容器离线 zip 根为 /）。
 """
 import os
 import shutil
 import sys
-import json
 
 ROOT = os.path.dirname(os.path.abspath(__file__))
 DIST = os.path.join(ROOT, 'minitool')
@@ -50,13 +49,6 @@ def copy_dir(src_rel, dst_rel):
         print('WARN skip missing:', src_rel)
         return
     shutil.copytree(src, dst)
-
-
-def write_manifest():
-    path = os.path.join(DIST, 'mini_tool.json')
-    with open(path, 'w', encoding='utf-8') as f:
-        json.dump({'is_high_consumption_scene': False}, f, ensure_ascii=False)
-    print('wrote mini_tool.json (is_high_consumption_scene=false)')
 
 
 def main():
@@ -106,8 +98,6 @@ def main():
     for src_rel, dst_rel in RUNTIME_DIRS:
         copy_dir(src_rel, dst_rel)
 
-    write_manifest()
-
     total = 0
     n_files = 0
     htmls = []
@@ -125,7 +115,7 @@ def main():
     assert os.path.exists(os.path.join(DIST, 'js', 'frag.js'))
     assert not os.path.exists(os.path.join(DIST, 'js', 'tilt-web.js')), 'tilt-web.js 不得进容器包'
     assert not os.path.exists(os.path.join(DIST, 'assets-check.html')), '诊断页不得进发布包'
-    assert os.path.exists(os.path.join(DIST, 'mini_tool.json'))
+    assert not os.path.exists(os.path.join(DIST, 'mini_tool.json')), 'v1.10.0 不打包高消耗标记'
     assert htmls == ['index.html'], '发布包必须且只能有 index.html 一个 html，实际: %r' % htmls
     print('sanity OK (%d js files, html=%r)' % (n_js, htmls))
     return 0

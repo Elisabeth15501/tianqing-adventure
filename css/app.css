@@ -751,6 +751,8 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
  * 放在文件末尾：同特异性下覆盖上面各媒体查询里的 .topbar padding 简写。 */
 :root{--tq-tb-pad-r:16px}
 .topbar{padding-right:calc(var(--tq-tb-pad-r) + var(--tq-topbar-right))}
+/* 顶栏的上避让由 .app 的 padding-top:var(--tq-top-inset) 统一承担，勿在此再加 margin，
+ * 否则容器里会双份下移（2026-11-17 实测踩到）。 */
 @media (min-width:700px){:root{--tq-tb-pad-r:32px}}
 @media (min-aspect-ratio:99/1) and (min-width:900px){:root{--tq-tb-pad-r:28px}}
 @media (max-height:740px){:root{--tq-tb-pad-r:14px}}
@@ -889,7 +891,8 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   animation:shvFade .18s ease-out both}
 .shv-sheet{position:relative;width:100%;max-width:100%;min-width:0;height:92%;max-height:92%;
   background:var(--paper);color:var(--ink);overflow-x:hidden;
-  border-radius:16px 16px 0 0;padding:12px 14px calc(14px + env(safe-area-inset-bottom,0px));
+  border-radius:16px 16px 0 0;padding:12px 14px 14px;
+    padding-bottom:calc(14px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
   display:flex;flex-direction:column;overflow-y:hidden;
   animation:shvRise .22s cubic-bezier(.22,.61,.36,1) both;
   box-shadow:0 -8px 30px rgba(0,0,0,.28)}
@@ -1052,7 +1055,9 @@ body.shv-open .main{overflow:hidden}
   padding:14px 16px;display:flex;flex-direction:column;justify-content:flex-start;
   opacity:0;pointer-events:none;transition:opacity .16s ease;overflow:auto}
 .iv-src.on{opacity:1;pointer-events:auto}
-.iv-src-h{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+/* Chrome 61 基线：flex gap 不可用，改用子项单边 margin（两端表现一致，无需行为检测） */
+.iv-src-h{display:flex;align-items:center;flex:0 0 auto}
+.iv-src-h > * + *{margin-left:6px}
 .iv-src-h b{font-size:12.5px;font-weight:600;color:#3F4A45;letter-spacing:.02em}
 .iv-src-h em{font-style:normal;font-size:9.5px;color:#8A7B5E;flex:1 1 auto;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}

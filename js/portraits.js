@@ -1060,7 +1060,7 @@
        *   即使真图在内存里也要付一次「建 SVG 串 + 解析 + 弃掉 + 0.26s 淡入」，
        *   玩家看到的是「占位闪一下再换成真人」，切换显得又慢又跳。
        *   命中时直接上图，并打 data-instant 关掉入场动画（见 css .fig-real[data-instant]）。 */
-      var hot = !!(TQA && TQA.reg[ak] && TQA.status[ak] === 'ok' && TQA.imgs[ak]);
+      var hot = !!(TQA && TQA.reg[ak] && TQA.status[ak] === 'ok' && TQA.src(ak));
       var canReal = !!(TQA && TQA.reg[ak]);
       /* ★占位闪现（2026-11-02 手机实测）：旧逻辑「没命中热路径就先画矢量剪影」，
        *   于是每次换人都先冒一张代码绘像，几十毫秒后再被真图顶掉 —— 玩家看到的是闪一下。
@@ -1106,7 +1106,7 @@
         slot.classList.add('has-real');
         applyFit(slot, key, useSlot);
       }
-      if (hot) { paintReal(TQA.imgs[ak].src, true); }
+      if (hot) { paintReal(TQA.src(ak), true); TQA.releasePortrait(ak); }
       else if (canReal) {
         TQA.resolve(ak, function (stt) {
           if (slot._tqGen !== gen || slot._tqKey !== key || slot._tqSlot !== useSlot) { return; }
@@ -1115,7 +1115,8 @@
             if (!slot.querySelector('.fig-real')) { paintVector(); }
             TQA.onLate(ak, function (st2) {
               if (st2 !== 'ok' || slot._tqGen !== gen || slot._tqKey !== key || slot._tqSlot !== useSlot) { return; }
-              if (TQA.imgs[ak]) { paintReal(TQA.imgs[ak].src, true); }
+              var lateSrc = TQA.src(ak);
+              if (lateSrc) { paintReal(lateSrc, true); TQA.releasePortrait(ak); }
             });
             return;
           }
@@ -1127,9 +1128,10 @@
             markMissing(slot, stt);
             return;
           }
-          var im = TQA.image(ak);
-          if (!im) { return; }
-          paintReal(im.src, false);
+          var realSrc = TQA.src(ak);
+          if (!realSrc) { return; }
+          paintReal(realSrc, false);
+          TQA.releasePortrait(ak);
         }, { hot: true });   /* 屏上优先：预取队列见到 _hot 就让路 */
       } else {
         slot.classList.remove('has-real');
@@ -1158,7 +1160,7 @@
       var fb = opts && typeof opts.fallback === 'function' ? opts.fallback : null;
       var tok = (node._tqTok || 0) + 1;
       node._tqTok = tok;
-      function put(im) {
+      function put(src) {
         var pic = document.createElement('img');
         pic.className = 'mem-fig-real';
         /* ★2026-11-02 真机：立绘是 50~70KB 的 webp，解码在主线程同步做会掉帧，
@@ -1167,13 +1169,13 @@
          *   也不会成为长按的命中目标（宿主会把 <img> 认成「图片」弹保存菜单）。 */
         pic.setAttribute('decoding', 'async');
         pic.setAttribute('draggable', 'false');
-        pic.src = im.src;
+        pic.src = src;
         pic.alt = (TP.meta(key).label || '') + ' 立绘';
         node.innerHTML = '';
         node.appendChild(pic);
       }
       /* 命中内存里的图：同步落图，回忆舞台不闪占位 */
-      if (TQA.status[ak] === 'ok' && TQA.imgs[ak]) { put(TQA.imgs[ak]); return true; }
+      if (TQA.status[ak] === 'ok' && TQA.src(ak)) { put(TQA.src(ak)); TQA.releasePortrait(ak); return true; }
       TQA.resolve(ak, function (stt) {
         if (node._tqTok !== tok) { return; }
         if (stt === 'timeout') {
@@ -1181,14 +1183,16 @@
           if (fb && !node.querySelector('img.mem-fig-real')) { fb(); }
           TQA.onLate(ak, function (st2) {
             if (st2 !== 'ok' || node._tqTok !== tok) { return; }
-            if (TQA.imgs[ak]) { put(TQA.imgs[ak]); }
+            var memSrc = TQA.src(ak);
+            if (memSrc) { put(memSrc); TQA.releasePortrait(ak); }
           });
           return;
         }
         if (stt !== 'ok') { if (fb) { fb(); } return; }
-        var im = TQA.image(ak);
-        if (!im) { return; }
-        put(im);
+        var okSrc = TQA.src(ak);
+        if (!okSrc) { return; }
+        put(okSrc);
+        TQA.releasePortrait(ak);
       }, { hot: true });
       return true;
     },
