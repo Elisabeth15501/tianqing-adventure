@@ -15,9 +15,9 @@
   'use strict';
   global.TQ_VERSION = {
     ver: '1.1.12',
-    build: '2026-11-17 16:57',
+    build: '2026-11-18 02:20',
     stage: '内测',
-    note: '容器顶栏安全区 · 解码位图 LRU 防内存回退 · 真图用相对路径',
+    note: '第二轮容器修复：位图不被 release 废掉 · fail 冷却重试 · 破图 onerror 兜底 · 顶栏桥异步重试',
     /* 对应 git 提交在发布时补记（留空则设定页只显示版本与构建时间） */
     commit: ''
   };
