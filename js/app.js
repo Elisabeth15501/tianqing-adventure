@@ -15,6 +15,14 @@
   (function () {
     var GAP = 6; /* 按钮与自绘 UI 的最小视觉间距 [PLACEHOLDER·真机可微调] */
     var root = document.documentElement;
+    /* ★2026-11-18：容器判定不能只看 window.xhs —— 它在真机是异步注入的，
+     * 初始化那一刻还没挂上 ⇒ 顶部下限 0 ⇒ 胶囊压住「设定/手札」。
+     * UA 兜底让「桥还没到」的窗口期也按容器口径预留。 */
+    function inContainer() {
+      return !!(global.xhs && global.xhs.miniTool)
+        || /xhs|xiaohongshu|redapp/i.test(navigator.userAgent || '');
+    }
+    var gotInfo = false;
     function setVar(name, px) {
       root.style.setProperty(name, Math.max(0, Math.round(px)) + 'px');
     }
@@ -23,15 +31,15 @@
          不动全局 --tq-top-inset（那会把顶栏也推下去），只算一个设定页专用上边距：
          容器内取 max(实测, 44) —— getWindowInfo 取不到时也有下限；Pages 上没有
          window.xhs，值等于 16px，视觉与旧版完全一致。 */
-      var inContainer = !!(global.xhs && global.xhs.miniTool);
+      var inCont = inContainer();
       var setTop = ins.top || 0;
-      if (inContainer && setTop < 44) { setTop = 44; }
+      if (inCont && setTop < 44) { setTop = 44; }
       setVar('--tq-set-top', setTop + 16);
-      /* ★2026-11-17：主顶栏原来完全没吃 --tq-top-inset，容器胶囊按钮直接压在
-       * 「设定/手札」上。这里给顶栏用的上预留也做 44px 下限（Pages 仍为 0）。
-       * getWindowInfo 取到真实值时用真值，取不到也按容器最小安全条下移。 */
+      /* ★2026-11-18：44px 下限真机仍被胶囊压住（截图实证：胶囊与顶栏同高）。
+       * 小红书顶部胶囊 + 状态条实际占 ≥80 逻辑像素，改为 88px 下限；
+       * Pages 无 window.xhs / UA 不匹配，仍为 0，视觉与旧版一致。 */
       var topSafe = ins.top || 0;
-      if (inContainer && topSafe < 44) { topSafe = 44; }
+      if (inCont && topSafe < 88) { topSafe = 88; }
       setVar('--tq-top-inset', topSafe);
       setVar('--tq-bottom-inset', ins.bottom || 0);
       setVar('--tq-left-inset', ins.left || 0);
@@ -56,7 +64,12 @@
      * 只有横跨中段的悬浮按钮才推 left/right——否则会把整页内容无谓地左右缩进。 */
     function measure(info) {
       if (!info || typeof info !== 'object') { return null; }
-      var W = info.windowWidth || 0, H = info.windowHeight || 0;
+      var de = document.documentElement || {};
+      /* ★2026-11-18：真机 getWindowInfo 不保证带 windowWidth/windowHeight。
+       * 旧版只认这两个字段，缺一个就 W=0 ⇒ 右上角避让恒 0（胶囊压按钮）。
+       * 三级回退：官方字段 → screen* → 视口 client*。 */
+      var W = info.windowWidth || info.screenWidth || de.clientWidth || 0;
+      var H = info.windowHeight || info.screenHeight || de.clientHeight || 0;
       var ins = { top: 0, bottom: 0, left: 0, right: 0, topRight: 0 };
       var sa = info.safeArea;
       if (sa && typeof sa === 'object') {
@@ -69,34 +82,45 @@
       ['back', 'me', 'share'].forEach(function (k) {
         var r = mb[k];
         if (!r || typeof r.width !== 'number' || typeof r.height !== 'number' || !r.width || !r.height) { return; }
-        var midY = H ? (r.top + r.bottom) / 2 : 0;
+        /* rect 兼容：容器有的版本给 left/right，有的只给 x+width。
+         * 旧版用 (left+right)/2 判左右，缺 right 时得 NaN ⇒ 整条避让失效。 */
+        var l = (typeof r.left === 'number') ? r.left
+              : (typeof r.x === 'number' ? r.x : 0);
+        var rr = (typeof r.right === 'number') ? r.right : (l + r.width);
+        var t = (typeof r.top === 'number') ? r.top
+              : (typeof r.y === 'number' ? r.y : 0);
+        var b = (typeof r.bottom === 'number') ? r.bottom : (t + r.height);
+        var midY = H ? (t + b) / 2 : 0;
         if (H && midY < H * 0.22) {
           /* 顶部条：整页从按钮下沿开始，顶栏右侧同时让开右上角按钮 */
-          if (typeof r.bottom === 'number') { ins.top = Math.max(ins.top, r.bottom + GAP); }
-          if (W && typeof r.left === 'number' && (r.left + r.right) / 2 > W / 2) {
-            ins.topRight = Math.max(ins.topRight, W - r.left + GAP);
+          ins.top = Math.max(ins.top, b + GAP);
+          if (W && l >= W / 2) {
+            var pad = W - l + GAP;
+            /* 物理/逻辑像素不同源时 pad 可能为负或吞掉半屏；限幅到 45% 宽 */
+            ins.topRight = Math.max(ins.topRight, Math.max(0, Math.min(pad, W * 0.45)));
           }
         } else if (H && midY > H * 0.78) {
           /* 底部条 */
-          if (typeof r.top === 'number') { ins.bottom = Math.max(ins.bottom, H - r.top + GAP); }
+          ins.bottom = Math.max(ins.bottom, H - t + GAP);
         } else if (W) {
           /* 中段悬浮：按左右归边 */
-          if ((r.left + r.right) / 2 > W / 2) {
-            if (typeof r.left === 'number') { ins.right = Math.max(ins.right, W - r.left + GAP); }
-          } else if (typeof r.right === 'number') {
-            ins.left = Math.max(ins.left, r.right + GAP);
+          if ((l + rr) / 2 > W / 2) {
+            ins.right = Math.max(ins.right, W - l + GAP);
+          } else {
+            ins.left = Math.max(ins.left, rr + GAP);
           }
         }
       });
-      /* 防御：异常/极端数据不吞掉大半个屏 */
-      if (H && ins.top > H * 0.25) { ins.top = 0; ins.topRight = 0; }
+      /* 防御：异常/极端数据不吞掉大半个屏。
+       * ★topRight 是「顶栏右内边距」，与整页 top 无关，不能跟着一起清零。 */
+      if (H && ins.top > H * 0.25) { ins.top = 0; }
       if (H && ins.bottom > H * 0.35) { ins.bottom = 0; }
       if (W && ins.left + ins.right > W * 0.5) { ins.left = 0; ins.right = 0; }
       return ins;
     }
     function onInfo(info) {
       var ins = measure(info);
-      if (ins) { apply(ins); }
+      if (ins) { gotInfo = true; apply(ins); }
     }
     function pull() {
       var mt = global.xhs && global.xhs.miniTool;
@@ -122,21 +146,36 @@
      * return（mt 为空），之后只有 resize/orientationchange 才重试；真机上玩家不转屏
      * 就永远拿不到 menuButtons ⇒ --tq-topbar-right 恒 0 ⇒ 平台胶囊压住「设定/手札」。
      * 这里补一段有上限的幂等重试：拿到一次真实数据即停，绝不无限轮询。 */
+    /* ★2026-11-18：上一轮只重试到 xhs 出现就停，但真机上「桥已注入、getWindowInfo
+     * 回调却不来」同样是常态 —— 那时 88px 下限永远没被 apply，胶囊照样压顶栏。
+     * 现在：拿到一次真实信息即停；桥出现后 600ms 仍无信息则按容器下限兜底。
+     * 最后再加一道 3.6s 总兜底（UA 判定为容器但桥始终没来）。 */
+    function fallback() {
+      if (gotInfo || !inContainer()) { return; }
+      apply({ top: 88, bottom: 0, left: 0, right: 0, topRight: 0 });
+    }
     (function retryPull(n) {
-      if (n <= 0) { return; }
+      if (n <= 0) { fallback(); return; }
       setTimeout(function () {
         var mt = global.xhs && global.xhs.miniTool;
-        if (mt && typeof mt.getWindowInfo === 'function') { pull(); return; }
+        if (mt && typeof mt.getWindowInfo === 'function') {
+          pull();
+          setTimeout(fallback, 600);
+          return;   /* 桥已到：后续由 pull 的回调 / 600ms 兜底接手 */
+        }
         retryPull(n - 1);
       }, 250);
-    }(6));   /* 最多 6×250ms = 1.5s，覆盖容器桥注入窗口 */
+    }(14));   /* 最多 14×250ms = 3.5s */
+    setTimeout(fallback, 3600);
     /* 宿主手动推送（兼容旧桥） */
     window.addEventListener('message', function (e) {
       var d = e.data || {};
       if (!d) { return; }
       if (d.type === 'tq-host-inset' && typeof d.top === 'number') {
+        gotInfo = true;
         apply({ top: Math.round(d.top), bottom: 0, left: 0, right: 0, topRight: 0 });
       } else if (d.type === 'tq-host-safearea' && d.inset) {
+        gotInfo = true;
         apply(d.inset);
       }
     });
@@ -374,6 +413,16 @@
     { t: '酉', n: '滋德殿' }, { t: '终', n: '合瓮' }
   ];
   var CUR_ACT = 0;
+  var TIME_BAR = null;   /* 当前幕的时辰条（带 _tqUpdate，供步级推进刷新） */
+  var CS_DOT = null;     /* 差事帖计数节点（完成小节后就地刷新） */
+  function refreshProgress(actIdx, ratio) {
+    if (TIME_BAR && TIME_BAR._tqUpdate) { TIME_BAR._tqUpdate(actIdx, ratio); }
+    if (CS_DOT && save && D.tasks && save.role && D.tasks[save.role]) {
+      var n = 0, total = D.tasks[save.role].list.length;
+      for (var k in save.taskDone) { if (save.taskDone[k]) { n += 1; } }
+      CS_DOT.textContent = Math.min(n, total) + '/' + total;
+    }
+  }
 
   function topbar(actName) {
     /* 简版：首屏/选角/手札（复刻设计稿 topbar(name)：幕名 + 手札，无时辰条/差事帖） */
@@ -402,7 +451,8 @@
       for (k in save.taskDone) { if (save.taskDone[k]) { doneN += 1; } }
       if (doneN > totalN) { doneN = totalN; }
     }
-    cs.appendChild(el('span', 'cs-dot', doneN + '/' + totalN));
+    CS_DOT = el('span', 'cs-dot', doneN + '/' + totalN);
+    cs.appendChild(CS_DOT);
     cs.addEventListener('click', function () { openChaishi(); });
     btns.appendChild(cs);
     var stb = el('button', 'set-btn', '设定');
@@ -807,6 +857,13 @@
       SCENE.inst = global.TQScenes.mount(host, key, { form: form, input: 'auto' });
       SCENE.key = key; SCENE.form = form; SCENE.el = host;
       fitSceneCover(host, key, form);
+      /* ★2026-11-18：mount 是同步的，底图却异步解码；旧版 mount 成功就再无兜底，
+       * 真机一次解码失败 ⇒ 只剩 #100E0C 黑底（投壶幕实证）。
+       * 底图两次失败会派发 tq-scene-fail，这里接住并挂矢量底图。 */
+      host.addEventListener('tq-scene-fail', function () {
+        if (SCENE.key !== key || SCENE.el !== host) { return; }
+        sceneFallback(D.acts[CUR_ACT]);
+      });
       return true;
     } catch (e) {
       /* 素材缺失/引擎没加载：退回矢量底图，不打断剧情。
@@ -820,11 +877,27 @@
     }
   }
 
+  /* 场景兜底：进幕与幕中换景共用。旧版只有进幕有矢量兜底，幕中换景失败
+   * 直接露出 .bg-scene 的 #100E0C 纯黑底（女官线投壶幕实证）。 */
+  function sceneFallback(act) {
+    var old = app.querySelector('.bg-art.wash');
+    if (old && old.parentNode) { old.parentNode.removeChild(old); }
+    if (act && act.bg && D.bg && D.bg[act.bg]) {
+      var bg = el('div', 'bg-art wash');
+      bg.innerHTML = D.bg[act.bg];
+      app.appendChild(bg);
+      return true;
+    }
+    return false;
+  }
+
   function buildActShell(act, idx, fromStep) {
     clear(app);
     CUR_ACT = idx;
     app.appendChild(topbarAct(act.name));
-    app.appendChild(F.timebar(ACT_NODES, idx));
+    TIME_BAR = F.timebar(ACT_NODES, idx);
+    app.appendChild(TIME_BAR);
+    refreshProgress(idx, 0);
     /* ★中途续玩要按「存档点之前最后一个 scene」挂景：
      *   终幕前半在广德殿（S3）、「翌日玉津园」起换 S6；若从第 8 步继续，不能还停在 S3。 */
     var seq = expandSteps(act.steps, save.role);
@@ -832,11 +905,7 @@
     var upto = Math.min(fromStep || 0, seq.length - 1);
     for (var q = 0; q <= upto; q++) { if (seq[q] && seq[q].scene) { sk = seq[q].scene; } }
     /* 真场景优先，矢量图兜底（矢量图降到 .06，只当纹理） */
-    if (!mountScene(sk) && act.bg && D.bg[act.bg]) {
-      var bg = el('div', 'bg-art wash');
-      bg.innerHTML = D.bg[act.bg];
-      app.appendChild(bg);
-    }
+    if (!mountScene(sk)) { sceneFallback(act); }
     /* VN 结构：vn-main（横版双栏容器）> 立绘区 + 文档流；操作小节切 act-op 全宽 */
     var main = el('div', 'main act-vn');
     var vnMain = el('div', 'vn-main');
@@ -1081,9 +1150,10 @@
       if (busy) { return; }
       retract(); /* 上一交互小节退场（若占台）；恢复 dock 与立绘区 */
       if (injected.length) { handleStep(injected.shift()); return; }
-      if (i >= steps.length) { finishAct(idx, main); return; }
+      if (i >= steps.length) { refreshProgress(idx, 1); finishAct(idx, main); return; }
       var st = steps[i];
       i += 1;
+      refreshProgress(idx, i / steps.length);
       handleStep(st);
     }
 
@@ -1099,9 +1169,11 @@
 
     function handleStep(st) {
       busy = true;
-      /* 步级换景（终幕：广德殿夜宴 S3 → 翌日玉津园 S6）。同一幕只换一次，
-       * 之后各步沿用（data.js 只在那一步写 scene）。 */
-      if (st.scene) { mountScene(st.scene); }
+      /* step 级换景（终幕：广德殿夜宴 S3 → 翌日玉津园 S6）。同一幕只换一次，
+       * 之后各步沿用（data.js 只在那一步写 scene）。
+       * ★2026-11-18：幕中换景原本没有任何兜底，换景失败就是纯黑底；
+       * 与进幕路径对齐，失败时回挂本幕矢量底图。 */
+      if (st.scene && !mountScene(st.scene)) { sceneFallback(act); }
       /* 只对「会露脸」的步骤滚动预取：narr/交互小节不改变 cast，预取也是白拉 */
       if (st.type === 'card') { prefetchAhead(i, 4); }
       if (st.type === 'narr') {

@@ -10,7 +10,8 @@
 (function (global) {
   'use strict';
 
-  var TA = { reg: {}, status: {}, imgs: {}, srcs: {}, _lru: [], env: null, slowKinds: {}, _pending: {}, _failAt: {}, _retryN: {} };
+  var TA = { reg: {}, status: {}, imgs: {}, srcs: {}, _lru: [], env: null, slowKinds: {},
+    _pending: {}, _failAt: {}, _retryN: {}, _retryTimer: {} };
   /* ★2026-11-17 真机修复：fail 不再是「一锤定音」。
    * 小工具 WebView 里一次瞬时的解码失败（内存抖动/并发峰值）会把图永久钉死为 fail，
    * 之后整局不再重试 ⇒ 用户看到「从某章节起成批素材永久回退」。
@@ -206,9 +207,35 @@
     TA.status[key] = 'fail';
     TA._failAt[key] = Date.now();
     TA._retryN[key] = (TA._retryN[key] || 0) + 1;
+    /* ★2026-11-18：旧版冷却重试只在「下一次 resolve」才发生。
+     * 但屏上的矢量占位/破图不会自己去 resolve —— 玩家停在这一幕时，
+     * 一次瞬时失败就被永久看见（史官线午时起成批回退、指定编号瓷片始终是纯色多边形）。
+     * 有等待者时主动排一次重取，成功后由 onLate 回调让 UI 原位升级。 */
+    if ((TA._late[key] || []).length) { scheduleRetry(key); }
+  }
+  function scheduleRetry(key) {
+    if (TA._retryTimer[key]) { return; }
+    if ((TA._retryN[key] || 0) >= MAX_RETRY) { return; }
+    var wait = Math.max(60, FAIL_COOLDOWN - (Date.now() - (TA._failAt[key] || 0)));
+    TA._retryTimer[key] = setTimeout(function () {
+      delete TA._retryTimer[key];
+      if (TA.status[key] !== 'fail' || !TA.reg[key]) { return; }
+      if ((TA._retryN[key] || 0) >= MAX_RETRY) { return; }
+      delete TA.status[key];
+      TA.resolve(key, function (stt) {
+        if (stt === 'ok') {
+          var q = TA._late[key] || [];
+          delete TA._late[key];
+          for (var i = 0; i < q.length; i += 1) { q[i]('ok'); }
+        } else if (stt === 'fail' && (TA._late[key] || []).length) {
+          scheduleRetry(key);   /* onerror 里 markFail 已排，但 timeout/其他分支兜底 */
+        }
+      });
+    }, wait);
   }
   /* 运维/自动化：解除某个 key 的失败缓存，下次 resolve 立即重取（不等待冷却） */
   TA.retry = function (key) {
+    if (TA._retryTimer[key]) { clearTimeout(TA._retryTimer[key]); delete TA._retryTimer[key]; }
     delete TA.status[key]; delete TA._failAt[key]; delete TA._retryN[key];
     delete TA._inflight[key]; delete TA._late[key]; delete TA._pending[key];
   };
@@ -300,11 +327,51 @@
     };
     im.src = ent.src;
   };
-  /* 注册「图晚到」回调：只在该 key 已超时、仍在下载时有效（否则立刻回调）。 */
+  /* 注册「图晚到 / 失败后重试成功」回调：
+   * ① 已 ok → 立即回调（调用方原位升级）
+   * ② 还在下载 → 挂到 _late，等 onload 补写
+   * ③ **fail → 也挂上，并主动排一次冷却重试**（2026-11-18 新增）
+   * 旧版第 ③ 种直接 return，玩家停在屏上的占位永远等不到升级。 */
   TA.onLate = function (key, cb) {
     if (TA.status[key] === 'ok') { cb('ok'); return; }
-    if (!TA._inflight[key]) { return; }      /* 没在下载 → 不会有晚到 */
     (TA._late[key] = TA._late[key] || []).push(cb);
+    if (TA.status[key] === 'fail') { scheduleRetry(key); }
+  };
+
+  /* ★★★ 2026-11-18 统一素材加载入口（女官线 / 史官线共用，杜绝加载逻辑漂移）★★★
+   * 背景：立绘（portraits.js）与瓷片 / 场景回退（frag.js）过去各写一套 resolve + 三态
+   * 处理，结果两边「失败后怎么办」不一致 —— 立绘后来补了 fail→onLate 重试，瓷片却还在
+   * fail 分支画完矢量就 return，于是真机一次瞬时解码失败 = 该瓷片整局停在「预设图样」。
+   * 这正是「史官线 4/6/7/8/9/10/12/13/15/16 号瓷片加载不出、女官线却正常」的根因：
+   *   不是资源缺失（同一批文件），而是两条线触发的失败时序不同，回退路径又各自为政。
+   *
+   * 现在把三态决策 + 失败自恢复收敛到这一个函数，两类素材都调它，行为必然同步：
+   *   handlers.ready(img, ent)  图可用（首次命中 / 晚到 / 冷却重试成功，都会调）
+   *   handlers.pending(stt)     只是慢（timeout）：调用方应先画矢量占位兜住
+   *   handlers.fail(stt)        真失败（fail/none）：调用方画占位 + 可挂自有角标
+   * 无论 pending 还是 fail，都统一挂 onLate —— 图晚到或冷却重试成功后，ready 会被
+   * 再次调用，调用方只要在这里「原位替换」即可，占位不会永久钉死。
+   * 返回 cancel()：节点卸载/换代时调用，避免旧节点的迟到回调污染新画面。 */
+  TA.observe = function (key, handlers, opts) {
+    var h = handlers || {};
+    var dead = false;
+    function ready() {
+      if (dead) { return; }
+      var img = TA.image(key);
+      if (img && h.ready) { h.ready(img, TA.reg[key]); }
+    }
+    function watchLate() {
+      if (dead) { return; }
+      TA.onLate(key, function (st) { if (st === 'ok') { ready(); } });
+    }
+    TA.resolve(key, function (stt) {
+      if (dead) { return; }
+      if (stt === 'ok') { ready(); return; }
+      if (stt === 'timeout') { if (h.pending) { h.pending(stt); } }
+      else { if (h.fail) { h.fail(stt); } else if (h.pending) { h.pending(stt); } }
+      watchLate();      /* fail 也挂：由 onLate 触发冷却重试，成功后 ready 原位升级 */
+    }, opts || { hot: true });
+    return function () { dead = true; };
   };
   /* 并发受控的批量预热：只排「还没解过」的 key，失败/超时都不阻塞队列。
    * opt = { conc: 3, done: fn }。与 resolve 共用同一条去重链，重复调用无副作用。 */
@@ -343,6 +410,7 @@
     pump();
   };
   TA.reset = function (key) {   /* 运维/测试：手动解除失败缓存 */
+    if (TA._retryTimer[key]) { clearTimeout(TA._retryTimer[key]); delete TA._retryTimer[key]; }
     delete TA.status[key]; delete TA.imgs[key]; delete TA.srcs[key];
     delete TA._late[key]; delete TA._inflight[key]; delete TA._failAt[key]; delete TA._retryN[key];
     var at = TA._lru.indexOf(key);

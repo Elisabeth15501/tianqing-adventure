@@ -613,6 +613,13 @@
         'background:rgba(255,253,246,.94);border:1px solid #E6DFCE;color:#6B6560;letter-spacing:.02em';
       btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
       btn.addEventListener('pointerup', function (e) { e.stopPropagation(); });
+      /* ★2026-11-18 真机修复：小红书 WebView 是纯触屏环境。
+       * 旧版只拦 pointer* / click，touchstart 仍冒泡到 .iv-stage 的 tDown()，
+       * 后者 e.preventDefault() 会**取消合成 click** ⇒ 这里的 toggleSrc 永远不执行，
+       * 玩家点了「原文对照」毫无反应（桌面鼠标无 touchstart，所以本地一直测不出来）。
+       * 补拦 touch 两态，并在舞台手势入口按控件豁免。 */
+      btn.addEventListener('touchstart', function (e) { e.stopPropagation(); }, { passive: true });
+      btn.addEventListener('touchend', function (e) { e.stopPropagation(); }, { passive: true });
       btn.addEventListener('click', function (e) { e.stopPropagation(); toggleSrc(); });
       cv.stage.appendChild(btn);
 
@@ -629,6 +636,8 @@
         '<div class="iv-src-f">对不上字的地方，就是誊录抄错的那一处 ·（宋）薛居正等撰</div>';
       panel.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
       panel.addEventListener('pointerup', function (e) { e.stopPropagation(); });
+      panel.addEventListener('touchstart', function (e) { e.stopPropagation(); }, { passive: true });
+      panel.addEventListener('touchend', function (e) { e.stopPropagation(); }, { passive: true });
       panel.querySelector('.iv-src-x').addEventListener('click', function (e) { e.stopPropagation(); toggleSrc(false); });
       cv.stage.appendChild(panel);
     }
@@ -3400,6 +3409,18 @@ function playShiFolk(cv, hooks, cfg, ui) {
        有 PointerEvent 就接所有 pointerType；同时无条件挂 touchstart/move/end（passive:false）。
        两路互斥（ptrId / touchId 先按先得），不会双触发。 */
     var USE_PTR = !!global.PointerEvent, ptrId = null, touchId = null;
+    /* ★2026-11-18：舞台上的「原文对照」按钮/面板是 DOM 控件，不是画布命中。
+     * 命中它们时手势层必须整条让路（不 preventDefault、不 g.down），
+     * 否则触屏上 preventDefault 会吞掉合成 click（详见 ensureSrc 注释）。 */
+    function isUiTarget(e) {
+      var n = e && e.target;
+      while (n && n !== stage) {
+        if (n.classList && (n.classList.contains('iv-src-btn')
+          || n.classList.contains('iv-src') || n.classList.contains('iv-src-x'))) { return true; }
+        n = n.parentNode;
+      }
+      return false;
+    }
     function tmap(t) { return { clientX: t.clientX, clientY: t.clientY, pointerId: t.identifier }; }
     function pickTouch(list, id) {
       if (!list || !list.length) { return null; }
@@ -3408,7 +3429,7 @@ function playShiFolk(cv, hooks, cfg, ui) {
     }
 
     function onDown(e) {
-      if (ptrId !== null) { return; }
+      if (ptrId !== null || isUiTarget(e)) { return; }
       if (e.cancelable) { e.preventDefault(); }
       ptrId = e.pointerId;
       var p = cv.map(e); g.down(p);
@@ -3426,7 +3447,7 @@ function playShiFolk(cv, hooks, cfg, ui) {
     }
 
     function tDown(e) {
-      if (touchId !== null || ptrId !== null) { return; }
+      if (touchId !== null || ptrId !== null || isUiTarget(e)) { return; }
       if (e.cancelable) { e.preventDefault(); }
       var t = e.changedTouches && e.changedTouches[0]; if (!t) { return; }
       touchId = t.identifier; g.down(cv.map(tmap(t)));

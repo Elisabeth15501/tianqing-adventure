@@ -70,11 +70,14 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .timebar{margin:0 16px 8px;background:rgba(221,233,229,.55);border:1px solid var(--qing);border-radius:12px;padding:10px 6px 6px;flex-shrink:0}
 .tb-line{position:relative;height:26px}
 .tb-line .base{position:absolute;left:8%;right:8%;top:12px;height:3px;background:var(--deep)}
-.tb-line .prog{position:absolute;left:8%;top:12px;height:3px;background:var(--gold);width:50%}
+/* ★2026-11-18：宽度不再写死 50%；由 app.js refreshProgress() 按「本幕已读步数/总步数」
+   × 84%（base 两端各 8%）写入行内 style。初始 0，避免进幕就显示假进度。 */
+.tb-line .prog{position:absolute;left:8%;top:12px;height:3px;background:var(--gold);width:0}
 .tb-nodes{display:flex;justify-content:space-between;margin-top:-14px;padding:0 2%}
 .tb-node{text-align:center;position:relative;padding-top:14px}
 .tb-dot{width:11px;height:11px;border-radius:50%;background:var(--yue);border:2.5px solid var(--deep);margin:0 auto}
 .tb-node.cur .tb-dot{width:16px;height:16px;background:var(--gold);border-color:var(--deep)}
+.tb-node.done .tb-dot{background:var(--deep);border-color:var(--gold)}
 .tb-t{font-size:13px;font-weight:600;margin-top:3px;color:var(--ink)}
 .tb-n{font-size:10px;color:var(--muted);margin-top:1px}
 /* 合瓷归位图（手札拼合进度盘） */

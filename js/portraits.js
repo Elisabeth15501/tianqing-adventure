@@ -523,8 +523,12 @@
    *   ⑶ 跪像还要免于「身高差 12% 封顶」——跪着的人本来就矮一截，不该把站着的那位拖下来。 */
   var FIT = {
     'fengdao_a1':      { cx: 0.550, ratio: 0.667, headW: 0.196, y0: 0.096, bw: 0.462, y1: 0.958, bwv: 0.444},
-    'fuhou_a1':        { cx: 0.550, ratio: 0.667, headW: 0.300, y0: 0.081, bw: 0.786, y1: 0.954, bwv: 0.554, kneel: 1},
-    'fuhou_e2':       { cx: 0.528, ratio: 0.667, headW: 0.250, y0: 0.074, bw: 0.715, y1: 0.955, bwv: 0.473, kneel: 1},
+    /* ★2026-11-18：符后原 headW=0.300 是全表最大，单人档头宽归一化把她压到
+     * 同槽角色的 76%（实测 292×480 vs 385×633），是真机「符后过小」的主因。
+     * 0.300 属于头顶定列被头饰污染的值，按同为全身立像的郭荣 0.219 / 郭威 0.181
+     * 口径重定 0.220（e2 同法 0.210），不再让饰品宽度决定人的大小。 */
+    'fuhou_a1':        { cx: 0.550, ratio: 0.667, headW: 0.220, y0: 0.081, bw: 0.786, y1: 0.954, bwv: 0.554, kneel: 1},
+    'fuhou_e2':       { cx: 0.528, ratio: 0.667, headW: 0.210, y0: 0.074, bw: 0.715, y1: 0.955, bwv: 0.473, kneel: 1},
     'guorong_a1':      { cx: 0.504, ratio: 0.667, headW: 0.219, y0: 0.079, bw: 0.432, y1: 0.948, bwv: 0.431},
     'guorong_n1':     { cx: 0.491, ratio: 0.667, headW: 0.255, y0: 0.078, bw: 0.535, y1: 0.954, bwv: 0.529},
     'guorong_a2':      { cx: 0.512, ratio: 0.667, headW: 0.280, y0: 0.124, bw: 0.947, y1: 0.893, bwv: 0.610, kneel: 1},
@@ -634,10 +638,11 @@
     ligu: 1.00, guowei: 1.00,                                   /* 与郭荣身高相若 */
     zhaokuangyin: 1.05,                                         /* 稍高于郭荣 */
     fengdao: 0.95, zhangyongde: 0.94, lichongjin: 0.94,         /* 稍矮于郭荣 */
-    fanzhi: 0.90, yinchongyi: 0.90,                             /* 矮于郭荣 */
+    fanzhi: 0.90, yinchongyi: 0.96,                             /* ★殷崇义 0.90 → 0.96：与同殿使臣/宰辅档一致（李谷1.00/王溥0.92/张永德0.94） */
     /* 2026-11-02 手机实测定档：王朴要「接近张永德」（0.94）⇒ 0.93；王溥同为四相取 0.92 */
     wangpu: 0.93, wangpu2: 0.92,
-    fuhou: 0.97,                                                /* 符后调大：原 0.89 偏小（坐姿另乘 KNEE_K） */
+    /* ★2026-11-18：符后 0.97 → 1.00（使臣级别不再压一头） */
+    fuhou: 1.00,                                                /* 符后调大：原 0.89 偏小（坐姿另乘 KNEE_K） */
     nvguan: 0.86, shiguan: 0.86,                                /* 玩家：明显矮于郭荣 */
     shaonian: 0.80, zongxun: 0.60,                              /* 少年郭荣 / 六岁宗训 */
     sizheng: 0.94, shanggong: 0.94, shangshiling: 0.94, qijulang: 0.94   /* 配角（暂无同框） */
@@ -658,7 +663,10 @@
    * 跪坐的人头顶约在站立者的 0.75 处；素材是「跪着但把画布撑满」，只能整体缩放表达，
    * 代价是头也跟着小 25%（读起来像"坐得稍靠后"，可接受）。只在**同框里有站立者**时生效，
    * 两边都跪或单人时不动 —— 那时没有参照物，缩了反而莫名其妙。 */
-  var KNEE_K = 0.75;
+  /* ★2026-11-18：0.75 的跪姿折扣真机看「人小一圈」（符后 0.97×0.75≈0.73），
+   * 与站立角色比例断档。改 0.84：仍明显低于站姿（一眼分得出跪坐），
+   * 但不再缩到读不清。跪像的头也跟着放大，符合「人物比例一致」。 */
+  var KNEE_K = 0.84;
   /* 参照身长：郭荣 a1 的「头顶→图底」占比（0.921）。全库以它为 1 个"标准身高"。 */
   var REF_HF = 1 - ((FIT.guorong_a1 && FIT.guorong_a1.y0) || 0.079);
 
@@ -890,6 +898,10 @@
     a.setAttribute('title', '素材自检');
     a.textContent = '立绘未载入 · 自检';
     slot.appendChild(a);
+  }
+  function clearMissing(slot) {
+    var m = slot && slot.querySelector('.fig-miss');
+    if (m && m.parentNode) { m.parentNode.removeChild(m); }
   }
 
   var CHAR_ASSETS = {
@@ -1133,7 +1145,7 @@
             TQA.onLate(ak, function (st2) {
               if (st2 !== 'ok' || slot._tqGen !== gen || slot._tqKey !== key || slot._tqSlot !== useSlot) { return; }
               var lateSrc = TQA.src(ak);
-              if (lateSrc) { paintReal(lateSrc, true); }
+              if (lateSrc) { paintReal(lateSrc, true); clearMissing(slot); }
             });
             return;
           }
@@ -1143,6 +1155,13 @@
              * 分不清是「设计如此」还是「素材没载入」——实机排障全靠猜。 */
             if (!slot.querySelector('.fig-real')) { paintVector(); }
             markMissing(slot, stt);
+            /* ★2026-11-18：fail 不再「挂着角标等下一次切换」。assets.js 的
+             * onLate 现在对 fail 也会排一次冷却重试；一旦成功就原位换真图、撤角标。 */
+            TQA.onLate(ak, function (st2) {
+              if (st2 !== 'ok' || slot._tqGen !== gen || slot._tqKey !== key || slot._tqSlot !== useSlot) { return; }
+              var src2 = TQA.src(ak);
+              if (src2) { paintReal(src2, true); clearMissing(slot); }
+            });
             return;
           }
           var realSrc = TQA.src(ak);

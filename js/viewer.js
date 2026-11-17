@@ -129,7 +129,7 @@
     function cmd(c) { if (stage && stage.__cmd) { stage.__cmd(c); } }
 
     /* ---------- 内壁 / 旋转 互切 ---------- */
-    var onInner = false;
+    var onInner = true;   /* ★2026-11-18：默认静态内壁（与剧情拾得页口径一致），不再开场自动旋转 */
     function toggleInner() {
       if (!F) { return; }
       onInner = !onInner;
@@ -210,11 +210,19 @@
 
     document.body.appendChild(ov);
     document.body.classList.add('shv-open');
-    if (F) { F.spin3d(stage, key); }
+    if (F) {
+      /* 复用 toggleInner 的 onInner===true 副作用，但不能调用 toggleInner() 本身
+       * （它会再翻一次布尔值，变回旋转档）。 */
+      try { delete stage.__tq; delete stage.__cmd; } catch (e0) { stage.__tq = null; stage.__cmd = null; }
+      stage.setAttribute('data-mode', 'inner');
+      if (bar) { bar.setAttribute('data-inner', '1'); }
+      F.shardInner(stage, key);
+      bInner.textContent = '旋转';
+      bInner.setAttribute('data-on', '1');
+      tip.textContent = '静态内壁 · 双指缩放 / 拖动平移 · 点「旋转」换角度';
+    }
 
-    /* 默认停在旋转档：开场即 auto-rotate + 可拖拽旋转，直接满足「可旋转互动」；
-     * 旋转帧为 160px/格（拖拽旋转时够用，放大看细节才糊），
-     * 想看釉下笔触/清晰细节，点工具条「内壁」切到静态细看档（920px）。 */
+    /* 已不再默认旋转：旋转帧只作可选视角，点「旋转」才进入（见 toggleInner）。 */
     setTimeout(function () {
       if (!stage.isConnected) { return; }
       sync();

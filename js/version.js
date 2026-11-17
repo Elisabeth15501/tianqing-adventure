@@ -15,9 +15,9 @@
   'use strict';
   global.TQ_VERSION = {
     ver: '1.1.12',
-    build: '2026-11-18 02:20',
+    build: '2026-11-18 04:05',
     stage: '内测',
-    note: '第二轮容器修复：位图不被 release 废掉 · fail 冷却重试 · 破图 onerror 兜底 · 顶栏桥异步重试',
+    note: '两线素材加载统一：TQA.observe 失败自恢复 · 瓷片 fail 原位升级 · 投壶换景兜底 · 立绘比例 · 时间条 · 顶栏',
     /* 对应 git 提交在发布时补记（留空则设定页只显示版本与构建时间） */
     commit: ''
   };

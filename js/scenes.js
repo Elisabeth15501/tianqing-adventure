@@ -272,20 +272,30 @@
    *   再叠一层**程序化前景**（檐角暗影 + 低位浮尘，纯 CSS 渐变）反向位移 2 倍——
    *   一近一远就有了景深，且零新增资源、零新增请求。 */
   /* 背景层加载：失败重试一次，第二次仍失败才告警。
-     ★2026-11-05：底图改 CSS 背景后不再有 <img> 的 onerror 可用，而旧实现是「裸设 src」，
-     失败等于静默空白 —— 真机上表现为「场景没了、控制台干净」，无法定位。
-     这里用脱离文档的 Image 追踪，成功失败都落痕迹；重试带 cache-bust 防同一张坏缓存。 */
+     ★2026-11-18：重试**不能**加 ?r=1 —— 小工具里资产是 zip 内同源相对路径，
+     查询串会变成另一个 URL 被本地加载器/CSP 拒（assets.js 已踩过同一个坑）。
+     现在改为同一相对路径重设一次；彻底失败时在宿主上发 tq-scene-fail，
+     让 app.js 挂矢量底图，绝不留纯黑底（女官线投壶幕实证）。 */
   function loadBg(box, src) {
     var im = new global.Image();
     var tried = 0;
     function set(u) { if (box) { box.style.backgroundImage = 'url("' + u + '")'; } }
+    im.onload = function () { if (box) { box.setAttribute('data-bg-ok', '1'); } };
     im.onerror = function () {
       if (tried === 0) {
         tried = 1;
-        var u = src + (src.indexOf('?') < 0 ? '?' : '&') + 'r=1';
-        set(u);
-        im.src = u;
+        im.src = src;      /* 同一相对路径，无查询串 */
+        set(src);
         return;
+      }
+      if (box) {
+        box.setAttribute('data-bg-fail', '1');
+        /* 宿主可能已不在文档里（换幕很快），此时事件无人接也无害 */
+        var ev = document.createEvent ? document.createEvent('Event') : null;
+        if (ev) {
+          if (ev.initEvent) { ev.initEvent('tq-scene-fail', true, false); }
+          box.dispatchEvent(ev);
+        }
       }
       if (global.console && global.console.warn) {
         global.console.warn('[TQ] 场景图加载失败:', src);
