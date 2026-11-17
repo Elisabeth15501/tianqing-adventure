@@ -25,12 +25,27 @@
    * 33 张立绘全量 decode ≈ 176MiB、49 张瓷片 ≈ 131MiB（RGBA8 估算）；
    * 桌面浏览器无感，小工具 WebView 到中后段就会因内存压力让新图 onerror ⇒ 回退角标。
    * 路径常驻（srcs）、位图按 LRU 淘汰：需要时 resolve 会按路径静默重载。 */
-  var CACHE_LIMIT = (global.xhs && global.xhs.miniTool) ? 6 : 20;
+  /* ★2026-11-18 深层修复：容器判定必须与 app.js 同口径——不能只看 window.xhs。
+   * window.xhs 在真机是**异步注入**的（顶栏 bug 已实证）：本文件顶层执行的那一刻
+   * 桥往往还没挂上，旧写法 `(global.xhs && global.xhs.miniTool) ? 6 : 20`
+   * 于是误判成网页、缓存上限取 20 ⇒ 容器里囤 20 张解码位图（≈100MB+），
+   * 女官线先玩内存干净全好、史官线后玩累积到上限 → 新图批量 onerror 回退角标。
+   * 修法：①惰性求值（每次 touch 重算，桥后到也能纠偏）；②加 UA 兜底与 app.js 对齐。
+   * 一旦识别为容器就锁死 6（避免桥瞬时抖动让上限忽大忽小）。 */
+  var _cacheLimitLocked = 0;   /* 0=未定；>0=已锁定为容器口径 */
+  function cacheLimit() {
+    if (_cacheLimitLocked) { return _cacheLimitLocked; }
+    var inCont = !!(global.xhs && global.xhs.miniTool)
+      || /xhs|xiaohongshu|redapp/i.test((global.navigator && global.navigator.userAgent) || '');
+    if (inCont) { _cacheLimitLocked = 6; return 6; }
+    return 20;                  /* Pages：桥与 UA 都不匹配，保持原视觉/性能 */
+  }
   function touch(key) {
     var q = TA._lru, at = q.indexOf(key);
     if (at >= 0) { q.splice(at, 1); }
     q.push(key);
-    while (q.length > CACHE_LIMIT) { delete TA.imgs[q.shift()]; }
+    var lim = cacheLimit();
+    while (q.length > lim) { delete TA.imgs[q.shift()]; }
   }
   function remember(key, im, src) {
     TA.srcs[key] = src;
