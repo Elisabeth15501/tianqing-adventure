@@ -118,6 +118,18 @@
       apply({ top: window.__TQ_HOST__.insetTop, bottom: 0, left: 0, right: 0, topRight: 0 });
     } else { apply({ top: 0, bottom: 0, left: 0, right: 0, topRight: 0 }); }
     pull();
+    /* ★2026-11-17：容器桥 window.xhs 可能是异步注入的——脚本执行时 pull() 直接
+     * return（mt 为空），之后只有 resize/orientationchange 才重试；真机上玩家不转屏
+     * 就永远拿不到 menuButtons ⇒ --tq-topbar-right 恒 0 ⇒ 平台胶囊压住「设定/手札」。
+     * 这里补一段有上限的幂等重试：拿到一次真实数据即停，绝不无限轮询。 */
+    (function retryPull(n) {
+      if (n <= 0) { return; }
+      setTimeout(function () {
+        var mt = global.xhs && global.xhs.miniTool;
+        if (mt && typeof mt.getWindowInfo === 'function') { pull(); return; }
+        retryPull(n - 1);
+      }, 250);
+    }(6));   /* 最多 6×250ms = 1.5s，覆盖容器桥注入窗口 */
     /* 宿主手动推送（兼容旧桥） */
     window.addEventListener('message', function (e) {
       var d = e.data || {};

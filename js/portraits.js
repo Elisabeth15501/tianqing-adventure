@@ -1096,6 +1096,20 @@
         var pic = document.createElement('img');
         pic.className = 'fig-real';
         if (instant) { pic.setAttribute('data-instant', '1'); }
+        /* ★2026-11-17 真机修复：resolve 报 ok（图曾解过码/LRU 命中）后，
+         * 这里新建的 <img> 仍可能因容器内存抖动二次 onerror —— 旧版没有兜底，
+         * 用户看到的是浏览器「破图图标 + alt 文字」（真机截图实证）。
+         * 现在：onerror 立刻撤掉破图、退回矢量占位、挂可见角标，并可异步重试真图。 */
+        var picGen = gen;
+        pic.onerror = function () {
+          if (slot._tqGen !== picGen || !pic.parentNode) { return; }
+          if (pic.parentNode) { pic.parentNode.removeChild(pic); }
+          slot.classList.remove('has-real');
+          if (!slot.querySelector('.fig-art')) { paintVector(); }
+          markMissing(slot, 'fail');
+          /* 解除这次的失败缓存，让下一次剧情切换能重试（配合 assets.js 冷却机制） */
+          if (window.TQA && TQA.retry) { TQA.retry(ak); }
+        };
         pic.src = src;
         pic.alt = (TP.meta(key).label || '') + ' 立绘';
         slot.insertBefore(pic, slot.firstChild);
@@ -1106,7 +1120,10 @@
         slot.classList.add('has-real');
         applyFit(slot, key, useSlot);
       }
-      if (hot) { paintReal(TQA.src(ak), true); TQA.releasePortrait(ak); }
+      /* ★2026-11-17：这里**不能** releasePortrait —— 那样会把刚解码的位图立刻
+       * 从 TQA 的 LRU 里删掉，每次换人全部重新解码；容器内存抖动下反复 onerror ⇒
+       * 「从午时起成批素材回退」。位图交给 LRU（容器 6 张）自己淘汰即可。 */
+      if (hot) { paintReal(TQA.src(ak), true); }
       else if (canReal) {
         TQA.resolve(ak, function (stt) {
           if (slot._tqGen !== gen || slot._tqKey !== key || slot._tqSlot !== useSlot) { return; }
@@ -1116,7 +1133,7 @@
             TQA.onLate(ak, function (st2) {
               if (st2 !== 'ok' || slot._tqGen !== gen || slot._tqKey !== key || slot._tqSlot !== useSlot) { return; }
               var lateSrc = TQA.src(ak);
-              if (lateSrc) { paintReal(lateSrc, true); TQA.releasePortrait(ak); }
+              if (lateSrc) { paintReal(lateSrc, true); }
             });
             return;
           }
@@ -1131,7 +1148,7 @@
           var realSrc = TQA.src(ak);
           if (!realSrc) { return; }
           paintReal(realSrc, false);
-          TQA.releasePortrait(ak);
+          /* 不再 releasePortrait：位图留在 LRU，下次同角色切换走热路径直达 */
         }, { hot: true });   /* 屏上优先：预取队列见到 _hot 就让路 */
       } else {
         slot.classList.remove('has-real');
@@ -1175,7 +1192,7 @@
         node.appendChild(pic);
       }
       /* 命中内存里的图：同步落图，回忆舞台不闪占位 */
-      if (TQA.status[ak] === 'ok' && TQA.src(ak)) { put(TQA.src(ak)); TQA.releasePortrait(ak); return true; }
+      if (TQA.status[ak] === 'ok' && TQA.src(ak)) { put(TQA.src(ak)); return true; }
       TQA.resolve(ak, function (stt) {
         if (node._tqTok !== tok) { return; }
         if (stt === 'timeout') {
@@ -1184,7 +1201,7 @@
           TQA.onLate(ak, function (st2) {
             if (st2 !== 'ok' || node._tqTok !== tok) { return; }
             var memSrc = TQA.src(ak);
-            if (memSrc) { put(memSrc); TQA.releasePortrait(ak); }
+            if (memSrc) { put(memSrc); }
           });
           return;
         }
@@ -1192,7 +1209,7 @@
         var okSrc = TQA.src(ak);
         if (!okSrc) { return; }
         put(okSrc);
-        TQA.releasePortrait(ak);
+        /* 不再 releasePortrait：位图留在 LRU，回忆舞台反复进出不必重解码 */
       }, { hot: true });
       return true;
     },

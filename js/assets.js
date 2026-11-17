@@ -10,7 +10,16 @@
 (function (global) {
   'use strict';
 
-  var TA = { reg: {}, status: {}, imgs: {}, srcs: {}, _lru: [], env: null, slowKinds: {}, _pending: {} };
+  var TA = { reg: {}, status: {}, imgs: {}, srcs: {}, _lru: [], env: null, slowKinds: {}, _pending: {}, _failAt: {}, _retryN: {} };
+  /* ★2026-11-17 真机修复：fail 不再是「一锤定音」。
+   * 小工具 WebView 里一次瞬时的解码失败（内存抖动/并发峰值）会把图永久钉死为 fail，
+   * 之后整局不再重试 ⇒ 用户看到「从某章节起成批素材永久回退」。
+   * 现在：fail 带冷却时间，冷却过后下次 resolve 自动重新发起（可恢复）；
+   *       重试有次数上限，真 404 不会无限重试。
+   * ★不做 ?r=N 查询串重试：容器里资产是 zip 内同源相对路径，加查询串会变成
+   *   另一个 URL（本地资源加载器/CSP 可能直接拒绝）——治愈反而致残。 */
+  var FAIL_COOLDOWN = 2500;   /* ms：fail 后多久允许自动重试 */
+  var MAX_RETRY = 3;          /* 单 key 自动重试上限（每次失败 markFail 计 1） */
   /* ★2026-11-17：容器内只保留最近 N 张**解码位图**。
    * 33 张立绘全量 decode ≈ 176MiB、49 张瓷片 ≈ 131MiB（RGBA8 估算）；
    * 桌面浏览器无感，小工具 WebView 到中后段就会因内存压力让新图 onerror ⇒ 回退角标。
@@ -193,6 +202,17 @@
   TA._inflight = {};  /* key → { im, cbs }：请求未决（含已超时但仍在下载） */
   TA._hot = {};       /* key → 1：**屏上正在等**的图。预取见到它就停手，先把带宽让出来 */
 
+  function markFail(key) {
+    TA.status[key] = 'fail';
+    TA._failAt[key] = Date.now();
+    TA._retryN[key] = (TA._retryN[key] || 0) + 1;
+  }
+  /* 运维/自动化：解除某个 key 的失败缓存，下次 resolve 立即重取（不等待冷却） */
+  TA.retry = function (key) {
+    delete TA.status[key]; delete TA._failAt[key]; delete TA._retryN[key];
+    delete TA._inflight[key]; delete TA._late[key]; delete TA._pending[key];
+  };
+
   TA.resolve = function (key, cb, opt) {
     var ent = TA.reg[key];
     if (!ent) { cb('none'); return; }
@@ -203,12 +223,19 @@
       if (TA.status[key] === 'ok' && !TA.imgs[key] && TA.srcs[key]) {
         var again = new Image();
         again.onload = function () { remember(key, again, TA.srcs[key]); cb('ok'); };
-        again.onerror = function () { TA.status[key] = 'fail'; cb('fail'); };
+        again.onerror = function () { markFail(key); cb('fail'); };
         again.src = TA.srcs[key];
         return;
       }
-      cb(TA.status[key]);
-      return;
+      if (TA.status[key] === 'fail') {
+        /* ★冷却后自动重试：瞬时解码失败不该把资源钉死一整局。
+         * 超过上限（真 404）才彻底放弃，避免无意义请求。 */
+        var last = TA._failAt[key] || 0;
+        if ((TA._retryN[key] || 0) < MAX_RETRY && (Date.now() - last) >= FAIL_COOLDOWN) {
+          delete TA.status[key];
+          /* 落到下方正常加载流程 */
+        } else { cb('fail'); return; }
+      } else { cb(TA.status[key]); return; }
     }
     if (opt && opt.hot) { TA._hot[key] = 1; }
     if (TA._pending[key]) { TA._pending[key].push(cb); return; }
@@ -227,8 +254,11 @@
       if (done) { return; }
       done = true;
       clearTimeout(to);
-      TA.status[key] = stt;
-      if (stt === 'ok') { remember(key, im, ent.src); delete TA._inflight[key]; }
+      if (stt === 'ok') {
+        TA.status[key] = 'ok';
+        TA._retryN[key] = 0;              /* 成功即清零重试史 */
+        remember(key, im, ent.src); delete TA._inflight[key];
+      } else { markFail(key); }
       drain(stt);
       if (stt === 'ok') { fireLate(key); }
       else { delete TA._inflight[key]; delete TA._late[key]; }
@@ -262,6 +292,10 @@
     im.onerror = function () {
       delete TA._hot[key];
       if (done) { delete TA._inflight[key]; delete TA._late[key]; return; }
+      /* ★2026-11-17：这里不再即时改 im.src 重试。原因有二：
+       *   ① 容器内资产是同源相对路径，追加 ?r=1 会变成新 URL，本地加载器/CSP 可能直接拒；
+       *   ② 即时重试会与下方「冷却重试」共用 TA._retryN，把次数耗尽 ⇒ 冷却重试永不触发。
+       * 统一的恢复路径只有一个：markFail → 冷却 2.5s → 下次 resolve 自动重来（见上方）。 */
       finish('fail');
     };
     im.src = ent.src;
@@ -310,7 +344,7 @@
   };
   TA.reset = function (key) {   /* 运维/测试：手动解除失败缓存 */
     delete TA.status[key]; delete TA.imgs[key]; delete TA.srcs[key];
-    delete TA._late[key]; delete TA._inflight[key];
+    delete TA._late[key]; delete TA._inflight[key]; delete TA._failAt[key]; delete TA._retryN[key];
     var at = TA._lru.indexOf(key);
     if (at >= 0) { TA._lru.splice(at, 1); }
   };
