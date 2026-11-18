@@ -41,9 +41,10 @@
     '.spl-stage{position:relative;overflow:hidden;background:#0B0908;touch-action:none}',
     /* 层比舞台大 14%（六面各溢 7%）：LIM30 最坏位移占舞台宽 2%，永远看不到层的直边 */
     '.spl{position:absolute;left:-7%;top:-7%;width:114%;height:114%;',
-    '  will-change:transform;pointer-events:none;transform:translate3d(0,0,0)}',
-    '.spl img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 50%;',
-    '  -webkit-user-drag:none;user-select:none}',
+    '  will-change:transform;pointer-events:none;transform:translate3d(0,0,0);',
+    '  background-size:cover;background-position:50% 50%;background-repeat:no-repeat}',
+    /* ★图层用 CSS 背景而非 <img>（2026-11-04）：<img> 会被宿主长按识别成图片。
+       层比舞台大 14%，cover 等价于原 object-fit:cover。 */
     /* 加色层：黑=透明。注意 bg 必须保持 normal —— 这是「静止态==原图」的结构前提。
        真物体分层（cfg.additive=false）时 mg/fg 是 RGBA 贴片，用 normal + alpha。
        特异性 (0,3,0) > (0,2,0)，按实例属性覆盖。 */
@@ -188,12 +189,6 @@
         box.className = 'spl';
         box.setAttribute('data-l', l);
         box.setAttribute('data-k', String(this.cfg.ks[l]));
-        img = document.createElement('img');
-        img.setAttribute('data-l', l);
-        img.setAttribute('draggable', 'false');
-        img.setAttribute('decoding', 'async');
-        img.alt = l.toUpperCase() + ' 层';
-        box.appendChild(img);
         el.appendChild(box);
       }
       this.layers[l] = box;
@@ -214,22 +209,43 @@
   };
 
   Parallax.prototype._load = function () {
-    var self = this, i, l, img;
+    var self = this, i, l;
     this.loaded = {};
+    this.imgs = this.imgs || {};
     for (i = 0; i < ORDER.length; i += 1) {
       l = ORDER[i];
-      img = this.layers[l].querySelector('img');
-      (function (ll, im) {
+      (function (ll) {
         var src = self._src(ll, self.form);
+        var box = self.layers[ll];
+        if (box) { box.style.backgroundImage = 'url("' + src + '")'; }
+        /* 用脱离文档的 Image 追踪「有没有加载成功」：背景图本身不暴露 naturalWidth，
+           而 still()/审计要这两个数，接口保持不变。 */
+        var im = self.imgs[ll];
+        if (!im) { im = self.imgs[ll] = new global.Image(); }
         if (im.getAttribute('src') === src) {
           self.loaded[ll] = im.complete && im.naturalWidth > 0;
           return;
         }
         self.loaded[ll] = false;
         im.onload = function () { self.loaded[ll] = im.naturalWidth > 0; };
-        im.onerror = function () { self.loaded[ll] = false; };
+        /* 失败重试一次（带 cache-bust），第二次才告警：背景层没有 <img> 的可见失败态，
+           不留日志的话真机就是「场景黑了、控制台干净」。 */
+        var retried = false;
+        im.onerror = function () {
+          if (!retried) {
+            retried = true;
+            var u = src + (src.indexOf('?') < 0 ? '?' : '&') + 'r=1';
+            if (box) { box.style.backgroundImage = 'url("' + u + '")'; }
+            im.setAttribute('src', u);
+            return;
+          }
+          self.loaded[ll] = false;
+          if (global.console && global.console.warn) {
+            global.console.warn('[TQ] 场景图层加载失败:', ll, src);
+          }
+        };
         im.setAttribute('src', src);
-      }(l, img));
+      }(l));
       this._srcs[l] = this._src(l, this.form);
     }
   };
@@ -411,7 +427,7 @@
       l = ORDER[i];
       box = this.layers[l];
       if (!box) { continue; }
-      img = box.querySelector('img');
+      img = (this.imgs && this.imgs[l]) || null;
       cs = global.getComputedStyle ? global.getComputedStyle(box) : null;
       n = rect(box);
       /* ★ 必须比「位置」而不是只比「尺寸」：getBoundingClientRect 已包含 transform，

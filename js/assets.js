@@ -10,7 +10,55 @@
 (function (global) {
   'use strict';
 
-  var TA = { reg: {}, status: {}, imgs: {}, env: null, slowKinds: {}, _pending: {} };
+  var TA = { reg: {}, status: {}, imgs: {}, srcs: {}, _lru: [], env: null, slowKinds: {},
+    _pending: {}, _failAt: {}, _retryN: {}, _retryTimer: {} };
+  /* ★2026-11-17 真机修复：fail 不再是「一锤定音」。
+   * 小工具 WebView 里一次瞬时的解码失败（内存抖动/并发峰值）会把图永久钉死为 fail，
+   * 之后整局不再重试 ⇒ 用户看到「从某章节起成批素材永久回退」。
+   * 现在：fail 带冷却时间，冷却过后下次 resolve 自动重新发起（可恢复）；
+   *       重试有次数上限，真 404 不会无限重试。
+   * ★不做 ?r=N 查询串重试：容器里资产是 zip 内同源相对路径，加查询串会变成
+   *   另一个 URL（本地资源加载器/CSP 可能直接拒绝）——治愈反而致残。 */
+  var FAIL_COOLDOWN = 2500;   /* ms：fail 后多久允许自动重试 */
+  var MAX_RETRY = 3;          /* 单 key 自动重试上限（每次失败 markFail 计 1） */
+  /* ★2026-11-17：容器内只保留最近 N 张**解码位图**。
+   * 33 张立绘全量 decode ≈ 176MiB、49 张瓷片 ≈ 131MiB（RGBA8 估算）；
+   * 桌面浏览器无感，小工具 WebView 到中后段就会因内存压力让新图 onerror ⇒ 回退角标。
+   * 路径常驻（srcs）、位图按 LRU 淘汰：需要时 resolve 会按路径静默重载。 */
+  /* ★2026-11-18 深层修复：容器判定必须与 app.js 同口径——不能只看 window.xhs。
+   * window.xhs 在真机是**异步注入**的（顶栏 bug 已实证）：本文件顶层执行的那一刻
+   * 桥往往还没挂上，旧写法 `(global.xhs && global.xhs.miniTool) ? 6 : 20`
+   * 于是误判成网页、缓存上限取 20 ⇒ 容器里囤 20 张解码位图（≈100MB+），
+   * 女官线先玩内存干净全好、史官线后玩累积到上限 → 新图批量 onerror 回退角标。
+   * 修法：①惰性求值（每次 touch 重算，桥后到也能纠偏）；②加 UA 兜底与 app.js 对齐。
+   * 一旦识别为容器就锁死 6（避免桥瞬时抖动让上限忽大忽小）。 */
+  var _cacheLimitLocked = 0;   /* 0=未定；>0=已锁定为容器口径 */
+  function cacheLimit() {
+    if (_cacheLimitLocked) { return _cacheLimitLocked; }
+    var inCont = !!(global.xhs && global.xhs.miniTool)
+      || /xhs|xiaohongshu|redapp/i.test((global.navigator && global.navigator.userAgent) || '');
+    if (inCont) { _cacheLimitLocked = 6; return 6; }
+    return 20;                  /* Pages：桥与 UA 都不匹配，保持原视觉/性能 */
+  }
+  function touch(key) {
+    var q = TA._lru, at = q.indexOf(key);
+    if (at >= 0) { q.splice(at, 1); }
+    q.push(key);
+    var lim = cacheLimit();
+    while (q.length > lim) { delete TA.imgs[q.shift()]; }
+  }
+  function remember(key, im, src) {
+    TA.srcs[key] = src;
+    TA.imgs[key] = im;
+    touch(key);
+  }
+  TA.src = function (key) { return TA.srcs[key] || (TA.imgs[key] && TA.imgs[key].src) || null; };
+  TA.release = function (key) {
+    delete TA.imgs[key];
+    var at = TA._lru.indexOf(key);
+    if (at >= 0) { TA._lru.splice(at, 1); }
+  };
+  TA.releasePortrait = TA.release;
 
   /* ---------- 内壁静态帧的姿态与保证（由 pick_inner_pose.py + pack_inner_still.py 产出） ----------
    * innerRatio = 「该姿态下可见内壁面积 / 该片内壁总面积」。
@@ -170,11 +218,67 @@
   TA._inflight = {};  /* key → { im, cbs }：请求未决（含已超时但仍在下载） */
   TA._hot = {};       /* key → 1：**屏上正在等**的图。预取见到它就停手，先把带宽让出来 */
 
+  function markFail(key) {
+    TA.status[key] = 'fail';
+    TA._failAt[key] = Date.now();
+    TA._retryN[key] = (TA._retryN[key] || 0) + 1;
+    /* ★2026-11-18：旧版冷却重试只在「下一次 resolve」才发生。
+     * 但屏上的矢量占位/破图不会自己去 resolve —— 玩家停在这一幕时，
+     * 一次瞬时失败就被永久看见（史官线午时起成批回退、指定编号瓷片始终是纯色多边形）。
+     * 有等待者时主动排一次重取，成功后由 onLate 回调让 UI 原位升级。 */
+    if ((TA._late[key] || []).length) { scheduleRetry(key); }
+  }
+  function scheduleRetry(key) {
+    if (TA._retryTimer[key]) { return; }
+    if ((TA._retryN[key] || 0) >= MAX_RETRY) { return; }
+    var wait = Math.max(60, FAIL_COOLDOWN - (Date.now() - (TA._failAt[key] || 0)));
+    TA._retryTimer[key] = setTimeout(function () {
+      delete TA._retryTimer[key];
+      if (TA.status[key] !== 'fail' || !TA.reg[key]) { return; }
+      if ((TA._retryN[key] || 0) >= MAX_RETRY) { return; }
+      delete TA.status[key];
+      TA.resolve(key, function (stt) {
+        if (stt === 'ok') {
+          var q = TA._late[key] || [];
+          delete TA._late[key];
+          for (var i = 0; i < q.length; i += 1) { q[i]('ok'); }
+        } else if (stt === 'fail' && (TA._late[key] || []).length) {
+          scheduleRetry(key);   /* onerror 里 markFail 已排，但 timeout/其他分支兜底 */
+        }
+      });
+    }, wait);
+  }
+  /* 运维/自动化：解除某个 key 的失败缓存，下次 resolve 立即重取（不等待冷却） */
+  TA.retry = function (key) {
+    if (TA._retryTimer[key]) { clearTimeout(TA._retryTimer[key]); delete TA._retryTimer[key]; }
+    delete TA.status[key]; delete TA._failAt[key]; delete TA._retryN[key];
+    delete TA._inflight[key]; delete TA._late[key]; delete TA._pending[key];
+  };
+
   TA.resolve = function (key, cb, opt) {
     var ent = TA.reg[key];
     if (!ent) { cb('none'); return; }
     if (TA.assetsMode() === 'vector') { TA.status[key] = 'fail'; cb('fail'); return; }
-    if (TA.status[key]) { cb(TA.status[key]); return; }
+    if (TA.status[key]) {
+      /* LRU 淘汰过位图但路径还在：按原相对路径静默重载，调用方仍只收到 ok/fail。
+       * ★必须用 TA.srcs 的相对路径，不用 im.src 的绝对 URL（容器 CSP 可能拒绝）。 */
+      if (TA.status[key] === 'ok' && !TA.imgs[key] && TA.srcs[key]) {
+        var again = new Image();
+        again.onload = function () { remember(key, again, TA.srcs[key]); cb('ok'); };
+        again.onerror = function () { markFail(key); cb('fail'); };
+        again.src = TA.srcs[key];
+        return;
+      }
+      if (TA.status[key] === 'fail') {
+        /* ★冷却后自动重试：瞬时解码失败不该把资源钉死一整局。
+         * 超过上限（真 404）才彻底放弃，避免无意义请求。 */
+        var last = TA._failAt[key] || 0;
+        if ((TA._retryN[key] || 0) < MAX_RETRY && (Date.now() - last) >= FAIL_COOLDOWN) {
+          delete TA.status[key];
+          /* 落到下方正常加载流程 */
+        } else { cb('fail'); return; }
+      } else { cb(TA.status[key]); return; }
+    }
     if (opt && opt.hot) { TA._hot[key] = 1; }
     if (TA._pending[key]) { TA._pending[key].push(cb); return; }
     var flight = TA._inflight[key];
@@ -192,8 +296,11 @@
       if (done) { return; }
       done = true;
       clearTimeout(to);
-      TA.status[key] = stt;
-      if (stt === 'ok') { TA.imgs[key] = im; delete TA._inflight[key]; }
+      if (stt === 'ok') {
+        TA.status[key] = 'ok';
+        TA._retryN[key] = 0;              /* 成功即清零重试史 */
+        remember(key, im, ent.src); delete TA._inflight[key];
+      } else { markFail(key); }
       drain(stt);
       if (stt === 'ok') { fireLate(key); }
       else { delete TA._inflight[key]; delete TA._late[key]; }
@@ -216,7 +323,7 @@
         if (tooBig) { return; }
         var f = TA._inflight[key];
         TA.status[key] = 'ok';
-        TA.imgs[key] = im;
+        remember(key, im, ent.src);
         delete TA._inflight[key];
         if (f) { for (var j = 0; j < f.cbs.length; j += 1) { f.cbs[j]('ok'); } }
         fireLate(key);
@@ -227,15 +334,59 @@
     im.onerror = function () {
       delete TA._hot[key];
       if (done) { delete TA._inflight[key]; delete TA._late[key]; return; }
+      /* ★2026-11-17：这里不再即时改 im.src 重试。原因有二：
+       *   ① 容器内资产是同源相对路径，追加 ?r=1 会变成新 URL，本地加载器/CSP 可能直接拒；
+       *   ② 即时重试会与下方「冷却重试」共用 TA._retryN，把次数耗尽 ⇒ 冷却重试永不触发。
+       * 统一的恢复路径只有一个：markFail → 冷却 2.5s → 下次 resolve 自动重来（见上方）。 */
       finish('fail');
     };
     im.src = ent.src;
   };
-  /* 注册「图晚到」回调：只在该 key 已超时、仍在下载时有效（否则立刻回调）。 */
+  /* 注册「图晚到 / 失败后重试成功」回调：
+   * ① 已 ok → 立即回调（调用方原位升级）
+   * ② 还在下载 → 挂到 _late，等 onload 补写
+   * ③ **fail → 也挂上，并主动排一次冷却重试**（2026-11-18 新增）
+   * 旧版第 ③ 种直接 return，玩家停在屏上的占位永远等不到升级。 */
   TA.onLate = function (key, cb) {
     if (TA.status[key] === 'ok') { cb('ok'); return; }
-    if (!TA._inflight[key]) { return; }      /* 没在下载 → 不会有晚到 */
     (TA._late[key] = TA._late[key] || []).push(cb);
+    if (TA.status[key] === 'fail') { scheduleRetry(key); }
+  };
+
+  /* ★★★ 2026-11-18 统一素材加载入口（女官线 / 史官线共用，杜绝加载逻辑漂移）★★★
+   * 背景：立绘（portraits.js）与瓷片 / 场景回退（frag.js）过去各写一套 resolve + 三态
+   * 处理，结果两边「失败后怎么办」不一致 —— 立绘后来补了 fail→onLate 重试，瓷片却还在
+   * fail 分支画完矢量就 return，于是真机一次瞬时解码失败 = 该瓷片整局停在「预设图样」。
+   * 这正是「史官线 4/6/7/8/9/10/12/13/15/16 号瓷片加载不出、女官线却正常」的根因：
+   *   不是资源缺失（同一批文件），而是两条线触发的失败时序不同，回退路径又各自为政。
+   *
+   * 现在把三态决策 + 失败自恢复收敛到这一个函数，两类素材都调它，行为必然同步：
+   *   handlers.ready(img, ent)  图可用（首次命中 / 晚到 / 冷却重试成功，都会调）
+   *   handlers.pending(stt)     只是慢（timeout）：调用方应先画矢量占位兜住
+   *   handlers.fail(stt)        真失败（fail/none）：调用方画占位 + 可挂自有角标
+   * 无论 pending 还是 fail，都统一挂 onLate —— 图晚到或冷却重试成功后，ready 会被
+   * 再次调用，调用方只要在这里「原位替换」即可，占位不会永久钉死。
+   * 返回 cancel()：节点卸载/换代时调用，避免旧节点的迟到回调污染新画面。 */
+  TA.observe = function (key, handlers, opts) {
+    var h = handlers || {};
+    var dead = false;
+    function ready() {
+      if (dead) { return; }
+      var img = TA.image(key);
+      if (img && h.ready) { h.ready(img, TA.reg[key]); }
+    }
+    function watchLate() {
+      if (dead) { return; }
+      TA.onLate(key, function (st) { if (st === 'ok') { ready(); } });
+    }
+    TA.resolve(key, function (stt) {
+      if (dead) { return; }
+      if (stt === 'ok') { ready(); return; }
+      if (stt === 'timeout') { if (h.pending) { h.pending(stt); } }
+      else { if (h.fail) { h.fail(stt); } else if (h.pending) { h.pending(stt); } }
+      watchLate();      /* fail 也挂：由 onLate 触发冷却重试，成功后 ready 原位升级 */
+    }, opts || { hot: true });
+    return function () { dead = true; };
   };
   /* 并发受控的批量预热：只排「还没解过」的 key，失败/超时都不阻塞队列。
    * opt = { conc: 3, done: fn }。与 resolve 共用同一条去重链，重复调用无副作用。 */
@@ -274,7 +425,11 @@
     pump();
   };
   TA.reset = function (key) {   /* 运维/测试：手动解除失败缓存 */
-    delete TA.status[key]; delete TA.imgs[key]; delete TA._late[key]; delete TA._inflight[key];
+    if (TA._retryTimer[key]) { clearTimeout(TA._retryTimer[key]); delete TA._retryTimer[key]; }
+    delete TA.status[key]; delete TA.imgs[key]; delete TA.srcs[key];
+    delete TA._late[key]; delete TA._inflight[key]; delete TA._failAt[key]; delete TA._retryN[key];
+    var at = TA._lru.indexOf(key);
+    if (at >= 0) { TA._lru.splice(at, 1); }
   };
 
   TA.image = function (key) { return TA.imgs[key] || null; };
@@ -292,7 +447,7 @@
       var im = TA.imgs[k];
       var row = { key: k, src: TA.reg[k].src, status: stt,
         w: im ? im.width : 0, h: im ? im.height : 0 };
-      if (stt === 'ok' && im) { okList.push(row); }
+      if (stt === 'ok' && (im || TA.srcs[k])) { okList.push(row); }
       else if (stt === 'pending') { pend.push(row); }
       else { miss.push(row); }
     });

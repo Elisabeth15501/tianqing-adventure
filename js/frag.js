@@ -277,96 +277,104 @@
     var key = 'shard-inner-' + id;
     var tqa = global.TQA;
     if (!tqa || !tqa.reg[key]) { vecShard(mount, false); return; }
-    tqa.resolve(key, function (stt) {
+    /* 先把矢量轮廓同步画上屏（零等待），真图到了再原位替换。
+     * ★2026-11-18：改用统一加载入口 TQA.observe —— 与立绘/两条线共用同一套
+     * 「resolve + 失败主动重试 + 晚到原位升级」语义。旧版 fail 分支只画矢量就 return，
+     * 真机一次瞬时解码失败 ⇒ 该瓷片整局停在「预设图样」（史官线 4/6/7/8/9/10/12/13/15/16 实证）。 */
+    vecShard(mount, false);
+    function paintInner(img) {
       if (!mount.isConnected) { return; }
-      if (stt !== 'ok') { vecShard(mount, stt === 'fail'); return; }
-      var ent = tqa.reg[key], img = tqa.image(key);
-      if (!img) { vecShard(mount, false); return; }
+      var ent = tqa.reg[key];
       mount.innerHTML = '';
-      var cv = h('canvas', 'shard-ll');
-      var d = dprOf();
-      /* ★2026-11-02 桌面实测「收到瓷片时显示异常（拉成一块怪形状）」：
-       *   旧代码按 `mount.clientWidth/clientHeight` 定 backing —— mount 是 .shard-stage，
-       *   桌面上它是整列宽的 flex 容器（≈852×236），而 canvas 的**显示尺寸**由 CSS
-       *   .shard-ll 固定为 200×200 ⇒ 按 852×236 画、再压进 200×200，纵向被压扁。
-       *   改成：先把 canvas 挂进去，按它自己的 CSS 显示尺寸（×DPR）定 backing，
-       *   两者同源，任何断点都不会变形。 */
-      mount.appendChild(cv);
-      /* ★ 清晰度修复（2026-11-02）：旧 backing = img.width*d/2 ≈146px 且固定，
-       *   zoom 只是把这块 146px 拉伸到 ~320px 显示 ⇒ 放大永远只有 ~146px 有效像素（糊）。
-       *   现 backing 一次开到「显示区尺寸 × dpr」（z=1 满分辨率）。draw() 仍用
-       *   cv.width*zoom 作目标矩形 —— dest 超出 backing 即被画布裁切，等价于「放大看局部」，
-       *   而源图始终按真实分辨率绘制 ⇒ 任意倍率都见真实像素，不再凭空拉伸。
-       *   配合 1024px 高分辨率内壁帧（旧 292px），放大细节提升约 3.5×。 */
-      var dispW = cv.clientWidth || 200, dispH = cv.clientHeight || 200;
-      cv.width = Math.round(dispW * d);
-      cv.height = Math.round(dispH * d);
-      cv.style.touchAction = 'none';
-      cv.setAttribute('role', 'img');
-      cv.setAttribute('aria-label', '瓷片内壁（静态·可缩放）');
-      /* ★2026-11-02（玩家反馈）：这里原来挂了一个「内壁 86%」的角标。
-       *   那个百分比是**制作侧的验收指标**（可见内壁面积 / 内壁总面积），
-       *   对玩家没有任何意义，反而像"这块瓷片有问题"的提示。
-       *   「内壁待重绘」的提示已在上游删除，这个角标一并撤掉——
-       *   拾得界面里不再出现任何关于素材完成度的文字。 */
-      var ctx = cv.getContext('2d');
-      if ('imageSmoothingQuality' in ctx) { ctx.imageSmoothingQuality = 'high'; }
-      var zoom = 1, panX = 0, panY = 0;
-      /* 正方形源按 contain 居中（不拉伸）：以较短边为缩放基准，pan 夹紧到画布内 */
-      function scNow() { return Math.min(cv.width, cv.height) * zoom; }
-      function clampPan() {
-        var w = scNow();
-        panX = Math.max(-(cv.width - w) / 2, Math.min((cv.width - w) / 2, panX));
-        panY = Math.max(-(cv.height - w) / 2, Math.min((cv.height - w) / 2, panY));
+    var cv = h('canvas', 'shard-ll');
+    var d = dprOf();
+    /* ★2026-11-02 桌面实测「收到瓷片时显示异常（拉成一块怪形状）」：
+     *   旧代码按 `mount.clientWidth/clientHeight` 定 backing —— mount 是 .shard-stage，
+     *   桌面上它是整列宽的 flex 容器（≈852×236），而 canvas 的**显示尺寸**由 CSS
+     *   .shard-ll 固定为 200×200 ⇒ 按 852×236 画、再压进 200×200，纵向被压扁。
+     *   改成：先把 canvas 挂进去，按它自己的 CSS 显示尺寸（×DPR）定 backing，
+     *   两者同源，任何断点都不会变形。 */
+    mount.appendChild(cv);
+    /* ★ 清晰度修复（2026-11-02）：旧 backing = img.width*d/2 ≈146px 且固定，
+     *   zoom 只是把这块 146px 拉伸到 ~320px 显示 ⇒ 放大永远只有 ~146px 有效像素（糊）。
+     *   现 backing 一次开到「显示区尺寸 × dpr」（z=1 满分辨率）。draw() 仍用
+     *   cv.width*zoom 作目标矩形 —— dest 超出 backing 即被画布裁切，等价于「放大看局部」，
+     *   而源图始终按真实分辨率绘制 ⇒ 任意倍率都见真实像素，不再凭空拉伸。
+     *   配合 1024px 高分辨率内壁帧（旧 292px），放大细节提升约 3.5×。 */
+    var dispW = cv.clientWidth || 200, dispH = cv.clientHeight || 200;
+    cv.width = Math.round(dispW * d);
+    cv.height = Math.round(dispH * d);
+    cv.style.touchAction = 'none';
+    cv.setAttribute('role', 'img');
+    cv.setAttribute('aria-label', '瓷片内壁（静态·可缩放）');
+    /* ★2026-11-02（玩家反馈）：这里原来挂了一个「内壁 86%」的角标。
+     *   那个百分比是**制作侧的验收指标**（可见内壁面积 / 内壁总面积），
+     *   对玩家没有任何意义，反而像"这块瓷片有问题"的提示。
+     *   「内壁待重绘」的提示已在上游删除，这个角标一并撤掉——
+     *   拾得界面里不再出现任何关于素材完成度的文字。 */
+    var ctx = cv.getContext('2d');
+    if ('imageSmoothingQuality' in ctx) { ctx.imageSmoothingQuality = 'high'; }
+    var zoom = 1, panX = 0, panY = 0;
+    /* 正方形源按 contain 居中（不拉伸）：以较短边为缩放基准，pan 夹紧到画布内 */
+    function scNow() { return Math.min(cv.width, cv.height) * zoom; }
+    function clampPan() {
+      var w = scNow();
+      panX = Math.max(-(cv.width - w) / 2, Math.min((cv.width - w) / 2, panX));
+      panY = Math.max(-(cv.height - w) / 2, Math.min((cv.height - w) / 2, panY));
+    }
+    function draw() {
+      ctx.clearRect(0, 0, cv.width, cv.height);
+      var w = scNow();
+      ctx.drawImage(img, 0, 0, img.width, img.height,
+        (cv.width - w) / 2 + panX, (cv.height - w) / 2 + panY, w, w);
+    }
+    draw();
+    /* 拖动平移 + 双指缩放 + 双击切换 1×/2× */
+    var pts = {}, lastX = 0, lastY = 0, pinch0 = 0, zoom0 = 1, tapT = 0;
+    function nPts() { var k, c = 0; for (k in pts) { if (pts[k]) { c += 1; } } return c; }
+    cv.addEventListener('pointerdown', function (e) {
+      pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+      try { cv.setPointerCapture(e.pointerId); } catch (err) { /* noop */ }
+      lastX = e.clientX; lastY = e.clientY;
+      if (nPts() === 2) { pinch0 = pinchDist(); zoom0 = zoom; }
+      e.preventDefault();
+    });
+    function pinchDist() {
+      var ids = [], k;
+      for (k in pts) { if (pts[k]) { ids.push(pts[k]); } }
+      if (ids.length < 2) { return 0; }
+      return Math.hypot(ids[0].x - ids[1].x, ids[0].y - ids[1].y);
+    }
+    cv.addEventListener('pointermove', function (e) {
+      if (!pts[e.pointerId]) { return; }
+      pts[e.pointerId] = { x: e.clientX, y: e.clientY };
+      if (nPts() >= 2) {
+        var pd = pinchDist();
+        if (pinch0 > 4) { zoom = Math.max(1, Math.min(3, zoom0 * pd / pinch0)); clampPan(); draw(); }
+        return;
       }
-      function draw() {
-        ctx.clearRect(0, 0, cv.width, cv.height);
-        var w = scNow();
-        ctx.drawImage(img, 0, 0, img.width, img.height,
-          (cv.width - w) / 2 + panX, (cv.height - w) / 2 + panY, w, w);
+      panX += e.clientX - lastX; panY += e.clientY - lastY;
+      lastX = e.clientX; lastY = e.clientY;
+      clampPan(); draw();
+    });
+    function up(e) {
+      var wasOne = nPts() === 1;
+      delete pts[e.pointerId];
+      if (wasOne) {
+        var now = Date.now();
+        if (now - tapT < 320) {
+          zoom = zoom > 1.2 ? 1 : 2; panX = 0; panY = 0; draw();
+          tapT = 0;
+        } else { tapT = now; }
       }
-      draw();
-      /* 拖动平移 + 双指缩放 + 双击切换 1×/2× */
-      var pts = {}, lastX = 0, lastY = 0, pinch0 = 0, zoom0 = 1, tapT = 0;
-      function nPts() { var k, c = 0; for (k in pts) { if (pts[k]) { c += 1; } } return c; }
-      cv.addEventListener('pointerdown', function (e) {
-        pts[e.pointerId] = { x: e.clientX, y: e.clientY };
-        try { cv.setPointerCapture(e.pointerId); } catch (err) { /* noop */ }
-        lastX = e.clientX; lastY = e.clientY;
-        if (nPts() === 2) { pinch0 = pinchDist(); zoom0 = zoom; }
-        e.preventDefault();
-      });
-      function pinchDist() {
-        var ids = [], k;
-        for (k in pts) { if (pts[k]) { ids.push(pts[k]); } }
-        if (ids.length < 2) { return 0; }
-        return Math.hypot(ids[0].x - ids[1].x, ids[0].y - ids[1].y);
-      }
-      cv.addEventListener('pointermove', function (e) {
-        if (!pts[e.pointerId]) { return; }
-        pts[e.pointerId] = { x: e.clientX, y: e.clientY };
-        if (nPts() >= 2) {
-          var pd = pinchDist();
-          if (pinch0 > 4) { zoom = Math.max(1, Math.min(3, zoom0 * pd / pinch0)); clampPan(); draw(); }
-          return;
-        }
-        panX += e.clientX - lastX; panY += e.clientY - lastY;
-        lastX = e.clientX; lastY = e.clientY;
-        clampPan(); draw();
-      });
-      function up(e) {
-        var wasOne = nPts() === 1;
-        delete pts[e.pointerId];
-        if (wasOne) {
-          var now = Date.now();
-          if (now - tapT < 320) {
-            zoom = zoom > 1.2 ? 1 : 2; panX = 0; panY = 0; draw();
-            tapT = 0;
-          } else { tapT = now; }
-        }
-      }
-      cv.addEventListener('pointerup', up);
-      cv.addEventListener('pointercancel', up);
+    }
+    cv.addEventListener('pointerup', up);
+    cv.addEventListener('pointercancel', up);
+    }
+    tqa.observe(key, {
+      ready: function (img) { paintInner(img); },
+      fail: function () { if (mount.isConnected) { vecShard(mount, true); } }
+      /* pending：矢量轮廓已在屏上，无需额外动作 */
     });
   };
 
@@ -443,14 +451,19 @@
       if (k >= keys.length) { cb(false); return; }
       var key = keys[k];
       if (!tqa.reg[key]) { tryAt(k + 1); return; }
-      tqa.resolve(key, function (stt) {
-        if (!mount.isConnected) { return; }
-        if (stt !== 'ok') { tryAt(k + 1); return; }
-        var img = tqa.image(key);
-        if (!img) { tryAt(k + 1); return; }
-        playAtlas(mount, tqa.reg[key], img, { label: '瓷片预设转台' });
-        cb(true);
-      }, { hot: true });
+      tqa.observe(key, {
+        ready: function (img) {
+          if (!mount.isConnected) { return; }
+          playAtlas(mount, tqa.reg[key], img, { label: '瓷片预设转台' });
+          cb(true);
+        },
+        fail: function () {
+          /* ★2026-11-18：瞬时失败不再直接放弃本 key，交给 observe 的 onLate 冷却重试。
+           * 但转台有后备 key（LL→atlas），先让下一档尝试，避免为坏 key 空等。 */
+          if (k + 1 < keys.length) { tryAt(k + 1); }
+          else { cb(false); }
+        }
+      });
     }
     tryAt(0);
   }
@@ -461,15 +474,18 @@
     var key = 'shard-' + id;
     var tqa = global.TQA;
     if (!tqa) { mount.innerHTML = TQ.FRACTURE; return; }
-    tqa.resolve(key, function (stt) {
-      if (!mount.isConnected) { return; }
-      if (stt !== 'ok') { mount.innerHTML = TQ.FRACTURE; return; }
-      var ent = tqa.reg[key], img = tqa.image(key);
-      mount.innerHTML = '';
-      var cv = h('canvas', 'shard-still');
-      fitCanvas(cv, ent);
-      mount.appendChild(cv);
-      drawAtlasFrame(cv.getContext('2d'), ent, img, bestFrameOf(ent, img), cv.width, cv.height);
+    /* ★2026-11-18：统一走 TQA.observe（失败冷却重试 + 晚到原位升级，两条线同语义） */
+    tqa.observe(key, {
+      ready: function (img) {
+        if (!mount.isConnected) { return; }
+        var ent = tqa.reg[key];
+        mount.innerHTML = '';
+        var cv = h('canvas', 'shard-still');
+        fitCanvas(cv, ent);
+        mount.appendChild(cv);
+        drawAtlasFrame(cv.getContext('2d'), ent, img, bestFrameOf(ent, img), cv.width, cv.height);
+      },
+      fail: function () { if (mount.isConnected) { mount.innerHTML = TQ.FRACTURE; } }
     });
   };
   /* 近看 / 拾得占台的「转动看看」：同一条预设转台。
@@ -503,17 +519,20 @@
     }
     /* 未注册多向图集 → 诚实回退 */
     if (!tqa || !tqa.reg[key] || tqa.kindOut('shard-LL')) { fallback(); return; }
-    tqa.resolve(key, function (stt) {
-      if (!mount.isConnected) { return; }
-      if (stt !== 'ok') { fallback(); return; }
-      var ent = tqa.reg[key], img = tqa.image(key);
-      if (!img) { fallback(); return; }
-      mount.innerHTML = '';
-      var cv = h('canvas', 'shard-ll');
-      fitCanvas(cv, ent);
-      cv.style.touchAction = 'none';
-      cv.setAttribute('role', 'img');
-      cv.setAttribute('aria-label', (isVessel ? '纸槌瓶' : '瓷片') + '全方位旋转');
+    /* ★2026-11-18：统一走 TQA.observe。旧版 fail 一次就永久回退到低清转台/矢量，
+     * 手札里那批编号瓷片（15/16 等）因此一直是「静态内壁 + 加载中」。现在失败会冷却重试，
+     * 成功后 ready 里重开 spin3d，恢复全方位旋转的最佳形态。 */
+    tqa.observe(key, {
+      ready: function () {
+        if (!mount.isConnected) { return; }
+        var ent = tqa.reg[key], img = tqa.image(key);
+        if (!img) { fallback(); return; }
+        mount.innerHTML = '';
+        var cv = h('canvas', 'shard-ll');
+        fitCanvas(cv, ent);
+        cv.style.touchAction = 'none';
+        cv.setAttribute('role', 'img');
+        cv.setAttribute('aria-label', (isVessel ? '纸槌瓶' : '瓷片') + '全方位旋转');
       cv.tabIndex = 0;
       mount.appendChild(cv);
       var ctx = cv.getContext('2d');
@@ -666,6 +685,8 @@
         else if (e.key === 'ArrowUp') { pitch = Math.max(-pmax, pitch - (2 * pmax / (PIT - 1) || 0)); auto = false; vp = 0; draw(); e.preventDefault(); }
         else if (e.key === 'ArrowDown') { pitch = Math.min(pmax, pitch + (2 * pmax / (PIT - 1) || 0)); auto = false; vp = 0; draw(); e.preventDefault(); }
       });
+      },
+      fail: function () { if (mount.isConnected) { fallback(); } }
     });
   };
 
@@ -711,17 +732,33 @@
     var tb = h('div', 'timebar');
     var line = h('div', 'tb-line');
     line.appendChild(h('div', 'base'));
-    line.appendChild(h('div', 'prog'));
+    var prog = h('div', 'prog');
+    line.appendChild(prog);
     tb.appendChild(line);
     var row = h('div', 'tb-nodes');
+    var dots = [];
     nodes.forEach(function (n, i) {
       var nd = h('div', 'tb-node' + (i === curIdx ? ' cur' : ''));
       nd.appendChild(h('div', 'tb-dot'));
+      dots.push(nd);
       nd.appendChild(h('div', 'tb-t', n.t));
       if (n.n) { nd.appendChild(h('div', 'tb-n', n.n)); }
       row.appendChild(nd);
     });
     tb.appendChild(row);
+    /* ★2026-11-18：进度条旧版是 CSS 写死 width:50%，且整条只在进幕时建一次，
+     * 剧情推进时既不改宽度也不改节点态 ⇒ 玩家看到「4/5 差事帖，条却一直停中间」。
+     * 这里挂一个幂等更新器：ratio = 本幕已读步数 / 总步数，按 84%（= base 的
+     * 100%-8%-8%）折算成进度宽度；同时标出已过节点。 */
+    tb._tqUpdate = function (ci, ratio) {
+      var r = Math.max(0, Math.min(1, ratio || 0));
+      prog.style.width = (r * 84).toFixed(2) + '%';
+      dots.forEach(function (nd, i) {
+        nd.classList.toggle('cur', i === ci);
+        nd.classList.toggle('done', i < ci || (i === ci && r >= 0.999));
+      });
+    };
+    tb._tqUpdate(curIdx, 0);
     return tb;
   };
   TQ.timebarInline = function (nodes, curIdx) {

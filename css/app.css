@@ -70,11 +70,14 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .timebar{margin:0 16px 8px;background:rgba(221,233,229,.55);border:1px solid var(--qing);border-radius:12px;padding:10px 6px 6px;flex-shrink:0}
 .tb-line{position:relative;height:26px}
 .tb-line .base{position:absolute;left:8%;right:8%;top:12px;height:3px;background:var(--deep)}
-.tb-line .prog{position:absolute;left:8%;top:12px;height:3px;background:var(--gold);width:50%}
+/* ★2026-11-18：宽度不再写死 50%；由 app.js refreshProgress() 按「本幕已读步数/总步数」
+   × 84%（base 两端各 8%）写入行内 style。初始 0，避免进幕就显示假进度。 */
+.tb-line .prog{position:absolute;left:8%;top:12px;height:3px;background:var(--gold);width:0}
 .tb-nodes{display:flex;justify-content:space-between;margin-top:-14px;padding:0 2%}
 .tb-node{text-align:center;position:relative;padding-top:14px}
 .tb-dot{width:11px;height:11px;border-radius:50%;background:var(--yue);border:2.5px solid var(--deep);margin:0 auto}
 .tb-node.cur .tb-dot{width:16px;height:16px;background:var(--gold);border-color:var(--deep)}
+.tb-node.done .tb-dot{background:var(--deep);border-color:var(--gold)}
 .tb-t{font-size:13px;font-weight:600;margin-top:3px;color:var(--ink)}
 .tb-n{font-size:10px;color:var(--muted);margin-top:1px}
 /* 合瓷归位图（手札拼合进度盘） */
@@ -202,7 +205,7 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
 .iv.rich .iv-steps,
 .iv.rich .iv-val,
 .iv.rich .iv-hint{width:100%;max-width:calc(58vh * 300 / 210);margin-left:auto;margin-right:auto}
-.iv-stage{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,#F5F9F7 0%,#DDE9E5 60%,#BFD2CD 100%);border:1px solid var(--qing);border-radius:12px;overflow:hidden}
+.iv-stage{position:relative;flex:1;min-height:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(circle at 50% 40%,#F5F9F7 0%,#DDE9E5 60%,#BFD2CD 100%);border:1px solid var(--qing);border-radius:12px;overflow:hidden;touch-action:none}
 .iv-stage.dark{background:radial-gradient(circle at 50% 36%,#3E5B5E 0%,#22383C 80%)}
 .iv-stage .zone-tag{position:absolute;top:8px;left:8px;font-size:10px;letter-spacing:1px;background:rgba(31,59,58,.62);color:var(--yue);border-radius:9px;padding:2px 9px;z-index:4}
 .iv-stage .step-tag{position:absolute;top:8px;right:8px;font-size:10px;font-weight:600;letter-spacing:1px;background:var(--gold);color:#4A3712;border-radius:9px;padding:2px 10px;z-index:4}
@@ -751,6 +754,8 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
  * 放在文件末尾：同特异性下覆盖上面各媒体查询里的 .topbar padding 简写。 */
 :root{--tq-tb-pad-r:16px}
 .topbar{padding-right:calc(var(--tq-tb-pad-r) + var(--tq-topbar-right))}
+/* 顶栏的上避让由 .app 的 padding-top:var(--tq-top-inset) 统一承担，勿在此再加 margin，
+ * 否则容器里会双份下移（2026-11-17 实测踩到）。 */
 @media (min-width:700px){:root{--tq-tb-pad-r:32px}}
 @media (min-aspect-ratio:99/1) and (min-width:900px){:root{--tq-tb-pad-r:28px}}
 @media (max-height:740px){:root{--tq-tb-pad-r:14px}}
@@ -889,7 +894,8 @@ body{background:var(--yue);color:var(--ink);font-family:-apple-system,"PingFang 
   animation:shvFade .18s ease-out both}
 .shv-sheet{position:relative;width:100%;max-width:100%;min-width:0;height:92%;max-height:92%;
   background:var(--paper);color:var(--ink);overflow-x:hidden;
-  border-radius:16px 16px 0 0;padding:12px 14px calc(14px + env(safe-area-inset-bottom,0px));
+  border-radius:16px 16px 0 0;padding:12px 14px 14px;
+    padding-bottom:calc(14px + var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)));
   display:flex;flex-direction:column;overflow-y:hidden;
   animation:shvRise .22s cubic-bezier(.22,.61,.36,1) both;
   box-shadow:0 -8px 30px rgba(0,0,0,.28)}
@@ -951,7 +957,7 @@ body.shv-open .main{overflow:hidden}
    钉在舞台下沿：成品留在上方看得见，不压交互画面。
    高度只由字号+内边距决定、宽度 100%，竖屏/中屏/横屏一套写法都成立。
    ★这段曾被并发写入冲掉一次（2026-11-01 23:37），改 app.css 前先 grep mg-sheet。 */
-.mg-sheet{position:absolute;left:0;right:0;bottom:0;z-index:5;display:flex;align-items:center;
+.mg-sheet{position:absolute;left:0;right:0;bottom:0;z-index:7;touch-action:manipulation;display:flex;align-items:center;
   padding:7px 12px 8px;background:#FBF6EA;border-top:1px solid #D8CFBA;
   border-radius:0 0 12px 12px;cursor:pointer;animation:mgSheetIn 180ms ease-out both}
 .mg-sheet-tx{flex:1;min-width:0;padding-right:8px}
@@ -1048,11 +1054,13 @@ body.shv-open .main{overflow:hidden}
    关了看不见对照"。改成整幅覆盖：开＝只看正字，收＝只看残页，交替着记。
    这也不是妥协：对照与残页同屏就等于替玩家把逐字比对做完了（§26.1 的口径）。
    收起时 opacity:0 + pointer-events:none，不占位、不吃手势。 */
-.iv-src{position:absolute;inset:0;z-index:6;background:#F7F5EE;border-radius:11px;
+.iv-src{position:absolute;left:0;top:0;right:0;bottom:0;z-index:6;background:#F7F5EE;border-radius:11px;
   padding:14px 16px;display:flex;flex-direction:column;justify-content:flex-start;
   opacity:0;pointer-events:none;transition:opacity .16s ease;overflow:auto}
 .iv-src.on{opacity:1;pointer-events:auto}
-.iv-src-h{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+/* Chrome 61 基线：flex gap 不可用，改用子项单边 margin（两端表现一致，无需行为检测） */
+.iv-src-h{display:flex;align-items:center;flex:0 0 auto}
+.iv-src-h > * + *{margin-left:6px}
 .iv-src-h b{font-size:12.5px;font-weight:600;color:#3F4A45;letter-spacing:.02em}
 .iv-src-h em{font-style:normal;font-size:9.5px;color:#8A7B5E;flex:1 1 auto;min-width:0;
   overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
@@ -1114,7 +1122,10 @@ body.shv-open .main{overflow:hidden}
  * z-index 44：高于史实出处浮层（40）与手札浮层，低于「收下瓷片」这类即时提示。
  * 面板走纸色 + 赭边，与出处页同族；内容可滚，横屏时分两列不必——列表本身不长。 */
 .set-ov{position:absolute;left:0;right:0;top:0;bottom:0;z-index:44;background:rgba(31,59,58,.55);
-  overflow-y:auto;display:flex;align-items:center;justify-content:center;padding:16px}
+  /* ★2026-11-05：设定页整体让开平台安全区。--tq-set-top 由 app.js 写入：
+     容器内 = max(getWindowInfo 顶部预留, 44) + 16；Pages 上 = 16（与旧版一致）。 */
+  overflow-y:auto;display:flex;align-items:center;justify-content:center;
+  padding:var(--tq-set-top,16px) 16px 16px}
 .set-panel{background:var(--paper);border:1px solid var(--tu);border-radius:14px;width:100%;
   max-width:520px;max-height:100%;overflow-y:auto;box-shadow:0 10px 32px rgba(31,59,58,.28);
   padding:16px 16px 18px;flex-shrink:0}
@@ -1184,6 +1195,14 @@ body.shv-open .main{overflow:hidden}
  * 根因：长按（500ms 左右）在 iOS/部分安卓 WebView 里会触发 callout 菜单，canvas 上尤其明显。
  * 处理：游戏区一律关掉 callout 与文本选择（本作没有需要长按复制的正文）；
  *       输入框例外。再配 app.js 的 contextmenu 拦截（安卓走这条）。 */
+/* ★2026-11-10 iOS 文本选择：选择可以从 body 起手，只挂 .app * 不够 —— 覆盖到 html,body；
+   SVG 里的 <text>（小游戏读数/提示）在 Safari 里会被单独选中，也一并关掉。 */
+html,body{-webkit-user-select:none;-moz-user-select:none;user-select:none;
+  -webkit-touch-callout:none;-webkit-tap-highlight-color:transparent}
+.app svg,.app svg text{-webkit-user-select:none;-moz-user-select:none;user-select:none;
+  -webkit-touch-callout:none}
+/* 小游戏的读数/标签是纯展示：不参与命中，长按就不会"按到字"上 */
+.iv-stage svg text{pointer-events:none}
 .app{-webkit-tap-highlight-color:transparent}
 .app *{-webkit-touch-callout:none;
   -webkit-user-select:none;-moz-user-select:none;-ms-user-select:none;user-select:none}

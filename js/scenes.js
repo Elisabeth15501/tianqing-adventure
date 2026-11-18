@@ -8,7 +8,7 @@
  * 三种 kind：
  *   parallax  三层（bg/mg/fg）→ 交给 SceneParallax 引擎，陀螺仪/指针驱动
  *   single    整幅单层（S3/S6 与 S1 竖版）→ 直接铺满，无位移
- *   pano      横向长卷（S4，2880×720）→ 指针拖动 camera，clamp 到两端
+ *   pano      横向长卷（S4，2048×512）→ 指针拖动 camera，clamp 到两端
  *
  * 视差系数来源（不许现编）：
  *   S5 用实测定标 ks = 0.30 / 0.60 / 1.00（build_s5_v3_layers.py + 三层预览验收）
@@ -93,10 +93,10 @@
   def('s4_pano', {
     title: 'S4 汴桥桥市（午时·可拖长卷）',
     forms: {
-      h: { kind: 'pano', size: [2880, 720], world: 2880,
+      h: { kind: 'pano', size: [2048, 512], world: 2048,
            files: { main: 'assets/scenes/s4_pano/pano_l4.webp' },
            note: '单层；camera ∈ [0, world − 可见宽]，不接陀螺仪' },
-      v: { kind: 'pano', size: [2880, 720], world: 2880,
+      v: { kind: 'pano', size: [2048, 512], world: 2048,
            files: { main: 'assets/scenes/s4_pano/pano_l4.webp' },
            note: '竖屏取同图的一段（可见宽更窄），非另出一张' }
     }
@@ -232,9 +232,19 @@
       '.tqs-stage img{display:block;width:100%;height:100%;object-fit:cover;object-position:50% 50%;',
       '  -webkit-user-drag:none;user-select:none}',
       '.tqs-pano{position:absolute;left:0;top:0;height:100%;will-change:transform}',
-      '.tqs-pano img{width:100%;height:100%;object-fit:fill}',
+      /* ★底图一律用 CSS 背景层（2026-11-04）：<img> 会触发宿主的长按「保存图片」，
+         背景图不是图片节点，从根上避开。cover/fill 用 background-size 表达。 */
+      '.tqs-bg{position:absolute;left:0;top:0;width:100%;height:100%;',
+      '  background-size:cover;background-position:50% 50%;background-repeat:no-repeat;',
+      '  pointer-events:none;-webkit-user-drag:none;user-select:none}',
+      /* 单层场景的可选实体前景（S1 竖版待资产）。只有注册了 files.fg 才创建，
+         没有就只保留下面那层程序化檐影 —— 不拿整幅备选图冒充前景。 */
+      '.tqs-solo-fgimg{position:absolute;left:0;top:0;width:100%;height:100%;',
+      '  background-size:cover;background-position:50% 50%;background-repeat:no-repeat;',
+      '  pointer-events:none;will-change:transform}',
+      '.tqs-pano .tqs-bg{background-size:100% 100%;background-position:0 0}',
       /* 单层场景：主图放大兜住位移，前景层反向慢移（程序化，无资源） */
-      '.tqs-solo img{transform-origin:50% 50%;will-change:transform}',
+      '.tqs-solo .tqs-bg{transform-origin:50% 50%;will-change:transform}',
       '.tqs-solo-fg{position:absolute;left:-6%;top:-4%;width:112%;height:108%;pointer-events:none;',
       '  will-change:transform;',
       '  background:'
@@ -261,18 +271,68 @@
    *   主图放大 1.06 倍后按倾斜做 ≤1.6% 位移（余量够，永不露边），
    *   再叠一层**程序化前景**（檐角暗影 + 低位浮尘，纯 CSS 渐变）反向位移 2 倍——
    *   一近一远就有了景深，且零新增资源、零新增请求。 */
+  /* 背景层加载：失败重试一次，第二次仍失败才告警。
+     ★2026-11-18：重试**不能**加 ?r=1 —— 小工具里资产是 zip 内同源相对路径，
+     查询串会变成另一个 URL 被本地加载器/CSP 拒（assets.js 已踩过同一个坑）。
+     现在改为同一相对路径重设一次；彻底失败时在宿主上发 tq-scene-fail，
+     让 app.js 挂矢量底图，绝不留纯黑底（女官线投壶幕实证）。 */
+  function loadBg(box, src) {
+    var im = new global.Image();
+    var tried = 0;
+    function set(u) { if (box) { box.style.backgroundImage = 'url("' + u + '")'; } }
+    im.onload = function () { if (box) { box.setAttribute('data-bg-ok', '1'); } };
+    im.onerror = function () {
+      if (tried === 0) {
+        tried = 1;
+        im.src = src;      /* 同一相对路径，无查询串 */
+        set(src);
+        return;
+      }
+      if (box) {
+        box.setAttribute('data-bg-fail', '1');
+        /* 宿主可能已不在文档里（换幕很快），此时事件无人接也无害 */
+        var ev = document.createEvent ? document.createEvent('Event') : null;
+        if (ev) {
+          if (ev.initEvent) { ev.initEvent('tq-scene-fail', true, false); }
+          box.dispatchEvent(ev);
+        }
+      }
+      if (global.console && global.console.warn) {
+        global.console.warn('[TQ] 场景图加载失败:', src);
+      }
+    };
+    im.src = src;
+    set(src);
+    return im;
+  }
+
   function mountSingle(el, cfg) {
     injectStyle();
     el.classList.add('tqs-stage', 'tqs-solo');
-    var im = el.querySelector('img');
-    if (!im) { im = document.createElement('img'); el.appendChild(im); }
-    im.setAttribute('alt', '');
-    im.setAttribute('draggable', 'false');
-    im.setAttribute('decoding', 'async');
-    im.src = path(cfg.files.main);
+    /* ★2026-11-04 长按根治：底图不再用 <img>，改成 CSS 背景层。
+       <img> 即便 pointer-events:none，部分安卓 WebView 仍在原生层按节点类型
+       弹「保存图片／识别图片」；背景图不是图片节点，这是不依赖宿主实现的一刀。
+       src/loaded 改由一个脱离文档的 Image 追踪，对调用方接口不变。 */
+    var src0 = path(cfg.files.main);
+    var bgd = el.querySelector('.tqs-bg');
+    if (!bgd) { bgd = document.createElement('div'); bgd.className = 'tqs-bg'; el.appendChild(bgd); }
+    var probe = loadBg(bgd, src0);
 
     var fg = el.querySelector('.tqs-solo-fg');
     if (!fg) { fg = document.createElement('div'); fg.className = 'tqs-solo-fg'; el.appendChild(fg); }
+
+    /* 可选实体前景：只有配置里注册了 files.fg 才建。S1 竖版当前没有这张图，
+       所以保持「程序化檐影」不变；资产到位后只需在 def 里加一行 fg，无需改渲染。 */
+    var fgi = null;
+    if (cfg.files && cfg.files.fg) {
+      fgi = el.querySelector('.tqs-solo-fgimg');
+      if (!fgi) {
+        fgi = document.createElement('div');
+        fgi.className = 'tqs-solo-fgimg';
+        el.insertBefore(fgi, fg);
+      }
+      loadBg(fgi, path(cfg.files.fg));
+    }
 
     var tx = 0, ty = 0, cx = 0, cy = 0, raf = 0, dead = false, ctrl = null;
     function paint() {
@@ -282,8 +342,9 @@
       cy += (ty - cy) * 0.14;
       var moving = Math.abs(tx - cx) > 0.0015 || Math.abs(ty - cy) > 0.0015;
       if (!moving) { cx = tx; cy = ty; }
-      im.style.transform = 'translate3d(' + (cx * -1.6).toFixed(2) + '%,' + (cy * -1.1).toFixed(2) + '%,0) scale(1.06)';
+      bgd.style.transform = 'translate3d(' + (cx * -1.6).toFixed(2) + '%,' + (cy * -1.1).toFixed(2) + '%,0) scale(1.06)';
       fg.style.transform = 'translate3d(' + (cx * 2.6).toFixed(2) + '%,' + (cy * 1.8).toFixed(2) + '%,0)';
+      if (fgi) { fgi.style.transform = 'translate3d(' + (cx * 2.0).toFixed(2) + '%,' + (cy * 1.4).toFixed(2) + '%,0)'; }
       if (moving) { schedule(); }
     }
     function schedule() {
@@ -303,8 +364,8 @@
     }
     return {
       kind: 'single', el: el,
-      src: im.src,
-      loaded: function () { return im.complete && im.naturalWidth > 0; },
+      src: src0,
+      loaded: function () { return probe.complete && probe.naturalWidth > 0; },
       inputStatus: function () {
         return { kind: el.getAttribute('data-spl-input') || 'none',
                  detail: ctrl && ctrl.status ? ctrl.status() : null };
@@ -326,12 +387,12 @@
     el.classList.add('tqs-stage');
     var box = document.createElement('div');
     box.className = 'tqs-pano';
-    var im = document.createElement('img');
-    im.setAttribute('alt', '');
-    im.setAttribute('draggable', 'false');
-    im.setAttribute('decoding', 'async');
-    im.src = path(cfg.files.main);
-    box.appendChild(im);
+    /* 长卷同样走 CSS 背景层（见 mountSingle 的说明）：`background-size:100% 100%`
+       等价于原来的 object-fit:fill，拖动只改 box 的 transform。 */
+    var bgd = document.createElement('div');
+    bgd.className = 'tqs-bg';
+    loadBg(bgd, path(cfg.files.main));
+    box.appendChild(bgd);
     el.appendChild(box);
 
     var inst = {

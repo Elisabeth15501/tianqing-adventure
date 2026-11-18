@@ -34,7 +34,7 @@
     var sv = document.createElementNS(NS, 'svg');
     sv.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
     sv.setAttribute('preserveAspectRatio', 'xMidYMid meet');
-    sv.style.cssText = 'position:absolute;inset:0;width:100%;height:100%;touch-action:none;z-index:1';
+    sv.style.cssText = 'position:absolute;left:0;top:0;right:0;bottom:0;width:100%;height:100%;touch-action:none;z-index:1';
     stage.appendChild(sv);
     this.stage = stage;
     this.svg = sv;
@@ -156,9 +156,21 @@
       var go = document.createElement('button'); go.className = 'mg-sheet-go'; go.type = 'button';
       go.textContent = o.go || '继续';
       box.appendChild(tx); box.appendChild(go);
-      box.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
-      box.addEventListener('pointerup', function (e) { e.stopPropagation(); });
-      box.addEventListener('click', function (e) { e.stopPropagation(); fire(); });
+      /* ★2026-11-10：只挂 click 时，iOS 上首次点击可能被系统 callout 吞掉（第一下只关菜单），
+         玩家点一次没反应就以为卡死 —— 这是「完成小节后无法继续」的第二条通路。
+         现在 pointerdown 记起点、pointerup 就确认（一次性），click 作为无障碍/键盘兜底。
+         必须记「按下是否落在面板内」：切面的拖动会一路划到舞台下缘，正好压过面板。 */
+      var inBox = false, fired = false;
+      function fireOnce() { if (fired) { return; } fired = true; fire(); }
+      box.addEventListener('pointerdown', function (e) { e.stopPropagation(); inBox = true; });
+      box.addEventListener('pointerup', function (e) {
+        e.stopPropagation();
+        if (!inBox) { return; }
+        inBox = false;
+        fireOnce();
+      });
+      box.addEventListener('pointercancel', function () { inBox = false; });
+      box.addEventListener('click', function (e) { e.stopPropagation(); fireOnce(); });
       stage.appendChild(box);
       fn = cb || null;
     }
@@ -601,6 +613,13 @@
         'background:rgba(255,253,246,.94);border:1px solid #E6DFCE;color:#6B6560;letter-spacing:.02em';
       btn.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
       btn.addEventListener('pointerup', function (e) { e.stopPropagation(); });
+      /* ★2026-11-18 真机修复：小红书 WebView 是纯触屏环境。
+       * 旧版只拦 pointer* / click，touchstart 仍冒泡到 .iv-stage 的 tDown()，
+       * 后者 e.preventDefault() 会**取消合成 click** ⇒ 这里的 toggleSrc 永远不执行，
+       * 玩家点了「原文对照」毫无反应（桌面鼠标无 touchstart，所以本地一直测不出来）。
+       * 补拦 touch 两态，并在舞台手势入口按控件豁免。 */
+      btn.addEventListener('touchstart', function (e) { e.stopPropagation(); }, { passive: true });
+      btn.addEventListener('touchend', function (e) { e.stopPropagation(); }, { passive: true });
       btn.addEventListener('click', function (e) { e.stopPropagation(); toggleSrc(); });
       cv.stage.appendChild(btn);
 
@@ -617,6 +636,8 @@
         '<div class="iv-src-f">对不上字的地方，就是誊录抄错的那一处 ·（宋）薛居正等撰</div>';
       panel.addEventListener('pointerdown', function (e) { e.stopPropagation(); });
       panel.addEventListener('pointerup', function (e) { e.stopPropagation(); });
+      panel.addEventListener('touchstart', function (e) { e.stopPropagation(); }, { passive: true });
+      panel.addEventListener('touchend', function (e) { e.stopPropagation(); }, { passive: true });
       panel.querySelector('.iv-src-x').addEventListener('click', function (e) { e.stopPropagation(); toggleSrc(false); });
       cv.stage.appendChild(panel);
     }
@@ -752,6 +773,11 @@
       fly: null, flash: null, aim: null,
       cap: { sp: '', tx: '' }, tag: '',
       drag: false, sx: 0, sy: 0, dx: 0, dy: 0,
+      /* ★左右手（2026-11-04）：右手拖拽时拇指正好压在抛物线右段。
+         以「玩家第一次起手的那一侧」锁定镜像：右手 ⇒ 整场水平翻转，
+         执矢手到右边、壶到左边，弧线朝远离手指的一侧走。
+         只锁一次（mirrorLocked），避免每次起手画面左右跳。 */
+      mirror: false, mirrorLocked: false,
       skip: null
     };
 
@@ -1174,7 +1200,6 @@
         var g = traj(TH.powMid, TH.upMid, HAND);
         s += '<polyline points="' + poly(g.pts) + '" fill="none" stroke="#8C9A8E" stroke-width="1.2" ' +
              'stroke-dasharray="2 6" stroke-linecap="round" opacity=".45"/>';
-        s += '<text x="292" y="50" font-size="8.2" text-anchor="end" fill="#8A8378" opacity=".9">按住画面 · 向右上拖</text>';
         return s;
       }
       var f = pathOf(A, HAND), i, apex = f.pts[0], tc = f.t.cross;
@@ -1193,12 +1218,20 @@
       /* 末端圈：小圈套进环里＝进；进了就填实，不用玩家自己去比 */
       s += '<circle cx="' + n1(tc.x) + '" cy="' + n1(tc.y) + '" r="2.8" fill="' +
            (A.hit ? col : 'none') + '" stroke="' + col + '" stroke-width="1.4" opacity=".95"/>';
-      if (A.hit) {
-        s += '<text x="292" y="50" font-size="8.6" text-anchor="end" fill="#3F6B58" font-weight="700">正对壶口 · 松手</text>';
-      } else {
-        s += '<text x="292" y="50" font-size="8.6" text-anchor="end" fill="#8A5A3A">' + esc(whyText(A.why)) + '</text>';
-      }
       return s;
+    }
+
+    /* 瞄准提示：文字不能跟着镜像走（会左右反写），故单独一层、恒不翻转 */
+    function aimHintSVG() {
+      if (st.ph !== 'aim' || !st.armed) { return ''; }
+      var dir = st.mirror ? '向左上拖' : '向右上拖';
+      if (!st.aim) {
+        return '<text x="292" y="50" font-size="8.2" text-anchor="end" fill="#8A8378" opacity=".9">按住画面 · ' + dir + '</text>';
+      }
+      if (st.aim.hit) {
+        return '<text x="292" y="50" font-size="8.6" text-anchor="end" fill="#3F6B58" font-weight="700">正对壶口 · 松手</text>';
+      }
+      return '<text x="292" y="50" font-size="8.6" text-anchor="end" fill="#8A5A3A">' + esc(whyText(st.aim.why)) + '</text>';
     }
 
     function render() {
@@ -1212,9 +1245,13 @@
       if (st.fly && st.fly.pos) { s += arrowSVG(st.fly.pos, st.fly.ink, 1); }
       s += handSVG();
       s += aimSVG();
+      s += slowSVG();
+      /* ★右手镜像只翻「几何层」：壶、手、弧线、矢、人物、暗场圈都在这一组里。
+         文字（比分条/台词/提示）留在组外，否则会反写。 */
+      if (st.mirror) { s = '<g transform="translate(300,0) scale(-1,1)">' + s + '</g>'; }
       s += chrome();
       s += flashSVG();
-      s += slowSVG();
+      s += aimHintSVG();
       return s;
     }
 
@@ -1325,7 +1362,11 @@
     /* ============================================================
        输入
        ============================================================ */
-    function down(p) {
+    /* 手势坐标 → 画面「母版坐标系」。镜像后玩家看到的 x 与内部 x 相反，
+       统一在这里换算，down/move 用同一套，dx/dy 才不会反号。 */
+    function mp(p) { return st.mirror ? { x: 300 - p.x, y: p.y } : p; }
+
+    function down(p0) {
       if (st.dead) { return; }
       if (st.ph === 'ai' || st.ph === 'end') {
         /* 看人投的时候，轻点画面＝快进这一轮（结果早已掷定，快进不改胜负） */
@@ -1333,11 +1374,15 @@
         return;
       }
       if (st.ph !== 'aim' || !st.armed) { return; }
+      /* 以「按下点在哪半屏」定左右手：只锁一次，后续起手不再翻 */
+      if (!st.mirrorLocked) { st.mirror = p0.x > 150; st.mirrorLocked = true; paint(); }
+      var p = mp(p0);
       st.drag = true; st.sx = p.x; st.sy = p.y; st.dx = 0; st.dy = 0;
       guardDown(st, st.beat);
     }
-    function move(p) {
+    function move(p0) {
       if (!st.drag || st.ph !== 'aim' || !st.armed) { return; }
+      var p = mp(p0);
       st.dx = p.x - st.sx; st.dy = p.y - st.sy;
       var a = aimOf(st.dx, st.dy);
       if (a.d < TH.min) { st.aim = null; paint(); return; }
@@ -2044,7 +2089,10 @@ function playShang(cv, hooks, cfg, ui) {
 /* ---------------- 丝结承露囊：择丝 / 选囊 / 绕丝 / 放香药 / 结绳 ---------------- */
 function playFolk(cv, hooks, cfg, ui) {
   var st = { beat: 0, silk: [], taken: [], body: 0, wound: 0, lastAng: 0, acc: 0, down: false,
-    hits: 0, drag: false, dish: { x: 62, y: 164 }, spiced: false, knot: 0, fin: false, pt: null };
+    hits: 0, drag: false, dish: { x: 62, y: 164 }, spiced: false, knot: 0, fin: false, pt: null,
+    /* ★绕丝改成「捏住一段线 → 拖着打圈」（2026-11-04）：
+       tip=丝头位置（可捏的实体），grab=是否已捏住，miss=没捏中次数（兜底放行）。 */
+    tip: { x: 182, y: 106 }, grab: false, miss: 0 };
 
   /* 十二束六色，两排 */
   var SK = [];
@@ -2100,16 +2148,22 @@ function playFolk(cv, hooks, cfg, ui) {
     s += bagSVG({ cols: colsOf(), body: st.body, wound: (st.beat === 2 ? st.wound : 3), spice: st.spiced, cinch: st.knot >= 1 ? 1 : (st.beat === 4 ? 0.35 : 1), bow: st.knot >= 2 ? 1 : 0 });
     if (st.beat === 2) {
       s += '<circle cx="150" cy="96" r="27" fill="none" stroke="#527E79" stroke-width="1.2" stroke-dasharray="4 4" opacity=".5"/>';
-      /* 丝头跟手：绕到哪儿、线头在哪儿，一眼看得见（不然只有三道静态的线，"在绕"这件事没有证据） */
-      if (st.down && st.pt) {
-        var hw0 = [9, 11.4, 14.2][Math.min(2, st.wound)] || 9;
-        var cy0 = [101.4, 105.8, 110.4][Math.min(2, st.wound)] || 101.4;
-        var ck0 = colsOf()[st.wound % 3];
-        s += '<path d="M' + n1(150 + hw0) + ' ' + n1(cy0 + 2) + ' Q' + n1(st.pt.x + 6) + ' ' + n1(st.pt.y - 6) + ' ' +
-          n1(st.pt.x) + ' ' + n1(st.pt.y) + '" fill="none" stroke="' + ck0 + '" stroke-width="1.6" stroke-linecap="round" opacity=".85"/>' +
-          '<circle cx="' + n1(st.pt.x) + '" cy="' + n1(st.pt.y) + '" r="2.2" fill="' + ck0 + '" opacity=".9"/>';
-      }
-      s += hudBar('捏住丝头，绕囊口打圈', st.wound + '/3 圈', st.wound >= 3 ? 'ok' : null);
+      /* 丝尾常驻：囊颈引出一段丝，末端就是「丝头」——玩家看得见要捏哪里，
+         而不是凭感觉在画面上画圈。捏住后整段跟着手指走。 */
+      var hw0 = [9, 11.4, 14.2][Math.min(2, st.wound)] || 9;
+      var cy0 = [101.4, 105.8, 110.4][Math.min(2, st.wound)] || 101.4;
+      var ck0 = colsOf()[st.wound % 3];
+      var tp = st.tip;
+      s += '<path d="M' + n1(150 + hw0) + ' ' + n1(cy0 + 2) +
+           ' Q' + n1((150 + hw0 + tp.x) / 2 + 8) + ' ' + n1((cy0 + tp.y) / 2 - 12) +
+           ' ' + n1(tp.x) + ' ' + n1(tp.y) + '" fill="none" stroke="' + ck0 +
+           '" stroke-width="1.6" stroke-linecap="round" opacity=".85"/>';
+      s += '<circle cx="' + n1(tp.x) + '" cy="' + n1(tp.y) + '" r="11" fill="none" stroke="' + ck0 +
+           '" stroke-width="1" stroke-dasharray="3 3" opacity="' + (st.grab ? '.22' : '.6') + '"/>';
+      s += '<circle cx="' + n1(tp.x) + '" cy="' + n1(tp.y) + '" r="3.6" fill="' + ck0 +
+           '" stroke="#FFFDF6" stroke-width="1" opacity=".95"/>';
+      s += hudBar(st.wound >= 3 ? '三圈绕满，松手' : (st.grab ? '拖着丝头打圈' : '先捏住丝头'),
+        st.wound + '/3 圈', st.wound >= 3 ? 'ok' : null);
     }
     if (st.beat === 3) {
       s += '<g transform="translate(' + n1(st.dish.x) + ',' + n1(st.dish.y) + ')"><ellipse rx="15" ry="5.6" fill="#9FA8A2" stroke="#5E6B64" stroke-width="1.2"/>' +
@@ -2192,10 +2246,18 @@ function playFolk(cv, hooks, cfg, ui) {
       return;
     }
     if (st.beat === 2) {
-      /* 2026-11-02 重写（任务9「绕丝太难」）：down 不再清 acc —— 原实现里
-       * 一旦 down 重入（宿主 WebView 点控抖动会重发 pointerdown，实测 B 场景
-       * acc 被清到 0），绕了一半全部作废。现在按住/松手只是暂停，进度保留。 */
-      st.down = true; st.lastAng = 0; st.px = null;
+      /* 2026-11-04：改为「捏住丝头才起绕」。按下点落在丝头 44px 内才算捏住；
+         连续两次没捏中则放宽为任意处起手（丝头直接吸到指尖），避免卡死。
+         2026-11-02 那条「down 不清 acc」的约束保留：重入只是暂停，进度不丢。 */
+      var near = dist(p, st.tip) <= 44;
+      if (!near && st.miss < 2) {
+        st.miss += 1;
+        hooks.tip('先捏住线头——丝尾上那个小圆点，捏住再打圈。');
+        return;
+      }
+      if (!near) { st.tip = { x: p.x, y: p.y }; }
+      st.down = true; st.grab = true; st.lastAng = 0; st.px = null;
+      paint();
       return;
     }
     if (st.beat === 3) { st.drag = dist(p, st.dish) < 24; return; }
@@ -2216,9 +2278,10 @@ function playFolk(cv, hooks, cfg, ui) {
     }
   }
   function move(p) {
-    if (st.beat === 2 && st.down) {
+    if (st.beat === 2 && st.down && st.grab) {
       st._moves = (st._moves || 0) + 1;
-      st.pt = { x: p.x, y: p.y };                 /* 丝头从这里牵出来 */
+      st.pt = { x: p.x, y: p.y };
+      st.tip = { x: p.x, y: p.y };                /* 丝头跟手：捏住的这一段就是绕丝的那一段 */
       /* ★转向累积：算「手指路径自己拐了多少弯」，而不是绕固定原点 (150,96) 转角度。
        * 旧实现的两个死穴（都实测复现过）：
        *   a) 手指路径必须包住原点——绕小圈(r15)或绕囊体的偏心圈，角度伸缩相抵，acc 恒 0；
@@ -2260,7 +2323,8 @@ function playFolk(cv, hooks, cfg, ui) {
   function up(p) {
     if (!guardUp(st, st.beat)) { return; }
     if (st.beat === 2) {
-      st.down = false;
+      st.down = false; st.grab = false;
+      paint();
       if (st.wound >= 3) { hooks.done(false); }
       else { hooks.tip('还差一点——捏住丝头绕满三圈。'); }
       return;
@@ -3341,24 +3405,93 @@ function playShiFolk(cv, hooks, cfg, ui) {
     g.beat(startBeat);
     g.start();
 
-    function onDown(e) { e.preventDefault(); var p = cv.map(e); g.down(p); try { stage.setPointerCapture(e.pointerId); } catch (err) { } }
-    function onMove(e) { var p = cv.map(e); g.move(p); }
-    function onUp(e) { var p = cv.map(e); g.up(p); }
+    /* ★输入双轨（2026-11-04）：容器可能只投递 touch 事件、或把拖动判成滚动后 pointercancel。
+       有 PointerEvent 就接所有 pointerType；同时无条件挂 touchstart/move/end（passive:false）。
+       两路互斥（ptrId / touchId 先按先得），不会双触发。 */
+    var USE_PTR = !!global.PointerEvent, ptrId = null, touchId = null;
+    /* ★2026-11-18：舞台上的「原文对照」按钮/面板是 DOM 控件，不是画布命中。
+     * 命中它们时手势层必须整条让路（不 preventDefault、不 g.down），
+     * 否则触屏上 preventDefault 会吞掉合成 click（详见 ensureSrc 注释）。 */
+    function isUiTarget(e) {
+      var n = e && e.target;
+      while (n && n !== stage) {
+        if (n.classList && (n.classList.contains('iv-src-btn')
+          || n.classList.contains('iv-src') || n.classList.contains('iv-src-x'))) { return true; }
+        n = n.parentNode;
+      }
+      return false;
+    }
+    function tmap(t) { return { clientX: t.clientX, clientY: t.clientY, pointerId: t.identifier }; }
+    function pickTouch(list, id) {
+      if (!list || !list.length) { return null; }
+      for (var i = 0; i < list.length; i++) { if (list[i].identifier === id) { return list[i]; } }
+      return list[0];
+    }
 
-    stage.addEventListener('pointerdown', onDown);
-    stage.addEventListener('pointermove', onMove);
-    stage.addEventListener('pointerup', onUp);
-    stage.addEventListener('pointercancel', onUp);
+    function onDown(e) {
+      if (ptrId !== null || isUiTarget(e)) { return; }
+      if (e.cancelable) { e.preventDefault(); }
+      ptrId = e.pointerId;
+      var p = cv.map(e); g.down(p);
+      try { stage.setPointerCapture(e.pointerId); } catch (err) { }
+    }
+    function onMove(e) {
+      if (ptrId !== null && e.pointerId !== ptrId) { return; }
+      if (e.cancelable) { e.preventDefault(); }
+      g.move(cv.map(e));
+    }
+    function onUp(e) {
+      if (ptrId !== null && e.pointerId !== ptrId) { return; }
+      ptrId = null;
+      g.up(cv.map(e));
+    }
+
+    function tDown(e) {
+      if (touchId !== null || ptrId !== null || isUiTarget(e)) { return; }
+      if (e.cancelable) { e.preventDefault(); }
+      var t = e.changedTouches && e.changedTouches[0]; if (!t) { return; }
+      touchId = t.identifier; g.down(cv.map(tmap(t)));
+    }
+    function tMove(e) {
+      if (touchId === null || ptrId !== null) { return; }
+      if (e.cancelable) { e.preventDefault(); }
+      var t = pickTouch(e.touches, touchId); if (!t) { return; }
+      g.move(cv.map(tmap(t)));
+    }
+    function tUp(e) {
+      if (touchId === null) { return; }
+      var t = pickTouch(e.changedTouches, touchId);
+      touchId = null;
+      g.up(t ? cv.map(tmap(t)) : { x: 0, y: 0 });
+    }
+
+    if (USE_PTR) {
+      stage.addEventListener('pointerdown', onDown);
+      stage.addEventListener('pointermove', onMove);
+      stage.addEventListener('pointerup', onUp);
+      stage.addEventListener('pointercancel', onUp);
+    }
+    /* passive:false 才能 preventDefault —— 否则手指纵向一拖就被判成滚动 */
+    stage.addEventListener('touchstart', tDown, { passive: false });
+    stage.addEventListener('touchmove', tMove, { passive: false });
+    stage.addEventListener('touchend', tUp, false);
+    stage.addEventListener('touchcancel', tUp, false);
 
     return {
       next: function (i) { g.beat(i); },
       destroy: function () {
         g.stop();
         sheet.close();
-        stage.removeEventListener('pointerdown', onDown);
-        stage.removeEventListener('pointermove', onMove);
-        stage.removeEventListener('pointerup', onUp);
-        stage.removeEventListener('pointercancel', onUp);
+        if (USE_PTR) {
+          stage.removeEventListener('pointerdown', onDown);
+          stage.removeEventListener('pointermove', onMove);
+          stage.removeEventListener('pointerup', onUp);
+          stage.removeEventListener('pointercancel', onUp);
+        }
+        stage.removeEventListener('touchstart', tDown);
+        stage.removeEventListener('touchmove', tMove);
+        stage.removeEventListener('touchend', tUp);
+        stage.removeEventListener('touchcancel', tUp);
         /* ★不删 SVG：结束时要停在这一拍的成品上（三条面 / 补好的卷 / 壶与比分）。
            删掉就是一个空舞台，玩家以为自己什么都没做。 */
         cv.svg.style.pointerEvents = 'none';
